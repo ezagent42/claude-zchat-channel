@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zchat-channel": {
+      "command": "uv",
+      "args": ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "zchat-channel"]
+    }
+  }
+}

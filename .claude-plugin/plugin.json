@@ -1,0 +1,6 @@
+{
+  "name": "zchat",
+  "description": "IRC channel for Claude Code — reply, join, dm, broadcast via slash commands",
+  "version": "0.1.0",
+  "keywords": ["irc", "channel", "zchat"]
+}
