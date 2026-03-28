@@ -6,8 +6,17 @@ requires-python = ">=3.11"
 dependencies = [
     "mcp[cli]>=1.2.0",
     "irc>=20.0",
-    "zchat-protocol",
+    "zchat-protocol>=0.1.0",
 ]
+license = "MIT"
+authors = [{ name = "ezagent42" }]
+
+[project.urls]
+Homepage = "https://github.com/ezagent42/claude-zchat-channel"
+Repository = "https://github.com/ezagent42/claude-zchat-channel"
+
+[tool.uv.sources]
+zchat-protocol = { path = "../zchat-protocol", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -16,9 +25,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["."]
 only-include = ["server.py", "message.py"]
-
-[tool.uv.sources]
-zchat-protocol = { path = "../zchat-protocol", editable = true }
 
 [project.optional-dependencies]
 test = [
