@@ -16,6 +16,7 @@ from zchat_protocol.sys_messages import (
 
 import anyio
 import irc.client
+import irc.connection
 import mcp.server.stdio
 from mcp.server.lowlevel import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
@@ -30,6 +31,8 @@ IRC_SERVER = os.environ.get("IRC_SERVER", "127.0.0.1")
 IRC_PORT = int(os.environ.get("IRC_PORT", "6667"))
 IRC_CHANNELS = os.environ.get("IRC_CHANNELS", "general")
 IRC_TLS = os.environ.get("IRC_TLS", "false").lower() == "true"
+IRC_SASL_USER = os.environ.get("IRC_SASL_USER", "")
+IRC_SASL_PASS = os.environ.get("IRC_SASL_PASS", "")
 _msg_counter = {"sent": 0, "received": 0}
 
 # ============================================================
@@ -72,8 +75,21 @@ async def poll_irc_queue(queue: asyncio.Queue, write_stream):
 def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
     """Initialize IRC client, connect, subscribe to channels."""
     reactor = irc.client.Reactor()
+
+    connect_kwargs: dict = {}
+    if IRC_TLS:
+        import ssl
+        import functools
+        context = ssl.create_default_context()
+        server_hostname = IRC_SERVER
+        wrapper = functools.partial(context.wrap_socket, server_hostname=server_hostname)
+        connect_kwargs["connect_factory"] = irc.connection.Factory(wrapper=wrapper)
+    if IRC_SASL_USER and IRC_SASL_PASS:
+        connect_kwargs["sasl_login"] = IRC_SASL_USER
+        connect_kwargs["password"] = IRC_SASL_PASS
+
     connection = reactor.server().connect(
-        IRC_SERVER, IRC_PORT, AGENT_NAME,
+        IRC_SERVER, IRC_PORT, AGENT_NAME, **connect_kwargs,
     )
     joined_channels: set[str] = set()
 
