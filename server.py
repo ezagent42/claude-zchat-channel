@@ -85,7 +85,7 @@ def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         wrapper = functools.partial(context.wrap_socket, server_hostname=server_hostname)
         connect_kwargs["connect_factory"] = irc.connection.Factory(wrapper=wrapper)
     if IRC_SASL_USER and IRC_SASL_PASS:
-        connect_kwargs["sasl_login"] = IRC_SASL_USER
+        connect_kwargs["sasl_login"] = AGENT_NAME
         connect_kwargs["password"] = IRC_SASL_PASS
 
     connection = reactor.server().connect(
