@@ -31,8 +31,7 @@ IRC_SERVER = os.environ.get("IRC_SERVER", "127.0.0.1")
 IRC_PORT = int(os.environ.get("IRC_PORT", "6667"))
 IRC_CHANNELS = os.environ.get("IRC_CHANNELS", "general")
 IRC_TLS = os.environ.get("IRC_TLS", "false").lower() == "true"
-IRC_SASL_USER = os.environ.get("IRC_SASL_USER", "")
-IRC_SASL_PASS = os.environ.get("IRC_SASL_PASS", "")
+IRC_AUTH_TOKEN = os.environ.get("IRC_AUTH_TOKEN", "")
 _msg_counter = {"sent": 0, "received": 0}
 
 # ============================================================
@@ -84,9 +83,9 @@ def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         server_hostname = IRC_SERVER
         wrapper = functools.partial(context.wrap_socket, server_hostname=server_hostname)
         connect_kwargs["connect_factory"] = irc.connection.Factory(wrapper=wrapper)
-    if IRC_SASL_USER and IRC_SASL_PASS:
+    if IRC_AUTH_TOKEN:
         connect_kwargs["sasl_login"] = AGENT_NAME
-        connect_kwargs["password"] = IRC_SASL_PASS
+        connect_kwargs["password"] = IRC_AUTH_TOKEN
 
     connection = reactor.server().connect(
         IRC_SERVER, IRC_PORT, AGENT_NAME, **connect_kwargs,
@@ -95,6 +94,10 @@ def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
 
     def on_welcome(conn, event):
         """Auto-join channels on connect."""
+        if conn.real_nickname != AGENT_NAME:
+            print(f"[channel-server] WARNING: nick mismatch! "
+                  f"expected={AGENT_NAME} actual={conn.real_nickname}",
+                  file=sys.stderr)
         channels = IRC_CHANNELS.split(",")
         for ch in channels:
             ch = ch.strip().lstrip("#")
