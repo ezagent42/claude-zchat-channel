@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from message import detect_mention, clean_mention, chunk_message
-from server import CHANNEL_INSTRUCTIONS
+from server import load_instructions
 from zchat_protocol.sys_messages import encode_sys_for_irc, decode_sys_from_irc, make_sys_message
 
 
@@ -47,11 +47,22 @@ def test_detect_mention_with_dash_separator():
     assert detect_mention("@alice:helper hello", "alice-helper") is False
 
 
-def test_channel_instructions_mention_slash_commands():
-    """CHANNEL_INSTRUCTIONS should reference available /zchat: commands."""
-    assert "/zchat:reply" in CHANNEL_INSTRUCTIONS
-    assert "/zchat:join" in CHANNEL_INSTRUCTIONS
-    assert "/zchat:dm" in CHANNEL_INSTRUCTIONS
-    assert "/zchat:broadcast" in CHANNEL_INSTRUCTIONS
-    assert "chat_id" in CHANNEL_INSTRUCTIONS
-    assert "reply" in CHANNEL_INSTRUCTIONS
+def test_load_instructions_interpolates_agent_name():
+    result = load_instructions("alice-agent0")
+    assert "alice-agent0" in result
+    assert "$agent_name" not in result
+
+
+def test_load_instructions_contains_routing_rules():
+    result = load_instructions("test-agent")
+    assert "/zchat:reply" in result
+    assert "/zchat:dm" in result
+    assert "/zchat:join" in result
+    assert "/zchat:broadcast" in result
+    assert "chat_id" in result
+    assert "subagent" in result.lower() or "Agent tool" in result
+
+
+def test_load_instructions_contains_soul_pointer():
+    result = load_instructions("test-agent")
+    assert "soul.md" in result
