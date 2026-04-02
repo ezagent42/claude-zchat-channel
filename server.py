@@ -9,6 +9,8 @@ import os
 import sys
 import time
 import threading
+from pathlib import Path
+from string import Template
 from zchat_protocol.sys_messages import (
     is_sys_message, make_sys_message,
     encode_sys_for_irc, decode_sys_from_irc,
@@ -207,34 +209,16 @@ def _handle_sys_message(msg: dict, sender_nick: str, connection, joined_channels
 # MCP Server + Tools
 # ============================================================
 
-CHANNEL_INSTRUCTIONS = f"""You are {AGENT_NAME}, a Claude Code agent connected to an IRC chat system.
-
-Messages arrive as <channel source="zchat-channel" chat_id="..." user="..." ts="...">content</channel>.
-- chat_id starting with "#" is a channel message (e.g. "#general")
-- chat_id without "#" is a private message from that user
-
-When you receive a channel notification:
-1. Read the message content and the user who sent it
-2. If addressed to you or relevant, respond using the "reply" tool with the same chat_id
-3. For private messages requesting you to stop/exit, save any work and run /exit
-
-## Available slash commands
-
-Users in your session can use these shortcuts instead of describing actions in natural language:
-
-| Command | Description |
-|---------|-------------|
-| `/zchat:reply -c #general -t "hello"` | Reply to a channel or user |
-| `/zchat:join -c dev` | Join an IRC channel |
-| `/zchat:dm -u alice -t "hey"` | Send a private message |
-| `/zchat:broadcast -t "deploying"` | Send to all joined channels |
-
-When these commands are invoked, follow the command instructions to call the appropriate MCP tool.
-You can also call "reply" and "join_channel" tools directly when responding to channel messages."""
+def load_instructions(agent_name: str) -> str:
+    """Load instructions.md and interpolate agent_name."""
+    path = Path(__file__).parent / "instructions.md"
+    tmpl = Template(path.read_text(encoding="utf-8"))
+    return tmpl.safe_substitute(agent_name=agent_name)
 
 
 def create_server():
-    server = Server("zchat-channel", instructions=CHANNEL_INSTRUCTIONS)
+    instructions = load_instructions(AGENT_NAME)
+    server = Server("zchat-channel", instructions=instructions)
     return server
 
 def register_tools(server: Server, state: dict):
