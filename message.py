@@ -3,8 +3,10 @@ Message utilities for zchat-channel-server.
 Handles mention detection and text chunking.
 """
 
-# Maximum message length before chunking
-MAX_MESSAGE_LENGTH = 4000
+# IRC RFC 2812: 512 bytes max per message including CR/LF.
+# Reserve ~120 bytes for IRC header (:nick!user@host PRIVMSG #channel :)
+# to leave ~390 bytes for the actual text payload.
+MAX_MESSAGE_BYTES = 390
 
 
 def detect_mention(body: str, agent_name: str) -> bool:
@@ -17,30 +19,43 @@ def clean_mention(body: str, agent_name: str) -> str:
     return body.replace(f"@{agent_name}", "").strip()
 
 
-def chunk_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
-    """Split a message into chunks, breaking at paragraph boundaries."""
-    if len(text) <= max_length:
+def _sanitize_for_irc(text: str) -> str:
+    """Replace newlines with spaces for IRC single-line protocol."""
+    return text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+
+def chunk_message(text: str, max_bytes: int = MAX_MESSAGE_BYTES) -> list[str]:
+    """Split a message into chunks that fit within IRC byte limits.
+
+    Uses byte length (UTF-8) instead of character count, since IRC
+    enforces a 512-byte limit per message and CJK characters are 3 bytes each.
+    """
+    text = _sanitize_for_irc(text)
+
+    if len(text.encode("utf-8")) <= max_bytes:
         return [text]
 
     chunks = []
     remaining = text
 
     while remaining:
-        if len(remaining) <= max_length:
+        if len(remaining.encode("utf-8")) <= max_bytes:
             chunks.append(remaining)
             break
 
-        # Try to break at a paragraph boundary
-        cut = remaining[:max_length].rfind("\n\n")
-        if cut == -1 or cut < max_length // 2:
-            # Fall back to newline
-            cut = remaining[:max_length].rfind("\n")
-        if cut == -1 or cut < max_length // 2:
-            # Fall back to space
-            cut = remaining[:max_length].rfind(" ")
-        if cut == -1:
-            # Hard cut
-            cut = max_length
+        # Find the longest prefix that fits within max_bytes (UTF-8)
+        # Start from a character estimate and adjust
+        estimate = max_bytes // 3  # conservative for CJK
+        while len(remaining[:estimate].encode("utf-8")) < max_bytes and estimate < len(remaining):
+            estimate += 1
+        while len(remaining[:estimate].encode("utf-8")) > max_bytes:
+            estimate -= 1
+
+        # Try to break at a space within the safe range
+        cut = remaining[:estimate].rfind(" ")
+        if cut == -1 or cut < estimate // 2:
+            # Hard cut at byte boundary
+            cut = estimate
 
         chunks.append(remaining[:cut])
         remaining = remaining[cut:].lstrip()

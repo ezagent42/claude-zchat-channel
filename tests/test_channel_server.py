@@ -23,9 +23,26 @@ def test_chunk_message_short():
 
 def test_chunk_message_long():
     text = "a" * 5000
-    chunks = chunk_message(text, max_length=400)
+    chunks = chunk_message(text, max_bytes=400)
     assert len(chunks) > 1
-    assert all(len(c) <= 400 for c in chunks)
+    assert all(len(c.encode("utf-8")) <= 400 for c in chunks)
+
+
+def test_chunk_message_cjk():
+    """CJK characters are 3 bytes each in UTF-8."""
+    text = "你好" * 200  # 400 chars = 1200 bytes
+    chunks = chunk_message(text, max_bytes=390)
+    assert len(chunks) > 1
+    assert all(len(c.encode("utf-8")) <= 390 for c in chunks)
+
+
+def test_chunk_message_strips_newlines():
+    """IRC PRIVMSG does not allow newlines."""
+    text = "line1\nline2\r\nline3"
+    chunks = chunk_message(text)
+    for chunk in chunks:
+        assert "\n" not in chunk
+        assert "\r" not in chunk
 
 
 def test_sys_message_irc_roundtrip():
