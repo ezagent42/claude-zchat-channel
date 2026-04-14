@@ -1,0 +1,122 @@
+"""Unit 测试 server.py 的集成点（mock IRC, mock MCP stdio）。"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _env(tmp_path, monkeypatch):
+    monkeypatch.setenv("CS_DB_PATH", str(tmp_path / "conv.db"))
+    monkeypatch.setenv("CS_EVENT_DB_PATH", str(tmp_path / "events.db"))
+    monkeypatch.setenv("CS_MESSAGE_DB_PATH", str(tmp_path / "msg.db"))
+    monkeypatch.setenv("BRIDGE_PORT", "0")
+    monkeypatch.setenv("AGENT_NAME", "unit-agent")
+
+
+def test_register_tools_lists_seven_tools() -> None:
+    """handle_list_tools 应返回 7 个 tool（2 旧 + 5 新）。"""
+    import server
+
+    srv = server.create_server()
+    state: dict = {}
+    server.register_tools(srv, state)
+
+    # lowlevel.Server 的 tools 在 request handler 里，需要直接调用注册的 callback
+    handler = srv.request_handlers
+    # 找到 list_tools handler 并调用
+    from mcp.types import ListToolsRequest
+
+    req = ListToolsRequest(method="tools/list", params=None)
+    result = asyncio.run(handler[ListToolsRequest](req))
+    tools = result.root.tools
+    names = {t.name for t in tools}
+    assert names == {
+        "reply",
+        "join_channel",
+        "edit_message",
+        "join_conversation",
+        "send_side_message",
+        "list_conversations",
+        "get_conversation_status",
+    }
+
+
+def test_main_builds_components() -> None:
+    """build_components() 应能组装所有 engine/bridge/transport 模块，不抛异常。"""
+    import server
+
+    components = server.build_components()
+    assert components["event_bus"] is not None
+    assert components["conversation_manager"] is not None
+    assert components["mode_manager"] is not None
+    assert components["timer_manager"] is not None
+    assert components["participant_registry"] is not None
+    assert components["message_store"] is not None
+    assert components["bridge_server"] is not None
+    assert components["irc_transport"] is not None
+
+    # 清理 DB
+    components["event_bus"].close()
+    components["conversation_manager"].close_db()
+    components["message_store"].close()
+
+
+def test_bridge_customer_connect_creates_conversation(tmp_path) -> None:
+    """
+    BridgeAPIServer._handle_customer_connect 必须能用已修正签名
+    调用 ConversationManager.create(conversation_id, metadata=...)
+    （customer 被放进 metadata）。
+    """
+    from bridge_api.ws_server import BridgeAPIServer
+    from engine.conversation_manager import ConversationManager
+
+    cm = ConversationManager(str(tmp_path / "conv.db"))
+    bs = BridgeAPIServer(conversation_manager=cm, port=0)
+
+    bs._handle_customer_connect(
+        {
+            "conversation_id": "conv1",
+            "customer": {"id": "david", "name": "David"},
+            "metadata": {"source": "feishu"},
+        }
+    )
+
+    conv = cm.get("conv1")
+    assert conv is not None
+    assert conv.id == "conv1"
+    assert conv.metadata.get("customer", {}).get("id") == "david"
+    assert conv.metadata.get("source") == "feishu"
+    cm.close_db()
+
+
+def test_list_conversations_tool_happy_path() -> None:
+    """list_conversations tool 调用应返回 TextContent（JSON 列表）。"""
+    import server
+    from mcp.types import CallToolRequest, CallToolRequestParams
+
+    srv = server.create_server()
+    state: dict = {}
+    components = server.build_components()
+    state["components"] = components
+    # mock IRC connection so _get_irc() 不抛
+    state["irc_connection"] = MagicMock()
+    server.register_tools(srv, state)
+
+    handler = srv.request_handlers
+    req = CallToolRequest(
+        method="tools/call",
+        params=CallToolRequestParams(name="list_conversations", arguments={}),
+    )
+    result = asyncio.run(handler[CallToolRequest](req))
+    content = result.root.content
+    assert len(content) == 1
+    assert content[0].type == "text"
+
+    components["event_bus"].close()
+    components["conversation_manager"].close_db()
+    components["message_store"].close()

@@ -117,10 +117,13 @@ class BridgeAPIServer:
         return conn
 
     def _handle_customer_connect(self, msg: dict) -> None:
+        metadata = dict(msg.get("metadata", {}))
+        customer = msg.get("customer")
+        if customer is not None:
+            metadata["customer"] = customer
         self._conversation_manager.create(
             conversation_id=msg["conversation_id"],
-            customer=msg["customer"],
-            metadata=msg.get("metadata", {}),
+            metadata=metadata,
         )
 
     # ------------------------------------------------------------------ #

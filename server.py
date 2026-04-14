@@ -1,32 +1,43 @@
 #!/usr/bin/env python3
+"""zchat-channel-server v1.0 — 集成入口.
+
+IRC 侧通过 `transport.irc_transport.IRCTransport` 连接，
+Bridge 侧通过 `bridge_api.ws_server.BridgeAPIServer` 暴露 WebSocket，
+核心业务由 `engine/` 各组件承载，协议原语在 `protocol/`。
+server.py 只是胶水代码：组装所有组件并启动 MCP stdio + Bridge + IRC。
 """
-zchat-channel-server: Claude Code Channel MCP Server
-Bridges IRC messaging <-> Claude Code via MCP stdio protocol.
-"""
+from __future__ import annotations
+
 import asyncio
 import json
 import os
 import sys
 import time
-import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
-from zchat_protocol.sys_messages import (
-    is_sys_message, make_sys_message,
-    encode_sys_for_irc, decode_sys_from_irc,
-)
+from typing import Any
 
 import anyio
-import irc.client
-import irc.connection
 import mcp.server.stdio
 from mcp.server.lowlevel import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 from mcp.shared.message import SessionMessage
-from mcp.types import JSONRPCMessage, JSONRPCNotification, Tool, TextContent
+from mcp.types import JSONRPCMessage, JSONRPCNotification, TextContent, Tool
 
-from message import detect_mention, clean_mention, chunk_message
-from datetime import datetime, timezone
+from bridge_api.ws_server import BridgeAPIServer
+from engine.conversation_manager import ConversationManager
+from engine.event_bus import EventBus
+from engine.message_store import MessageStore
+from engine.mode_manager import ModeManager
+from engine.participant_registry import ParticipantRegistry
+from engine.timer_manager import TimerManager
+from message import chunk_message, clean_mention, detect_mention
+from transport.irc_transport import IRCTransport
+
+# ------------------------------------------------------------------ #
+# 环境变量
+# ------------------------------------------------------------------ #
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "agent0")
 IRC_SERVER = os.environ.get("IRC_SERVER", "127.0.0.1")
@@ -34,16 +45,31 @@ IRC_PORT = int(os.environ.get("IRC_PORT", "6667"))
 IRC_CHANNELS = os.environ.get("IRC_CHANNELS", "general")
 IRC_TLS = os.environ.get("IRC_TLS", "false").lower() == "true"
 IRC_AUTH_TOKEN = os.environ.get("IRC_AUTH_TOKEN", "")
-_msg_counter = {"sent": 0, "received": 0}
 
-# ============================================================
-# MCP Notification Injection
-# ============================================================
+BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "9999"))
+BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "127.0.0.1")
 
-async def inject_message(write_stream, msg: dict, context: str):
-    """Send a channel notification to Claude Code via the MCP write stream."""
+CS_DB_PATH = os.environ.get("CS_DB_PATH", "conversations.db")
+CS_EVENT_DB_PATH = os.environ.get(
+    "CS_EVENT_DB_PATH", CS_DB_PATH.replace(".db", "_events.db")
+)
+CS_MESSAGE_DB_PATH = os.environ.get(
+    "CS_MESSAGE_DB_PATH", CS_DB_PATH.replace(".db", "_messages.db")
+)
+
+# ------------------------------------------------------------------ #
+# MCP notification 注入
+# ------------------------------------------------------------------ #
+
+
+async def inject_message(write_stream, msg: dict, context: str) -> None:
+    """将 IRC 侧消息以 MCP notification 注入 Claude Code。"""
     ts = msg.get("ts", 0)
-    iso_ts = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else datetime.now(tz=timezone.utc).isoformat()
+    iso_ts = (
+        datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        if ts
+        else datetime.now(tz=timezone.utc).isoformat()
+    )
     notification = JSONRPCNotification(
         jsonrpc="2.0",
         method="notifications/claude/channel",
@@ -60,8 +86,8 @@ async def inject_message(write_stream, msg: dict, context: str):
     await write_stream.send(SessionMessage(message=JSONRPCMessage(notification)))
 
 
-async def poll_irc_queue(queue: asyncio.Queue, write_stream):
-    """Consume IRC messages from the queue and inject into Claude Code."""
+async def poll_irc_queue(queue: asyncio.Queue, write_stream) -> None:
+    """将 IRC 队列中的消息持续注入到 MCP 客户端。"""
     while True:
         msg, context = await queue.get()
         try:
@@ -69,51 +95,312 @@ async def poll_irc_queue(queue: asyncio.Queue, write_stream):
         except Exception as e:
             print(f"[channel-server] inject error: {e}", file=sys.stderr)
 
-# ============================================================
-# IRC Setup
-# ============================================================
 
-def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
-    """Initialize IRC client, connect, subscribe to channels."""
-    reactor = irc.client.Reactor()
+# ------------------------------------------------------------------ #
+# MCP Server 构造 + Tool 注册
+# ------------------------------------------------------------------ #
 
-    connect_kwargs: dict = {}
-    if IRC_TLS:
-        import ssl
-        import functools
-        context = ssl.create_default_context()
-        server_hostname = IRC_SERVER
-        wrapper = functools.partial(context.wrap_socket, server_hostname=server_hostname)
-        connect_kwargs["connect_factory"] = irc.connection.Factory(wrapper=wrapper)
-    if IRC_AUTH_TOKEN:
-        connect_kwargs["sasl_login"] = AGENT_NAME
-        connect_kwargs["password"] = IRC_AUTH_TOKEN
 
-    connection = reactor.server().connect(
-        IRC_SERVER, IRC_PORT, AGENT_NAME, **connect_kwargs,
+def load_instructions(agent_name: str) -> str:
+    path = Path(__file__).parent / "instructions.md"
+    tmpl = Template(path.read_text(encoding="utf-8"))
+    return tmpl.safe_substitute(agent_name=agent_name)
+
+
+def create_server() -> Server:
+    instructions = load_instructions(AGENT_NAME)
+    return Server("zchat-channel", instructions=instructions)
+
+
+def register_tools(server: Server, state: dict) -> None:
+    """注册 MCP tools。IRC 连接 / 组件从 state 字典懒解析。"""
+
+    def _get_irc():
+        conn = state.get("irc_connection")
+        if conn is None:
+            raise RuntimeError("IRC connection not initialized yet")
+        return conn
+
+    def _components() -> dict:
+        return state.get("components") or {}
+
+    @server.list_tools()
+    async def handle_list_tools() -> list[Tool]:
+        return [
+            Tool(
+                name="reply",
+                description=(
+                    "Reply to a user or channel. chat_id is a username for private "
+                    "(e.g. 'alice') or #channel name (e.g. '#general')."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "chat_id": {
+                            "type": "string",
+                            "description": "Target: username or #channel",
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "Message content",
+                        },
+                    },
+                    "required": ["chat_id", "text"],
+                },
+            ),
+            Tool(
+                name="join_channel",
+                description="Join an IRC channel to receive @mentions.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "channel_name": {
+                            "type": "string",
+                            "description": "Channel name without # prefix",
+                        },
+                    },
+                    "required": ["channel_name"],
+                },
+            ),
+            Tool(
+                name="edit_message",
+                description=(
+                    "Edit a previously sent message by its message_id."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "message_id": {"type": "string"},
+                        "new_content": {"type": "string"},
+                    },
+                    "required": ["message_id", "new_content"],
+                },
+            ),
+            Tool(
+                name="join_conversation",
+                description=(
+                    "Join an existing conversation channel (#conv-<id>)."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "conversation_id": {"type": "string"},
+                    },
+                    "required": ["conversation_id"],
+                },
+            ),
+            Tool(
+                name="send_side_message",
+                description=(
+                    "Send a side-channel (operator+admin only) message to a conversation."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "conversation_id": {"type": "string"},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["conversation_id", "text"],
+                },
+            ),
+            Tool(
+                name="list_conversations",
+                description="List currently active conversations.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            ),
+            Tool(
+                name="get_conversation_status",
+                description="Get status details of a conversation by id.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "conversation_id": {"type": "string"},
+                    },
+                    "required": ["conversation_id"],
+                },
+            ),
+        ]
+
+    @server.call_tool()
+    async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
+        if name == "reply":
+            return await _handle_reply(_get_irc(), arguments)
+        if name == "join_channel":
+            return await _handle_join_channel(_get_irc(), arguments)
+        if name == "edit_message":
+            return await _handle_edit_message(_components(), arguments)
+        if name == "join_conversation":
+            return await _handle_join_conversation(
+                _get_irc(), _components(), arguments
+            )
+        if name == "send_side_message":
+            return await _handle_send_side_message(_components(), arguments)
+        if name == "list_conversations":
+            return await _handle_list_conversations(_components(), arguments)
+        if name == "get_conversation_status":
+            return await _handle_get_conversation_status(_components(), arguments)
+        raise ValueError(f"Unknown tool: {name}")
+
+
+# ------------------------------------------------------------------ #
+# Tool handlers
+# ------------------------------------------------------------------ #
+
+
+async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
+    chat_id = arguments["chat_id"]
+    text = arguments["text"]
+    for chunk in chunk_message(text):
+        connection.privmsg(chat_id, chunk)
+    return [TextContent(type="text", text=f"Sent to {chat_id}")]
+
+
+async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]:
+    channel = arguments["channel_name"]
+    connection.join(f"#{channel}")
+    return [TextContent(type="text", text=f"Joined #{channel}")]
+
+
+async def _handle_edit_message(
+    components: dict, arguments: dict
+) -> list[TextContent]:
+    store: MessageStore | None = components.get("message_store")
+    if store is None:
+        return [TextContent(type="text", text="message_store unavailable")]
+    message_id = arguments["message_id"]
+    new_content = arguments["new_content"]
+    original = store.get(message_id)
+    if original is None:
+        return [TextContent(type="text", text=f"message {message_id} not found")]
+    edited = store.edit(message_id, new_content)
+    return [TextContent(type="text", text=f"edited {message_id} → {edited.id}")]
+
+
+async def _handle_join_conversation(
+    connection, components: dict, arguments: dict
+) -> list[TextContent]:
+    conv_id = arguments["conversation_id"]
+    channel = IRCTransport.conv_channel_name(conv_id)
+    try:
+        connection.join(channel)
+    except Exception as e:
+        return [TextContent(type="text", text=f"join failed: {e}")]
+    return [TextContent(type="text", text=f"joined {channel}")]
+
+
+async def _handle_send_side_message(
+    components: dict, arguments: dict
+) -> list[TextContent]:
+    bs: BridgeAPIServer | None = components.get("bridge_server")
+    conv_id = arguments["conversation_id"]
+    text = arguments["text"]
+    if bs is None:
+        return [TextContent(type="text", text="bridge_server unavailable")]
+    await bs.send_reply(
+        conversation_id=conv_id,
+        text=text,
+        visibility="side",
     )
-    joined_channels: set[str] = set()
+    return [TextContent(type="text", text=f"side message sent to {conv_id}")]
 
-    def on_welcome(conn, event):
-        """Auto-join channels on connect."""
-        if conn.real_nickname != AGENT_NAME:
-            print(f"[channel-server] WARNING: nick mismatch! "
-                  f"expected={AGENT_NAME} actual={conn.real_nickname}",
-                  file=sys.stderr)
-        channels = IRC_CHANNELS.split(",")
-        for ch in channels:
-            ch = ch.strip().lstrip("#")
-            if ch:
-                conn.join(f"#{ch}")
-                joined_channels.add(ch)
-                print(f"[channel-server] Joined #{ch}", file=sys.stderr)
-        print(f"[channel-server] {AGENT_NAME} ready on IRC ({IRC_SERVER}:{IRC_PORT})", file=sys.stderr)
 
-    def on_pubmsg(conn, event):
-        """Handle channel messages — filter for @mentions."""
+async def _handle_list_conversations(
+    components: dict, arguments: dict
+) -> list[TextContent]:
+    cm: ConversationManager | None = components.get("conversation_manager")
+    if cm is None:
+        return [TextContent(type="text", text="[]")]
+    convs = cm.list_active()
+    payload = [
+        {"id": c.id, "state": c.state.value, "mode": c.mode}
+        for c in convs
+    ]
+    return [TextContent(type="text", text=json.dumps(payload))]
+
+
+async def _handle_get_conversation_status(
+    components: dict, arguments: dict
+) -> list[TextContent]:
+    cm: ConversationManager | None = components.get("conversation_manager")
+    if cm is None:
+        return [TextContent(type="text", text="conversation_manager unavailable")]
+    conv_id = arguments["conversation_id"]
+    conv = cm.get(conv_id)
+    if conv is None:
+        return [TextContent(type="text", text=f"conversation {conv_id} not found")]
+    payload = {
+        "id": conv.id,
+        "state": conv.state.value,
+        "mode": conv.mode,
+        "participants": [
+            getattr(p, "id", None) for p in conv.participants
+        ],
+    }
+    return [TextContent(type="text", text=json.dumps(payload))]
+
+
+# ------------------------------------------------------------------ #
+# 组件组装
+# ------------------------------------------------------------------ #
+
+
+def build_components() -> dict[str, Any]:
+    """组装所有 engine / bridge / transport 组件。不启动 IRC / WebSocket。"""
+    event_bus = EventBus(CS_EVENT_DB_PATH)
+    conversation_manager = ConversationManager(CS_DB_PATH)
+    mode_manager = ModeManager(event_bus)
+    timer_manager = TimerManager(event_bus)
+    participant_registry = ParticipantRegistry()
+    message_store = MessageStore(CS_MESSAGE_DB_PATH)
+    bridge_server = BridgeAPIServer(
+        conversation_manager=conversation_manager,
+        port=BRIDGE_PORT,
+        host=BRIDGE_HOST,
+    )
+    channels = [c.strip() for c in IRC_CHANNELS.split(",") if c.strip()]
+    irc_transport = IRCTransport(
+        server=IRC_SERVER,
+        port=IRC_PORT,
+        nick=AGENT_NAME,
+        channels=channels,
+        tls=IRC_TLS,
+        auth_token=IRC_AUTH_TOKEN,
+    )
+    return {
+        "event_bus": event_bus,
+        "conversation_manager": conversation_manager,
+        "mode_manager": mode_manager,
+        "timer_manager": timer_manager,
+        "participant_registry": participant_registry,
+        "message_store": message_store,
+        "bridge_server": bridge_server,
+        "irc_transport": irc_transport,
+    }
+
+
+# ------------------------------------------------------------------ #
+# main
+# ------------------------------------------------------------------ #
+
+
+async def main() -> None:
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    components = build_components()
+    irc_transport: IRCTransport = components["irc_transport"]
+    bridge_server: BridgeAPIServer = components["bridge_server"]
+
+    server = create_server()
+    state: dict = {"components": components}
+    register_tools(server, state)
+
+    def _on_pubmsg(conn, event):
         nick = event.source.nick
-        if nick == AGENT_NAME:
-            return
         body = event.arguments[0]
         if not detect_mention(body, AGENT_NAME):
             return
@@ -128,20 +415,8 @@ def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         }
         print(f"[channel-server] [{channel}] {nick}: {body}", file=sys.stderr)
         loop.call_soon_threadsafe(queue.put_nowait, (msg, channel))
-        _msg_counter["received"] += 1
 
-    def on_privmsg(conn, event):
-        """Handle private messages and sys messages."""
-        nick = event.source.nick
-        if nick == AGENT_NAME:
-            return
-        body = event.arguments[0]
-        # Check for sys message (__zchat_sys: prefix)
-        sys_msg = decode_sys_from_irc(body)
-        if sys_msg is not None:
-            _handle_sys_message(sys_msg, nick, conn, joined_channels)
-            return
-        # Regular private message
+    def _on_privmsg(nick: str, body: str):
         msg = {
             "id": os.urandom(4).hex(),
             "nick": nick,
@@ -151,170 +426,40 @@ def setup_irc(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         }
         print(f"[channel-server] [private:{nick}] {nick}: {body}", file=sys.stderr)
         loop.call_soon_threadsafe(queue.put_nowait, (msg, nick))
-        _msg_counter["received"] += 1
 
-    def on_disconnect(conn, event):
-        """Handle disconnection — attempt reconnect."""
-        print(f"[channel-server] Disconnected from IRC, reconnecting in 5s...", file=sys.stderr)
-        time.sleep(5)
-        try:
-            conn.reconnect()
-        except Exception as e:
-            print(f"[channel-server] Reconnect failed: {e}", file=sys.stderr)
-
-    connection.add_global_handler("welcome", on_welcome)
-    connection.add_global_handler("pubmsg", on_pubmsg)
-    connection.add_global_handler("privmsg", on_privmsg)
-    connection.add_global_handler("disconnect", on_disconnect)
-
-    # Run IRC reactor in a separate thread
-    def irc_thread():
-        try:
-            reactor.process_forever()
-        except Exception as e:
-            print(f"[channel-server] IRC reactor error: {e}", file=sys.stderr)
-
-    thread = threading.Thread(target=irc_thread, daemon=True)
-    thread.start()
-
-    return connection, joined_channels
-
-# ============================================================
-# Sys Message Handling
-# ============================================================
-
-def _handle_sys_message(msg: dict, sender_nick: str, connection, joined_channels: set):
-    """Handle incoming system messages over IRC PRIVMSG."""
-    msg_type = msg.get("type", "")
-    if msg_type == "sys.stop_request":
-        reply = make_sys_message(AGENT_NAME, "sys.stop_confirmed", {}, ref_id=msg["id"])
-        connection.privmsg(sender_nick, encode_sys_for_irc(reply))
-    elif msg_type == "sys.join_request":
-        channel = msg.get("body", {}).get("channel", "").lstrip("#")
-        if channel:
-            connection.join(f"#{channel}")
-            joined_channels.add(channel)
-            reply = make_sys_message(AGENT_NAME, "sys.join_confirmed",
-                                     {"channel": f"#{channel}"}, ref_id=msg["id"])
-            connection.privmsg(sender_nick, encode_sys_for_irc(reply))
-    elif msg_type == "sys.status_request":
-        reply = make_sys_message(AGENT_NAME, "sys.status_response", {
-            "channels": list(joined_channels),
-            "messages_sent": _msg_counter["sent"],
-            "messages_received": _msg_counter["received"],
-        }, ref_id=msg["id"])
-        connection.privmsg(sender_nick, encode_sys_for_irc(reply))
-
-# ============================================================
-# MCP Server + Tools
-# ============================================================
-
-def load_instructions(agent_name: str) -> str:
-    """Load instructions.md and interpolate agent_name."""
-    path = Path(__file__).parent / "instructions.md"
-    tmpl = Template(path.read_text(encoding="utf-8"))
-    return tmpl.safe_substitute(agent_name=agent_name)
-
-
-def create_server():
-    instructions = load_instructions(AGENT_NAME)
-    server = Server("zchat-channel", instructions=instructions)
-    return server
-
-def register_tools(server: Server, state: dict):
-    """Register MCP tools. IRC connection is resolved lazily from state dict."""
-
-    def _get_irc():
-        conn = state.get("irc_connection")
-        if conn is None:
-            raise RuntimeError("IRC connection not initialized yet")
-        return conn
-
-    @server.list_tools()
-    async def handle_list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="reply",
-                description="Reply to a user or channel. chat_id is a username for private (e.g. 'alice') or #channel name (e.g. '#general').",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "chat_id": {"type": "string", "description": "Target: username or #channel"},
-                        "text": {"type": "string", "description": "Message content"},
-                    },
-                    "required": ["chat_id", "text"],
-                },
-            ),
-            Tool(
-                name="join_channel",
-                description="Join an IRC channel to receive @mentions.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "channel_name": {"type": "string", "description": "Channel name without # prefix"},
-                    },
-                    "required": ["channel_name"],
-                },
-            ),
-        ]
-
-    @server.call_tool()
-    async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
-        conn = _get_irc()
-        if name == "reply":
-            return await _handle_reply(conn, arguments)
-        elif name == "join_channel":
-            return await _handle_join_channel(conn, arguments)
-        raise ValueError(f"Unknown tool: {name}")
-
-async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
-    chat_id = arguments["chat_id"]
-    text = arguments["text"]
-    chunks = chunk_message(text)
-    for chunk in chunks:
-        target = chat_id  # #channel or nick
-        connection.privmsg(target, chunk)
-    _msg_counter["sent"] += 1
-    return [TextContent(type="text", text=f"Sent to {chat_id}")]
-
-async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]:
-    channel = arguments["channel_name"]
-    connection.join(f"#{channel}")
-    return [TextContent(type="text", text=f"Joined #{channel}")]
-
-
-# ============================================================
-# Main
-# ============================================================
-
-async def main():
-    queue: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_running_loop()
-    server = create_server()
-    state: dict = {}
-    register_tools(server, state)
     init_opts = InitializationOptions(
         server_name=f"zchat-channel-{AGENT_NAME}",
-        server_version="0.2.0",
+        server_version="1.0.0",
         capabilities=server.get_capabilities(
             notification_options=NotificationOptions(),
             experimental_capabilities={"claude/channel": {}},
         ),
     )
+
+    # 先启 Bridge WebSocket（无阻塞），E2E 测试依赖这个先就绪
+    await bridge_server.start()
+
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await anyio.sleep(2)
-        connection, joined_channels = setup_irc(queue, loop)
+        connection = irc_transport.start(
+            queue,
+            loop,
+            on_pubmsg=_on_pubmsg,
+            on_privmsg_text=_on_privmsg,
+        )
         state["irc_connection"] = connection
         try:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(server.run, read_stream, write_stream, init_opts)
                 tg.start_soon(poll_irc_queue, queue, write_stream)
         finally:
-            connection.disconnect("Agent shutting down")
+            irc_transport.disconnect("Agent shutting down")
+            await bridge_server.stop()
 
-def entry_point():
-    """Synchronous entry point for console_scripts."""
+
+def entry_point() -> None:
     asyncio.run(main())
+
 
 if __name__ == "__main__":
     entry_point()
