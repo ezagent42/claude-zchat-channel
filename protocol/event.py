@@ -42,7 +42,7 @@ class EventType(Enum):
 @dataclass
 class Event:
     type: EventType
-    conversation_id: str
-    data: dict[str, Any]
+    conversation_id: str = ""
+    data: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
     id: str = field(default_factory=lambda: str(uuid4()))
