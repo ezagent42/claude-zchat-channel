@@ -33,6 +33,8 @@ from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
 from engine.timer_manager import TimerManager
 from message import chunk_message, clean_mention, detect_mention
+from protocol.mode import ConversationMode
+from protocol.participant import Participant, ParticipantRole
 from transport.irc_transport import IRCTransport
 
 # ------------------------------------------------------------------ #
@@ -344,6 +346,107 @@ async def _handle_get_conversation_status(
 
 
 # ------------------------------------------------------------------ #
+# Bridge 回调注入
+# ------------------------------------------------------------------ #
+
+
+def wire_bridge_callbacks(
+    bridge_server: BridgeAPIServer, components: dict[str, Any]
+) -> None:
+    """将业务回调注入到 BridgeAPIServer 的钩子槽中。
+
+    从 main() 中独立出来便于单元测试。
+    """
+    conv_manager: ConversationManager = components["conversation_manager"]
+    mode_manager: ModeManager = components["mode_manager"]
+
+    async def _on_operator_join(msg: dict) -> None:
+        """Operator 通过 Bridge 加入对话 → 注册参与者 + 触发模式切换。"""
+        conv_id = msg.get("conversation_id", "")
+        operator = msg.get("operator", {})
+        operator_id = operator.get("id", "unknown")
+
+        conv = conv_manager.get(conv_id)
+        if conv is None:
+            print(
+                f"[server] operator_join: conversation {conv_id!r} not found",
+                file=sys.stderr,
+            )
+            return
+
+        # 注册 operator 参与者
+        participant = Participant(id=operator_id, role=ParticipantRole.OPERATOR)
+        try:
+            conv_manager.add_participant(conv_id, participant)
+        except Exception as e:
+            print(f"[server] add_participant failed: {e}", file=sys.stderr)
+
+        # 模式切换：auto → copilot（仅当前为 auto 时）
+        if conv.mode == ConversationMode.AUTO.value:
+            try:
+                t = await mode_manager.atransition(
+                    conv,
+                    ConversationMode.COPILOT,
+                    trigger="operator_join",
+                    triggered_by=operator_id,
+                )
+                await bridge_server.send_event(
+                    "mode.changed",
+                    {"from": t.from_mode.value, "to": t.to_mode.value,
+                     "trigger": "operator_join", "triggered_by": operator_id},
+                    conv_id,
+                )
+            except Exception as e:
+                print(f"[server] mode transition failed: {e}", file=sys.stderr)
+
+    async def _on_operator_command(msg: dict, cmd: Any) -> None:
+        """Operator 发送命令（/hijack / /release / /copilot）→ 模式切换。"""
+        conv_id = msg.get("conversation_id", "")
+        operator_id = msg.get("operator_id", "unknown")
+
+        conv = conv_manager.get(conv_id)
+        if conv is None:
+            return
+
+        target_mode: ConversationMode | None = None
+        if cmd.name == "hijack":
+            target_mode = ConversationMode.TAKEOVER
+        elif cmd.name == "release":
+            target_mode = ConversationMode.AUTO
+        elif cmd.name == "copilot":
+            target_mode = ConversationMode.COPILOT
+
+        if target_mode is None:
+            return
+
+        try:
+            t = await mode_manager.atransition(
+                conv,
+                target_mode,
+                trigger=cmd.name,
+                triggered_by=operator_id,
+            )
+            await bridge_server.send_event(
+                "mode.changed",
+                {"from": t.from_mode.value, "to": t.to_mode.value,
+                 "trigger": cmd.name, "triggered_by": operator_id},
+                conv_id,
+            )
+            # hijack 后发出 side visibility 系统通知（E2E gate enforcement 验证路径）
+            if cmd.name == "hijack":
+                await bridge_server.send_reply(
+                    conversation_id=conv_id,
+                    text=f"[system] takeover activated by {operator_id}",
+                    visibility="side",
+                )
+        except Exception as e:
+            print(f"[server] command {cmd.name} failed: {e}", file=sys.stderr)
+
+    bridge_server.on_operator_join = _on_operator_join
+    bridge_server.on_operator_command = _on_operator_command
+
+
+# ------------------------------------------------------------------ #
 # 组件组装
 # ------------------------------------------------------------------ #
 
@@ -435,6 +538,9 @@ async def main() -> None:
             experimental_capabilities={"claude/channel": {}},
         ),
     )
+
+    # 注入业务回调（mode switching / command dispatch）
+    wire_bridge_callbacks(bridge_server, components)
 
     # 先启 Bridge WebSocket（无阻塞），E2E 测试依赖这个先就绪
     await bridge_server.start()

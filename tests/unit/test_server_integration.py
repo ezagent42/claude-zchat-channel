@@ -120,3 +120,28 @@ def test_list_conversations_tool_happy_path() -> None:
     components["event_bus"].close()
     components["conversation_manager"].close_db()
     components["message_store"].close()
+
+
+# TC-U15: wire_bridge_callbacks 注入了 on_operator_join + on_operator_command
+def test_build_components_injects_operator_callbacks() -> None:
+    """
+    server.wire_bridge_callbacks(bridge_server, components) 注入后
+    on_operator_join 和 on_operator_command 均非 None。
+    """
+    import server
+
+    components = server.build_components()
+    bridge_server = components["bridge_server"]
+
+    server.wire_bridge_callbacks(bridge_server, components)
+
+    assert bridge_server.on_operator_join is not None, (
+        "on_operator_join should be wired by wire_bridge_callbacks()"
+    )
+    assert bridge_server.on_operator_command is not None, (
+        "on_operator_command should be wired by wire_bridge_callbacks()"
+    )
+
+    components["event_bus"].close()
+    components["conversation_manager"].close_db()
+    components["message_store"].close()

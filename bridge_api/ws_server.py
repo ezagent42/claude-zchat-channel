@@ -64,6 +64,7 @@ class BridgeAPIServer:
         # 可选钩子（由 server.py 组装时注入）
         self.on_customer_message: Callable[[dict], Awaitable[None]] | None = None
         self.on_operator_message: Callable[[dict], Awaitable[None]] | None = None
+        self.on_operator_join: Callable[[dict], Awaitable[None]] | None = None
         self.on_operator_command: Callable[[dict, Command], Awaitable[None]] | None = None
         self.on_admin_command: Callable[[dict, Command], Awaitable[None]] | None = None
 
@@ -133,6 +134,32 @@ class BridgeAPIServer:
     def _connections_for_role(self, role: str) -> list[BridgeConnection]:
         return [c for c in self._connections.values() if role in c.capabilities]
 
+    async def send_event(
+        self,
+        event_type: str,
+        data: dict,
+        conversation_id: str,
+    ) -> None:
+        """广播协议级事件到所有已注册 Bridge 连接（无 visibility 过滤）。
+
+        用于 mode.changed 等状态变化通知，所有角色都需要感知。
+        """
+        payload = json.dumps(
+            {
+                "type": "event",
+                "event_type": event_type,
+                "conversation_id": conversation_id,
+                "data": data,
+            }
+        )
+        for conn in list(self._connections.values()):
+            if conn.websocket is None:
+                continue
+            try:
+                await conn.websocket.send(payload)
+            except Exception:
+                logger.exception("send_event failed: %s", conn.instance_id)
+
     async def send_reply(
         self,
         conversation_id: str,
@@ -183,6 +210,8 @@ class BridgeAPIServer:
                     )
                 elif msg_type == "customer_connect":
                     self._handle_customer_connect(msg)
+                elif msg_type == "operator_join" and self.on_operator_join:
+                    await self.on_operator_join(msg)
                 elif msg_type == "customer_message" and self.on_customer_message:
                     await self.on_customer_message(msg)
                 elif msg_type == "operator_message" and self.on_operator_message:
