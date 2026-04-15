@@ -120,6 +120,54 @@
       "created_at": "2026-04-15T16:05:00Z",
       "updated_at": "2026-04-15T16:05:00Z",
       "related_ids": ["cs-diff-card-thread", "cs-plan-feishu", "cs-eval-feishu"]
+    },
+    {
+      "id": "cs-eval-p2-commands",
+      "name": "Task 4.6.6 P2 命令 handler 评估",
+      "type": "eval-doc",
+      "status": "executed",
+      "producer": "skill-5",
+      "consumers": ["skill-2"],
+      "path": ".artifacts/eval-docs/cs-eval-p2-commands.md",
+      "created_at": "2026-04-15T17:00:00Z",
+      "updated_at": "2026-04-15T17:40:00Z",
+      "related_ids": ["cs-plan-p2-commands", "cs-diff-p2-commands", "cs-report-p2-commands"]
+    },
+    {
+      "id": "cs-plan-p2-commands",
+      "name": "Task 4.6.6 P2 命令 handler 测试计划",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": ["skill-3"],
+      "path": ".artifacts/test-plans/cs-plan-p2-commands.md",
+      "created_at": "2026-04-15T17:05:00Z",
+      "updated_at": "2026-04-15T17:40:00Z",
+      "related_ids": ["cs-eval-p2-commands", "cs-diff-p2-commands", "cs-report-p2-commands"]
+    },
+    {
+      "id": "cs-diff-p2-commands",
+      "name": "Task 4.6.6 P2 命令 handler 代码变更",
+      "type": "code-diff",
+      "status": "confirmed",
+      "producer": "skill-3",
+      "consumers": ["skill-4"],
+      "path": ".artifacts/code-diffs/cs-diff-p2-commands.md",
+      "created_at": "2026-04-15T17:30:00Z",
+      "updated_at": "2026-04-15T17:40:00Z",
+      "related_ids": ["cs-eval-p2-commands", "cs-plan-p2-commands", "cs-report-p2-commands"]
+    },
+    {
+      "id": "cs-report-p2-commands",
+      "name": "Task 4.6.6 P2 命令 handler 测试报告",
+      "type": "e2e-report",
+      "status": "confirmed",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-p2-commands.md",
+      "created_at": "2026-04-15T17:40:00Z",
+      "updated_at": "2026-04-15T17:40:00Z",
+      "related_ids": ["cs-eval-p2-commands", "cs-plan-p2-commands", "cs-diff-p2-commands"]
     }
   ]
 }

@@ -34,6 +34,10 @@ class SquadRegistry:
     def get_squad(self, operator_id: str) -> list[str]:
         return list(self._operator_to_agents.get(operator_id, []))
 
+    def list_all(self) -> dict[str, list[str]]:
+        """返回所有分队的快照副本：{operator_id: [agent_ids]}。"""
+        return {op: list(agents) for op, agents in self._operator_to_agents.items()}
+
     def _detach(self, agent_id: str, operator_id: str) -> None:
         squad = self._operator_to_agents.get(operator_id)
         if not squad:

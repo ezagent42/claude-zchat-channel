@@ -22,6 +22,7 @@ from engine.event_bus import EventBus
 from engine.message_store import MessageStore
 from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
+from engine.squad_registry import SquadRegistry
 from engine.timer_manager import TimerManager
 from protocol.event import Event, EventType
 from protocol.gate import gate_message
@@ -121,6 +122,34 @@ def wire_bridge_callbacks(
         if conv is None:
             return
 
+        # /abandon → 直接关闭对话（不发 CSAT，不标 outcome）
+        if cmd.name == "abandon":
+            try:
+                if conv.state.value == "created":
+                    conv_manager.activate(conv_id)
+                conv_manager.close(conv_id)
+                event_bus: EventBus = components["event_bus"]
+                await event_bus.publish(
+                    Event(
+                        type=EventType.CONVERSATION_CLOSED,
+                        conversation_id=conv_id,
+                        data={"abandoned_by": operator_id},
+                    )
+                )
+                await bridge_server.send_event(
+                    "conversation.closed",
+                    {"abandoned_by": operator_id, "trigger": "abandon"},
+                    conv_id,
+                )
+                await bridge_server.send_reply(
+                    conversation_id=conv_id,
+                    text=f"[system] 对话已被 {operator_id} 放弃",
+                    visibility="system",
+                )
+            except Exception as e:
+                print(f"[server] /abandon failed: {e}", file=sys.stderr)
+            return
+
         # /resolve → 结案 + CSAT 流程
         if cmd.name == "resolve":
             try:
@@ -178,9 +207,10 @@ def wire_bridge_callbacks(
             print(f"[server] command {cmd.name} failed: {e}", file=sys.stderr)
 
     async def _on_admin_command(msg: dict, cmd: Any) -> None:
-        """Admin 发送命令（/status / /dispatch / /review）。"""
+        """Admin 发送命令（/status / /dispatch / /review / /assign / /reassign / /squad）。"""
         admin_id = msg.get("admin_id", "unknown")
         event_bus: EventBus = components["event_bus"]
+        squad_registry: SquadRegistry = components["squad_registry"]
 
         if cmd.name == "status":
             convs = conv_manager.list_active()
@@ -261,6 +291,109 @@ def wire_bridge_callbacks(
                     f"  结案率: {resolve_rate}%\n"
                     f"  CSAT 均分: {csat_avg:.1f}"
                 )
+            await bridge_server.send_reply(
+                conversation_id="__admin",
+                text=text,
+                visibility="system",
+            )
+            return
+
+        if cmd.name == "assign":
+            agent_nick = cmd.args.get("agent_nick", "")
+            operator_id = cmd.args.get("operator_id", "")
+            if not agent_nick or not operator_id:
+                await bridge_server.send_reply(
+                    conversation_id="__admin",
+                    text="[assign] usage: /assign <agent_nick> <operator_id>",
+                    visibility="system",
+                )
+                return
+            try:
+                squad_registry.assign(agent_nick, operator_id)
+                await event_bus.publish(
+                    Event(
+                        type=EventType.SQUAD_ASSIGNED,
+                        conversation_id="",
+                        data={
+                            "agent_nick": agent_nick,
+                            "operator_id": operator_id,
+                            "assigned_by": admin_id,
+                        },
+                    )
+                )
+                await bridge_server.send_event(
+                    "squad.assigned",
+                    {"agent_nick": agent_nick, "operator_id": operator_id,
+                     "assigned_by": admin_id},
+                    "__admin",
+                )
+                await bridge_server.send_reply(
+                    conversation_id="__admin",
+                    text=f"[assign] {agent_nick} → {operator_id}",
+                    visibility="system",
+                )
+            except Exception as e:
+                print(f"[server] /assign failed: {e}", file=sys.stderr)
+            return
+
+        if cmd.name == "reassign":
+            agent_nick = cmd.args.get("agent_nick", "")
+            from_op = cmd.args.get("from_operator", "")
+            to_op = cmd.args.get("to_operator", "")
+            if not agent_nick or not to_op:
+                await bridge_server.send_reply(
+                    conversation_id="__admin",
+                    text="[reassign] usage: /reassign <agent_nick> <from_op> <to_op>",
+                    visibility="system",
+                )
+                return
+            try:
+                squad_registry.reassign(agent_nick, to_op)
+                await event_bus.publish(
+                    Event(
+                        type=EventType.SQUAD_REASSIGNED,
+                        conversation_id="",
+                        data={
+                            "agent_nick": agent_nick,
+                            "from_operator": from_op,
+                            "to_operator": to_op,
+                            "reassigned_by": admin_id,
+                        },
+                    )
+                )
+                await bridge_server.send_event(
+                    "squad.reassigned",
+                    {"agent_nick": agent_nick, "from_operator": from_op,
+                     "to_operator": to_op, "reassigned_by": admin_id},
+                    "__admin",
+                )
+                await bridge_server.send_reply(
+                    conversation_id="__admin",
+                    text=f"[reassign] {agent_nick}: {from_op} → {to_op}",
+                    visibility="system",
+                )
+            except Exception as e:
+                print(f"[server] /reassign failed: {e}", file=sys.stderr)
+            return
+
+        if cmd.name == "squad":
+            target = cmd.args.get("target", "")
+            if target:
+                agents = squad_registry.get_squad(target)
+                if agents:
+                    text = f"[squad] {target}: {', '.join(agents)}"
+                else:
+                    text = f"[squad] {target}: 暂无 agent"
+            else:
+                squads = squad_registry.list_all()
+                if not squads:
+                    text = "[squad] 暂无分队"
+                else:
+                    lines = ["[squad] 全部分队:"]
+                    for op_id in sorted(squads.keys()):
+                        agents = squads[op_id]
+                        lines.append(f"  {op_id}: {', '.join(agents)}")
+                    text = "\n".join(lines)
             await bridge_server.send_reply(
                 conversation_id="__admin",
                 text=text,
@@ -384,6 +517,7 @@ def build_components() -> dict[str, Any]:
     mode_manager = ModeManager(event_bus)
     timer_manager = TimerManager(event_bus)
     participant_registry = ParticipantRegistry()
+    squad_registry = SquadRegistry()
     message_store = MessageStore(CS_MESSAGE_DB_PATH)
     bridge_server = BridgeAPIServer(
         conversation_manager=conversation_manager,
@@ -405,6 +539,7 @@ def build_components() -> dict[str, Any]:
         "mode_manager": mode_manager,
         "timer_manager": timer_manager,
         "participant_registry": participant_registry,
+        "squad_registry": squad_registry,
         "message_store": message_store,
         "bridge_server": bridge_server,
         "irc_transport": irc_transport,

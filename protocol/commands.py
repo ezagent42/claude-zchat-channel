@@ -22,7 +22,7 @@ _COMMAND_DEFS: dict[str, list[str]] = {
     "abandon": [],
     "assign": ["agent_nick", "operator_id"],
     "reassign": ["agent_nick", "from_operator", "to_operator"],
-    "squad": [],
+    "squad": ["target"],
     "status": ["target"],
     "dispatch": ["conversation_id", "agent_nick"],
     "review": [],
