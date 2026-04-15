@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Runtime data (SQLite)
+*.db
+
+# Bootstrap intermediate
+env-report.json
+
+# Credentials
+.feishu-credentials.json
