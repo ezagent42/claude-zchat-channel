@@ -234,14 +234,15 @@ class BridgeAPIServer:
                     )
                 elif msg_type == "customer_connect":
                     self._handle_customer_connect(msg)
-                    if self.on_customer_connect:
-                        await self.on_customer_connect(msg)
+                    # ack 先发，再触发 on_customer_connect（可能产生 auto-dispatch 事件）
                     await websocket.send(
                         json.dumps({
                             "type": "customer_connected",
                             "conversation_id": msg.get("conversation_id", ""),
                         })
                     )
+                    if self.on_customer_connect:
+                        await self.on_customer_connect(msg)
                 elif msg_type == "operator_join" and self.on_operator_join:
                     await self.on_operator_join(msg)
                 elif msg_type == "customer_message" and self.on_customer_message:

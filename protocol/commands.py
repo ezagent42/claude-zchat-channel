@@ -25,6 +25,7 @@ _COMMAND_DEFS: dict[str, list[str]] = {
     "squad": [],
     "status": ["target"],
     "dispatch": ["conversation_id", "agent_nick"],
+    "review": [],
 }
 
 

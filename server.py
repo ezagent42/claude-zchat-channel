@@ -178,8 +178,9 @@ def wire_bridge_callbacks(
             print(f"[server] command {cmd.name} failed: {e}", file=sys.stderr)
 
     async def _on_admin_command(msg: dict, cmd: Any) -> None:
-        """Admin 发送命令（/status / /dispatch）。"""
+        """Admin 发送命令（/status / /dispatch / /review）。"""
         admin_id = msg.get("admin_id", "unknown")
+        event_bus: EventBus = components["event_bus"]
 
         if cmd.name == "status":
             convs = conv_manager.list_active()
@@ -222,6 +223,49 @@ def wire_bridge_callbacks(
                 )
             except Exception as e:
                 print(f"[server] /dispatch failed: {e}", file=sys.stderr)
+            return
+
+        if cmd.name == "review":
+            from datetime import datetime, timedelta, timezone
+            yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+            # 聚合统计：对话数来自 ConversationManager，其余来自 EventBus
+            all_convs = list(conv_manager._conversations.values())
+            conv_count = len(all_convs)
+            all_events = event_bus.query(since=yesterday)
+            takeover_count = sum(
+                1 for e in all_events
+                if e.type == EventType.MODE_CHANGED
+                and e.data.get("to") == "takeover"
+            )
+            resolved_count = sum(
+                1 for c in all_convs
+                if c.state.value == "closed"
+            )
+            csat_scores = [
+                c.resolution.csat_score for c in all_convs
+                if c.resolution is not None and c.resolution.csat_score is not None
+            ]
+            csat_avg = sum(csat_scores) / len(csat_scores) if csat_scores else 0.0
+            resolve_rate = (
+                round(resolved_count / conv_count * 100, 1)
+                if conv_count > 0 else 0.0
+            )
+
+            if conv_count == 0:
+                text = "[review] 暂无统计数据（过去 24h 无对话）"
+            else:
+                text = (
+                    f"[review] 过去 24h 统计:\n"
+                    f"  对话数: {conv_count}\n"
+                    f"  接管次数: {takeover_count}\n"
+                    f"  结案率: {resolve_rate}%\n"
+                    f"  CSAT 均分: {csat_avg:.1f}"
+                )
+            await bridge_server.send_reply(
+                conversation_id="__admin",
+                text=text,
+                visibility="system",
+            )
             return
 
     async def _on_customer_message(msg: dict) -> None:
@@ -299,9 +343,32 @@ def wire_bridge_callbacks(
     bridge_server.on_customer_message = _on_customer_message
     bridge_server.on_customer_connect = _on_customer_connect
 
-    # EventBus 订阅: escalation
+    async def _on_sla_breach(event: Event) -> None:
+        """SLA timer 超时 → 向 admin 发送告警。"""
+        timer_name = event.data.get("name", "")
+        if not timer_name.startswith("sla_"):
+            return
+        conv_id = event.conversation_id
+        duration = event.data.get("action_params", {}).get("duration_s", "?")
+        await bridge_server.send_event(
+            "sla.breach",
+            {
+                "conversation_id": conv_id,
+                "breach_type": timer_name,
+                "timeout_seconds": duration,
+            },
+            conv_id,
+        )
+        await bridge_server.send_reply(
+            conversation_id="__admin",
+            text=f"[SLA 告警] conv_id={conv_id} breach={timer_name} timeout={duration}s",
+            visibility="system",
+        )
+
+    # EventBus 订阅
     event_bus: EventBus = components["event_bus"]
     event_bus.subscribe(EventType.TIMER_EXPIRED, _on_escalation)
+    event_bus.subscribe(EventType.TIMER_EXPIRED, _on_sla_breach)
 
 
 # ------------------------------------------------------------------ #

@@ -142,12 +142,27 @@ async def test_auto_dispatch_on_create(routing_ws) -> None:
     assert dispatch_events[0]["data"]["dispatched_by"] == "__auto"
 
 
+async def _drain_until_dispatched(ws, timeout: float = 10.0) -> None:
+    """排空消息直到收到 agent.dispatched 事件（auto-dispatch 完成标志）。"""
+    import time as _time
+    deadline = _time.time() + timeout
+    while _time.time() < deadline:
+        try:
+            raw = await asyncio.wait_for(ws.recv(), timeout=3)
+            msg = json.loads(raw)
+            if msg.get("event_type") == "agent.dispatched":
+                return
+        except asyncio.TimeoutError:
+            continue
+    # timeout 也可接受（无 routing config 时不会有 auto-dispatch）
+
+
 async def test_dispatch_whitelist_reject_e2e(routing_ws) -> None:
     """TC-R02: /dispatch agent 不在白名单 → 收到拒绝 reply。"""
     ws = routing_ws
     conv_id = f"e2e_routing_{os.getpid()}_02"
 
-    # 创建对话 + 排空 ack/auto-dispatch
+    # 创建对话 + 排空到 auto-dispatch 完成
     await ws.send(
         json.dumps(
             {
@@ -157,11 +172,7 @@ async def test_dispatch_whitelist_reject_e2e(routing_ws) -> None:
             }
         )
     )
-    for _ in range(5):
-        try:
-            await asyncio.wait_for(ws.recv(), timeout=2)
-        except asyncio.TimeoutError:
-            break
+    await _drain_until_dispatched(ws)
 
     # /dispatch 不在白名单的 agent
     await ws.send(
@@ -187,7 +198,7 @@ async def test_dispatch_whitelist_pass_e2e(routing_ws) -> None:
     ws = routing_ws
     conv_id = f"e2e_routing_{os.getpid()}_03"
 
-    # 创建对话 + 排空
+    # 创建对话 + 排空到 auto-dispatch 完成
     await ws.send(
         json.dumps(
             {
@@ -197,11 +208,7 @@ async def test_dispatch_whitelist_pass_e2e(routing_ws) -> None:
             }
         )
     )
-    for _ in range(5):
-        try:
-            await asyncio.wait_for(ws.recv(), timeout=2)
-        except asyncio.TimeoutError:
-            break
+    await _drain_until_dispatched(ws)
 
     # /dispatch 在白名单的 agent
     await ws.send(
