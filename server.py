@@ -24,6 +24,7 @@ from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
 from engine.squad_registry import SquadRegistry
 from engine.timer_manager import TimerManager
+from plugins.manager import PluginManager
 from protocol.event import Event, EventType
 from protocol.gate import gate_message
 from protocol.message_types import MessageVisibility
@@ -54,6 +55,9 @@ CS_MESSAGE_DB_PATH = os.environ.get(
     "CS_MESSAGE_DB_PATH", CS_DB_PATH.replace(".db", "_messages.db")
 )
 CS_ROUTING_CONFIG = os.environ.get("CS_ROUTING_CONFIG", "routing.toml")
+CS_PLUGINS_DIR = os.environ.get(
+    "CS_PLUGINS_DIR", str(__import__("pathlib").Path(__file__).parent / "plugins")
+)
 
 
 # ------------------------------------------------------------------ #
@@ -436,6 +440,13 @@ def wire_bridge_callbacks(
                 )
             except Exception as e:
                 print(f"[server] auto-dispatch {agent_nick} failed: {e}", file=sys.stderr)
+        # App plugin hook: sla_onboard 等 App 层 timer 在此处设置
+        plugin_manager: PluginManager = components["plugin_manager"]
+        await plugin_manager.fire(
+            "on_conversation_created",
+            conv_id=conv_id,
+            components=components,
+        )
 
     async def _on_escalation(event: Event) -> None:
         """Escalation event → 按 escalation_chain 顺序 dispatch 到第一个可用 agent。"""
@@ -519,6 +530,8 @@ def build_components() -> dict[str, Any]:
     participant_registry = ParticipantRegistry()
     squad_registry = SquadRegistry()
     message_store = MessageStore(CS_MESSAGE_DB_PATH)
+    from pathlib import Path as _Path
+    plugin_manager = PluginManager(_Path(CS_PLUGINS_DIR))
     bridge_server = BridgeAPIServer(
         conversation_manager=conversation_manager,
         port=BRIDGE_PORT,
@@ -544,6 +557,7 @@ def build_components() -> dict[str, Any]:
         "bridge_server": bridge_server,
         "irc_transport": irc_transport,
         "routing_config": routing_cfg,
+        "plugin_manager": plugin_manager,
     }
 
 

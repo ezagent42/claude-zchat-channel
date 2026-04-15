@@ -168,6 +168,54 @@
       "created_at": "2026-04-15T17:40:00Z",
       "updated_at": "2026-04-15T17:40:00Z",
       "related_ids": ["cs-eval-p2-commands", "cs-plan-p2-commands", "cs-diff-p2-commands"]
+    },
+    {
+      "id": "cs-eval-sla-timers",
+      "name": "Task 4.6.7 SLA Timer 自动触发评估",
+      "type": "eval-doc",
+      "status": "executed",
+      "producer": "skill-5",
+      "consumers": ["skill-2"],
+      "path": ".artifacts/eval-docs/cs-eval-sla-timers.md",
+      "created_at": "2026-04-15T18:00:00Z",
+      "updated_at": "2026-04-15T18:40:00Z",
+      "related_ids": ["cs-plan-sla-timers", "cs-diff-sla-timers", "cs-report-sla-timers"]
+    },
+    {
+      "id": "cs-plan-sla-timers",
+      "name": "Task 4.6.7 SLA Timer 测试计划",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": ["skill-3"],
+      "path": ".artifacts/test-plans/cs-plan-sla-timers.md",
+      "created_at": "2026-04-15T18:05:00Z",
+      "updated_at": "2026-04-15T18:40:00Z",
+      "related_ids": ["cs-eval-sla-timers", "cs-diff-sla-timers", "cs-report-sla-timers"]
+    },
+    {
+      "id": "cs-diff-sla-timers",
+      "name": "Task 4.6.7 SLA Timer 代码变更",
+      "type": "code-diff",
+      "status": "confirmed",
+      "producer": "skill-3",
+      "consumers": ["skill-4"],
+      "path": ".artifacts/code-diffs/cs-diff-sla-timers.md",
+      "created_at": "2026-04-15T18:30:00Z",
+      "updated_at": "2026-04-15T18:40:00Z",
+      "related_ids": ["cs-eval-sla-timers", "cs-plan-sla-timers", "cs-report-sla-timers"]
+    },
+    {
+      "id": "cs-report-sla-timers",
+      "name": "Task 4.6.7 SLA Timer 测试报告",
+      "type": "e2e-report",
+      "status": "confirmed",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-sla-timers.md",
+      "created_at": "2026-04-15T18:40:00Z",
+      "updated_at": "2026-04-15T18:40:00Z",
+      "related_ids": ["cs-eval-sla-timers", "cs-plan-sla-timers", "cs-diff-sla-timers"]
     }
   ]
 }
