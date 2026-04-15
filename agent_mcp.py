@@ -11,6 +11,7 @@ import asyncio
 import os
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
@@ -107,8 +108,9 @@ def register_tools(server: Server, state: dict) -> None:
             Tool(
                 name="reply",
                 description=(
-                    "Reply to a user or channel. chat_id is a username for private "
-                    "(e.g. 'alice') or #channel name (e.g. '#general')."
+                    "Reply to a user or channel. Returns message_id (UUID) for later "
+                    "edit_of reference. Use edit_of to edit a previous message. "
+                    "Use side=true for side-channel messages (squad only)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -120,6 +122,14 @@ def register_tools(server: Server, state: dict) -> None:
                         "text": {
                             "type": "string",
                             "description": "Message content",
+                        },
+                        "edit_of": {
+                            "type": "string",
+                            "description": "message_id of the message to edit/replace",
+                        },
+                        "side": {
+                            "type": "boolean",
+                            "description": "Send as side-channel message (squad only)",
                         },
                     },
                     "required": ["chat_id", "text"],
@@ -190,9 +200,23 @@ def register_tools(server: Server, state: dict) -> None:
 async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
     chat_id = arguments["chat_id"]
     text = arguments["text"]
-    for chunk in chunk_message(text):
+    edit_of = arguments.get("edit_of")
+    side = arguments.get("side", False)
+    message_id = str(uuid.uuid4())
+
+    if edit_of:
+        # 编辑替换：__edit:<original_msg_id>:<new_text>
+        prefixed = f"__edit:{edit_of}:{text}"
+    elif side:
+        # side channel：__side:<text>
+        prefixed = f"__side:{text}"
+    else:
+        # 普通消息：__msg:<msg_id>:<text>
+        prefixed = f"__msg:{message_id}:{text}"
+
+    for chunk in chunk_message(prefixed):
         connection.privmsg(chat_id, chunk)
-    return [TextContent(type="text", text=f"Sent to {chat_id}")]
+    return [TextContent(type="text", text=f'{{"message_id": "{message_id}", "sent_to": "{chat_id}"}}')]
 
 
 async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]:

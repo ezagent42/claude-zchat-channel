@@ -23,9 +23,11 @@ from engine.message_store import MessageStore
 from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
 from engine.timer_manager import TimerManager
+from protocol.gate import gate_message
+from protocol.message_types import MessageVisibility
 from protocol.mode import ConversationMode
 from protocol.participant import Participant, ParticipantRole
-from transport.irc_transport import IRCTransport
+from transport.irc_transport import IRCTransport, parse_agent_message
 
 # ------------------------------------------------------------------ #
 # 环境变量
@@ -218,10 +220,23 @@ def wire_bridge_callbacks(
             except Exception as e:
                 print(f"[server] set_csat failed: {e}", file=sys.stderr)
 
+    async def _on_customer_connect(msg: dict) -> None:
+        """Customer 接入 → IRC bot JOIN 对应 #conv-{id} 频道。"""
+        conv_id = msg.get("conversation_id", "")
+        if conv_id:
+            irc_transport = components.get("irc_transport")
+            if irc_transport is not None:
+                channel = IRCTransport.conv_channel_name(conv_id)
+                try:
+                    irc_transport.join(channel)
+                except Exception as e:
+                    print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
+
     bridge_server.on_operator_join = _on_operator_join
     bridge_server.on_operator_command = _on_operator_command
     bridge_server.on_admin_command = _on_admin_command
     bridge_server.on_customer_message = _on_customer_message
+    bridge_server.on_customer_connect = _on_customer_connect
 
 
 # ------------------------------------------------------------------ #
@@ -283,14 +298,71 @@ async def main() -> None:
         file=sys.stderr,
     )
 
-    # 启动 IRC bot
+    # 启动 IRC bot + 消息路由
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
-    irc_transport.start(queue, loop)
+    conv_manager: ConversationManager = components["conversation_manager"]
+    message_store: MessageStore = components["message_store"]
+
+    def _on_pubmsg(conn, event):
+        """IRC 频道消息 → 入队待路由到 Bridge API。"""
+        nick = event.source.nick
+        if nick == AGENT_NAME:
+            return
+        channel = event.target
+        body = event.arguments[0]
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            {"nick": nick, "channel": channel, "body": body},
+        )
+
+    irc_transport.start(queue, loop, on_pubmsg=_on_pubmsg)
     print(
         f"[channel-server] IRC bot '{AGENT_NAME}' connecting to {IRC_SERVER}:{IRC_PORT}",
         file=sys.stderr,
     )
+
+    async def _route_irc_messages() -> None:
+        """从 IRC 队列读取 agent 消息，解析前缀后路由到 Bridge API。"""
+        while True:
+            msg = await queue.get()
+            channel = msg["channel"]
+            conv_id = IRCTransport.extract_conv_id(channel)
+            if conv_id is None:
+                continue
+
+            parsed = parse_agent_message(msg["body"])
+            try:
+                if parsed["type"] == "edit":
+                    await bridge_server.send_edit(
+                        conv_id, parsed["message_id"], parsed["text"]
+                    )
+                elif parsed["type"] == "side":
+                    await bridge_server.send_reply(
+                        conversation_id=conv_id,
+                        text=parsed["text"],
+                        visibility="side",
+                    )
+                else:
+                    # 普通消息 — Gate 根据 mode + role 判定 visibility
+                    conv = conv_manager.get(conv_id)
+                    visibility = "public"
+                    if conv is not None:
+                        agent_participant = Participant(
+                            id=msg["nick"], role=ParticipantRole.AGENT
+                        )
+                        gate_result = gate_message(
+                            conv, agent_participant, MessageVisibility.PUBLIC
+                        )
+                        visibility = gate_result.value
+                    await bridge_server.send_reply(
+                        conversation_id=conv_id,
+                        text=parsed["text"],
+                        visibility=visibility,
+                        message_id=parsed.get("message_id"),
+                    )
+            except Exception as e:
+                print(f"[channel-server] route error: {e}", file=sys.stderr)
 
     # 等待 shutdown 信号
     shutdown = asyncio.Event()
@@ -301,9 +373,13 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal)
 
+    # 启动 IRC 消息路由任务
+    route_task = asyncio.create_task(_route_irc_messages())
+
     try:
         await shutdown.wait()
     finally:
+        route_task.cancel()
         print("[channel-server] shutting down...", file=sys.stderr)
         irc_transport.disconnect("Server shutting down")
         await bridge_server.stop()

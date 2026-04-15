@@ -112,7 +112,7 @@ def test_reply_tool_sends_message() -> None:
     content = result.root.content
     assert len(content) == 1
     assert content[0].type == "text"
-    assert "Sent to" in content[0].text
+    assert "sent_to" in content[0].text
     mock_conn.privmsg.assert_called()
 
 

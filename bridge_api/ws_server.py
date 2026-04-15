@@ -67,6 +67,7 @@ class BridgeAPIServer:
         self.on_operator_join: Callable[[dict], Awaitable[None]] | None = None
         self.on_operator_command: Callable[[dict, Command], Awaitable[None]] | None = None
         self.on_admin_command: Callable[[dict, Command], Awaitable[None]] | None = None
+        self.on_customer_connect: Callable[[dict], Awaitable[None]] | None = None
 
     # ------------------------------------------------------------------ #
     # 静态路由表
@@ -188,6 +189,29 @@ class BridgeAPIServer:
                 except Exception:
                     logger.exception("send_reply failed: %s", conn.instance_id)
 
+    async def send_edit(
+        self,
+        conversation_id: str,
+        message_id: str,
+        text: str,
+    ) -> None:
+        """广播编辑消息到所有 Bridge 连接（feishu_bridge 用 message_id 查映射调 update_message）。"""
+        payload = json.dumps(
+            {
+                "type": "edit",
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "text": text,
+            }
+        )
+        for conn in list(self._connections.values()):
+            if conn.websocket is None:
+                continue
+            try:
+                await conn.websocket.send(payload)
+            except Exception:
+                logger.exception("send_edit failed: %s", conn.instance_id)
+
     # ------------------------------------------------------------------ #
     # WebSocket 主循环
     # ------------------------------------------------------------------ #
@@ -210,6 +234,14 @@ class BridgeAPIServer:
                     )
                 elif msg_type == "customer_connect":
                     self._handle_customer_connect(msg)
+                    if self.on_customer_connect:
+                        await self.on_customer_connect(msg)
+                    await websocket.send(
+                        json.dumps({
+                            "type": "customer_connected",
+                            "conversation_id": msg.get("conversation_id", ""),
+                        })
+                    )
                 elif msg_type == "operator_join" and self.on_operator_join:
                     await self.on_operator_join(msg)
                 elif msg_type == "customer_message" and self.on_customer_message:

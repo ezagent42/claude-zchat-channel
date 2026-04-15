@@ -80,7 +80,9 @@ async def _setup_takeover(ws, conv_id: str) -> None:
             }
         )
     )
-    await asyncio.sleep(0.3)
+    # 消费 customer_connected 确认
+    ack = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
     await ws.send(
         json.dumps(
             {
@@ -169,7 +171,9 @@ async def test_mode_changed_event_broadcast_to_all(
             }
         )
     )
-    await asyncio.sleep(0.3)
+    # 消费 customer_connected 确认
+    ack = json.loads(await asyncio.wait_for(customer_ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
 
     await operator_ws.send(
         json.dumps(

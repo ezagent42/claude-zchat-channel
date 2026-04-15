@@ -31,7 +31,9 @@ async def test_resolve_emits_event_and_csat(bridge_ws, channel_server):
             }
         )
     )
-    await asyncio.sleep(0.5)
+    # 消费 customer_connected 确认
+    ack = json.loads(await asyncio.wait_for(bridge_ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
 
     # 2. /resolve
     await bridge_ws.send(
@@ -108,7 +110,9 @@ async def test_dispatch_emits_agent_dispatched(bridge_ws, channel_server):
             }
         )
     )
-    await asyncio.sleep(0.5)
+    # 消费 customer_connected 确认
+    ack = json.loads(await asyncio.wait_for(bridge_ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
 
     # 2. /dispatch
     await bridge_ws.send(

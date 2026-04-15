@@ -27,6 +27,41 @@ from zchat_protocol.sys_messages import (
 CONV_CHANNEL_PREFIX = "#conv-"
 
 
+def parse_agent_message(text: str) -> dict:
+    """解析 agent IRC 消息前缀，返回结构化消息字典。
+
+    前缀格式:
+        __msg:<uuid>:<text>    — 普通回复，含 message_id
+        __edit:<uuid>:<text>   — 编辑替换已有消息
+        __side:<text>          — side channel 消息 (visibility=side)
+        (无前缀)               — 普通消息，Gate 判定 visibility
+    """
+    if text.startswith("__edit:"):
+        rest = text[len("__edit:"):]
+        colon_idx = rest.find(":")
+        if colon_idx == -1:
+            return {"type": "reply", "text": text}
+        msg_id = rest[:colon_idx]
+        body = rest[colon_idx + 1:]
+        return {"type": "edit", "message_id": msg_id, "text": body}
+
+    if text.startswith("__side:"):
+        body = text[len("__side:"):]
+        return {"type": "side", "text": body}
+
+    if text.startswith("__msg:"):
+        rest = text[len("__msg:"):]
+        colon_idx = rest.find(":")
+        if colon_idx == -1:
+            return {"type": "reply", "text": text}
+        msg_id = rest[:colon_idx]
+        body = rest[colon_idx + 1:]
+        return {"type": "reply", "message_id": msg_id, "text": body}
+
+    # 无前缀 — 普通消息
+    return {"type": "reply", "text": text}
+
+
 class IRCTransport:
     """封装 IRC 连接、事件分发与对话频道命名。
 

@@ -35,7 +35,9 @@ async def test_operator_join_triggers_copilot(bridge_ws, channel_server):
             }
         )
     )
-    await asyncio.sleep(0.5)
+    # 消费 customer_connected 确认
+    ack = json.loads(await asyncio.wait_for(bridge_ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
 
     # 2. Operator 加入 → 触发 auto→copilot
     await bridge_ws.send(
@@ -74,7 +76,9 @@ async def test_hijack_triggers_takeover(bridge_ws, channel_server):
             }
         )
     )
-    await asyncio.sleep(0.3)
+    # 消费 customer_connected 确认
+    ack = json.loads(await asyncio.wait_for(bridge_ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
 
     # 2. Operator 加入 → auto→copilot（消费 mode.changed 事件）
     await bridge_ws.send(
