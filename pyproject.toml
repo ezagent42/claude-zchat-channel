@@ -26,7 +26,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["protocol", "engine", "transport", "bridge_api", "."]
 only-include = [
-    "server.py", "message.py", "instructions.md",
+    "server.py", "agent_mcp.py", "message.py", "instructions.md",
     "protocol/", "engine/", "transport/", "bridge_api/",
 ]
 
@@ -40,6 +40,7 @@ test = [
 
 [project.scripts]
 zchat-channel = "server:entry_point"
+zchat-agent-mcp = "agent_mcp:entry_point"
 
 [dependency-groups]
 dev = [

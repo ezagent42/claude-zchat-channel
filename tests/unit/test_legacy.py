@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from server import load_instructions
+from agent_mcp import load_instructions
 from zchat_protocol.sys_messages import encode_sys_for_irc, decode_sys_from_irc, make_sys_message
 
 

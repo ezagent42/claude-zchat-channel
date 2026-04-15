@@ -18,17 +18,15 @@ def _env(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_NAME", "unit-agent")
 
 
-def test_register_tools_lists_seven_tools() -> None:
-    """handle_list_tools 应返回 7 个 tool（2 旧 + 5 新）。"""
-    import server
+def test_register_tools_lists_four_tools() -> None:
+    """handle_list_tools 应返回 4 个 agent MCP tool。"""
+    import agent_mcp
 
-    srv = server.create_server()
+    srv = agent_mcp.create_server()
     state: dict = {}
-    server.register_tools(srv, state)
+    agent_mcp.register_tools(srv, state)
 
-    # lowlevel.Server 的 tools 在 request handler 里，需要直接调用注册的 callback
     handler = srv.request_handlers
-    # 找到 list_tools handler 并调用
     from mcp.types import ListToolsRequest
 
     req = ListToolsRequest(method="tools/list", params=None)
@@ -38,11 +36,8 @@ def test_register_tools_lists_seven_tools() -> None:
     assert names == {
         "reply",
         "join_channel",
-        "edit_message",
         "join_conversation",
         "send_side_message",
-        "list_conversations",
-        "get_conversation_status",
     }
 
 
@@ -94,32 +89,31 @@ def test_bridge_customer_connect_creates_conversation(tmp_path) -> None:
     cm.close_db()
 
 
-def test_list_conversations_tool_happy_path() -> None:
-    """list_conversations tool 调用应返回 TextContent（JSON 列表）。"""
-    import server
+def test_reply_tool_sends_message() -> None:
+    """reply tool 调用应通过 IRC 发送消息。"""
+    import agent_mcp
     from mcp.types import CallToolRequest, CallToolRequestParams
 
-    srv = server.create_server()
+    srv = agent_mcp.create_server()
     state: dict = {}
-    components = server.build_components()
-    state["components"] = components
-    # mock IRC connection so _get_irc() 不抛
-    state["irc_connection"] = MagicMock()
-    server.register_tools(srv, state)
+    mock_conn = MagicMock()
+    state["irc_connection"] = mock_conn
+    agent_mcp.register_tools(srv, state)
 
     handler = srv.request_handlers
     req = CallToolRequest(
         method="tools/call",
-        params=CallToolRequestParams(name="list_conversations", arguments={}),
+        params=CallToolRequestParams(
+            name="reply",
+            arguments={"chat_id": "#general", "text": "hello"},
+        ),
     )
     result = asyncio.run(handler[CallToolRequest](req))
     content = result.root.content
     assert len(content) == 1
     assert content[0].type == "text"
-
-    components["event_bus"].close()
-    components["conversation_manager"].close_db()
-    components["message_store"].close()
+    assert "Sent to" in content[0].text
+    mock_conn.privmsg.assert_called()
 
 
 # TC-U15: wire_bridge_callbacks 注入了 on_operator_join + on_operator_command

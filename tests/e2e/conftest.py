@@ -185,7 +185,7 @@ def channel_server(
         ["uv", "run", "python", "-m", "server"],
         cwd=str(server_root),
         env=env,
-        stdin=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
@@ -193,11 +193,6 @@ def channel_server(
         _wait_for_port("127.0.0.1", e2e_ports["bridge"], timeout=20)
         yield proc
     finally:
-        if proc.stdin and not proc.stdin.closed:
-            try:
-                proc.stdin.close()
-            except Exception:
-                pass
         proc.terminate()
         try:
             proc.wait(timeout=5)
