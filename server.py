@@ -408,6 +408,28 @@ def wire_bridge_callbacks(
         if conv is None:
             return
 
+        # /resolve → 结案 + CSAT 流程
+        if cmd.name == "resolve":
+            try:
+                # CREATED 状态需要先激活才能 close
+                if conv.state.value == "created":
+                    conv_manager.activate(conv_id)
+                conv_manager.resolve(conv_id, outcome="resolved", resolved_by=operator_id)
+                await bridge_server.send_event(
+                    "conversation.resolved",
+                    {"outcome": "resolved", "resolved_by": operator_id},
+                    conv_id,
+                )
+                await bridge_server.send_reply(
+                    conversation_id=conv_id,
+                    text="[system] 对话已结案，请评分 1-5",
+                    visibility="public",
+                )
+            except Exception as e:
+                print(f"[server] /resolve failed: {e}", file=sys.stderr)
+            return
+
+        # /hijack /release /copilot → 模式切换
         target_mode: ConversationMode | None = None
         if cmd.name == "hijack":
             target_mode = ConversationMode.TAKEOVER
@@ -442,8 +464,59 @@ def wire_bridge_callbacks(
         except Exception as e:
             print(f"[server] command {cmd.name} failed: {e}", file=sys.stderr)
 
+    async def _on_admin_command(msg: dict, cmd: Any) -> None:
+        """Admin 发送命令（/status / /dispatch）。"""
+        admin_id = msg.get("admin_id", "unknown")
+
+        if cmd.name == "status":
+            convs = conv_manager.list_active()
+            if not convs:
+                text = "[status] 无活跃对话 (0)"
+            else:
+                lines = [f"[status] 活跃对话 ({len(convs)}):"]
+                for c in convs:
+                    p_count = len(c.participants) if c.participants else 0
+                    lines.append(f"  {c.id} | {c.state.value} | {c.mode} | {p_count}人")
+                text = "\n".join(lines)
+            await bridge_server.send_reply(
+                conversation_id="__admin",
+                text=text,
+                visibility="system",
+            )
+            return
+
+        if cmd.name == "dispatch":
+            target_conv_id = cmd.args.get("conversation_id", "")
+            agent_nick = cmd.args.get("agent_nick", "")
+            conv = conv_manager.get(target_conv_id)
+            if conv is None:
+                return
+            try:
+                participant = Participant(id=agent_nick, role=ParticipantRole.AGENT)
+                conv_manager.add_participant(target_conv_id, participant)
+                await bridge_server.send_event(
+                    "agent.dispatched",
+                    {"agent_nick": agent_nick, "dispatched_by": admin_id},
+                    target_conv_id,
+                )
+            except Exception as e:
+                print(f"[server] /dispatch failed: {e}", file=sys.stderr)
+            return
+
+    async def _on_customer_message(msg: dict) -> None:
+        """Customer 消息处理（含 CSAT 评分接收）。"""
+        conv_id = msg.get("conversation_id", "")
+        csat_score = msg.get("csat_score")
+        if csat_score is not None:
+            try:
+                conv_manager.set_csat(conv_id, int(csat_score))
+            except Exception as e:
+                print(f"[server] set_csat failed: {e}", file=sys.stderr)
+
     bridge_server.on_operator_join = _on_operator_join
     bridge_server.on_operator_command = _on_operator_command
+    bridge_server.on_admin_command = _on_admin_command
+    bridge_server.on_customer_message = _on_customer_message
 
 
 # ------------------------------------------------------------------ #

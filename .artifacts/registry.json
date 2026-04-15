@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "cs-eval-commands",
+      "name": "命令 Handler 补全评估",
+      "type": "eval-doc",
+      "status": "executed",
+      "producer": "skill-5",
+      "consumers": ["skill-2"],
+      "path": ".artifacts/eval-docs/cs-eval-commands.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": ["cs-plan-commands"]
+    },
+    {
+      "id": "cs-plan-commands",
+      "name": "命令 Handler 测试计划",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": ["skill-3"],
+      "path": ".artifacts/test-plans/cs-plan-commands.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": ["cs-eval-commands", "cs-diff-commands"]
+    },
+    {
+      "id": "cs-diff-commands",
+      "name": "命令 Handler 代码改动",
+      "type": "code-diff",
+      "status": "confirmed",
+      "producer": "skill-3",
+      "consumers": ["skill-4"],
+      "path": ".artifacts/code-diffs/cs-diff-commands.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": ["cs-plan-commands", "cs-report-commands"]
+    },
+    {
+      "id": "cs-report-commands",
+      "name": "命令 Handler 测试报告",
+      "type": "e2e-report",
+      "status": "confirmed",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-commands.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": ["cs-plan-commands", "cs-eval-commands", "cs-diff-commands"]
+    }
+  ]
+}
