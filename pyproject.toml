@@ -8,6 +8,8 @@ dependencies = [
     "irc>=20.0",
     "zchat-protocol>=0.1.0",
     "websockets>=12.0",
+    "lark-oapi>=1.4.0",
+    "pyyaml>=6.0",
 ]
 license = "MIT"
 authors = [{ name = "ezagent42" }]

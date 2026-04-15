@@ -48,6 +48,54 @@
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
       "related_ids": ["cs-plan-commands", "cs-eval-commands", "cs-diff-commands"]
+    },
+    {
+      "id": "cs-eval-feishu",
+      "name": "飞书 Bridge 功能评估",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": ["skill-2"],
+      "path": ".artifacts/eval-docs/cs-eval-feishu.md",
+      "created_at": "2026-04-15T08:39:00Z",
+      "updated_at": "2026-04-15T08:39:00Z",
+      "related_ids": ["cs-plan-feishu", "cs-diff-feishu", "cs-report-feishu"]
+    },
+    {
+      "id": "cs-plan-feishu",
+      "name": "飞书 Bridge 测试计划",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": ["skill-3"],
+      "path": ".artifacts/test-plans/cs-plan-feishu.md",
+      "created_at": "2026-04-15T08:45:00Z",
+      "updated_at": "2026-04-15T09:20:00Z",
+      "related_ids": ["cs-eval-feishu", "cs-diff-feishu", "cs-report-feishu"]
+    },
+    {
+      "id": "cs-diff-feishu",
+      "name": "飞书 Bridge 代码变更",
+      "type": "code-diff",
+      "status": "confirmed",
+      "producer": "skill-3",
+      "consumers": ["skill-4"],
+      "path": ".artifacts/code-diffs/cs-diff-feishu.md",
+      "created_at": "2026-04-15T09:20:00Z",
+      "updated_at": "2026-04-15T09:20:00Z",
+      "related_ids": ["cs-eval-feishu", "cs-plan-feishu", "cs-report-feishu"]
+    },
+    {
+      "id": "cs-report-feishu",
+      "name": "飞书 Bridge 测试报告",
+      "type": "e2e-report",
+      "status": "confirmed",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-feishu.md",
+      "created_at": "2026-04-15T09:30:00Z",
+      "updated_at": "2026-04-15T09:30:00Z",
+      "related_ids": ["cs-eval-feishu", "cs-plan-feishu", "cs-diff-feishu"]
     }
   ]
 }
