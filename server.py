@@ -23,10 +23,12 @@ from engine.message_store import MessageStore
 from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
 from engine.timer_manager import TimerManager
+from protocol.event import Event, EventType
 from protocol.gate import gate_message
 from protocol.message_types import MessageVisibility
 from protocol.mode import ConversationMode
 from protocol.participant import Participant, ParticipantRole
+from routing_config import RoutingConfig, load_routing_config
 from transport.irc_transport import IRCTransport, parse_agent_message
 
 # ------------------------------------------------------------------ #
@@ -50,6 +52,7 @@ CS_EVENT_DB_PATH = os.environ.get(
 CS_MESSAGE_DB_PATH = os.environ.get(
     "CS_MESSAGE_DB_PATH", CS_DB_PATH.replace(".db", "_messages.db")
 )
+CS_ROUTING_CONFIG = os.environ.get("CS_ROUTING_CONFIG", "routing.toml")
 
 
 # ------------------------------------------------------------------ #
@@ -58,7 +61,9 @@ CS_MESSAGE_DB_PATH = os.environ.get(
 
 
 def wire_bridge_callbacks(
-    bridge_server: BridgeAPIServer, components: dict[str, Any]
+    bridge_server: BridgeAPIServer,
+    components: dict[str, Any],
+    routing_config: RoutingConfig | None = None,
 ) -> None:
     """将业务回调注入到 BridgeAPIServer 的钩子槽中。
 
@@ -66,6 +71,7 @@ def wire_bridge_callbacks(
     """
     conv_manager: ConversationManager = components["conversation_manager"]
     mode_manager: ModeManager = components["mode_manager"]
+    rc = routing_config or RoutingConfig()
 
     async def _on_operator_join(msg: dict) -> None:
         """Operator 通过 Bridge 加入对话 → 注册参与者 + 触发模式切换。"""
@@ -198,6 +204,14 @@ def wire_bridge_callbacks(
             conv = conv_manager.get(target_conv_id)
             if conv is None:
                 return
+            # 白名单验证
+            if not rc.is_dispatch_allowed(agent_nick):
+                await bridge_server.send_reply(
+                    conversation_id="__admin",
+                    text=f"[dispatch] rejected: {agent_nick} not in available_agents",
+                    visibility="system",
+                )
+                return
             try:
                 participant = Participant(id=agent_nick, role=ParticipantRole.AGENT)
                 conv_manager.add_participant(target_conv_id, participant)
@@ -221,22 +235,73 @@ def wire_bridge_callbacks(
                 print(f"[server] set_csat failed: {e}", file=sys.stderr)
 
     async def _on_customer_connect(msg: dict) -> None:
-        """Customer 接入 → IRC bot JOIN 对应 #conv-{id} 频道。"""
+        """Customer 接入 → IRC bot JOIN 对应 #conv-{id} 频道 + auto-dispatch。"""
         conv_id = msg.get("conversation_id", "")
-        if conv_id:
-            irc_transport = components.get("irc_transport")
-            if irc_transport is not None:
-                channel = IRCTransport.conv_channel_name(conv_id)
-                try:
-                    irc_transport.join(channel)
-                except Exception as e:
-                    print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
+        if not conv_id:
+            return
+        # IRC bot auto-JOIN
+        irc_transport = components.get("irc_transport")
+        if irc_transport is not None:
+            channel = IRCTransport.conv_channel_name(conv_id)
+            try:
+                irc_transport.join(channel)
+            except Exception as e:
+                print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
+        # auto-dispatch default_agents
+        for agent_nick in rc.default_agents:
+            try:
+                participant = Participant(id=agent_nick, role=ParticipantRole.AGENT)
+                conv_manager.add_participant(conv_id, participant)
+                await bridge_server.send_event(
+                    "agent.dispatched",
+                    {"agent_nick": agent_nick, "dispatched_by": "__auto"},
+                    conv_id,
+                )
+            except Exception as e:
+                print(f"[server] auto-dispatch {agent_nick} failed: {e}", file=sys.stderr)
 
+    async def _on_escalation(event: Event) -> None:
+        """Escalation event → 按 escalation_chain 顺序 dispatch 到第一个可用 agent。"""
+        conv_id = event.conversation_id
+        if not conv_id or not rc.escalation_chain:
+            return
+        conv = conv_manager.get(conv_id)
+        if conv is None:
+            return
+        existing_ids = {p.id for p in (conv.participants or [])}
+        for target in rc.escalation_chain:
+            if target == "operator":
+                # 发告警通知 admin 介入
+                await bridge_server.send_reply(
+                    conversation_id=conv_id,
+                    text=f"[escalation] 需要人工介入: {conv_id}",
+                    visibility="system",
+                )
+                return
+            if target in existing_ids:
+                continue
+            try:
+                participant = Participant(id=target, role=ParticipantRole.AGENT)
+                conv_manager.add_participant(conv_id, participant)
+                await bridge_server.send_event(
+                    "agent.dispatched",
+                    {"agent_nick": target, "dispatched_by": "__escalation"},
+                    conv_id,
+                )
+                return
+            except Exception as e:
+                print(f"[server] escalation dispatch {target} failed: {e}", file=sys.stderr)
+
+    # 注入回调
     bridge_server.on_operator_join = _on_operator_join
     bridge_server.on_operator_command = _on_operator_command
     bridge_server.on_admin_command = _on_admin_command
     bridge_server.on_customer_message = _on_customer_message
     bridge_server.on_customer_connect = _on_customer_connect
+
+    # EventBus 订阅: escalation
+    event_bus: EventBus = components["event_bus"]
+    event_bus.subscribe(EventType.TIMER_EXPIRED, _on_escalation)
 
 
 # ------------------------------------------------------------------ #
@@ -246,6 +311,7 @@ def wire_bridge_callbacks(
 
 def build_components() -> dict[str, Any]:
     """组装所有 engine / bridge / transport 组件。不启动 IRC / WebSocket。"""
+    routing_cfg = load_routing_config(CS_ROUTING_CONFIG)
     event_bus = EventBus(CS_EVENT_DB_PATH)
     conversation_manager = ConversationManager(CS_DB_PATH)
     mode_manager = ModeManager(event_bus)
@@ -275,6 +341,7 @@ def build_components() -> dict[str, Any]:
         "message_store": message_store,
         "bridge_server": bridge_server,
         "irc_transport": irc_transport,
+        "routing_config": routing_cfg,
     }
 
 
@@ -289,7 +356,7 @@ async def main() -> None:
     irc_transport: IRCTransport = components["irc_transport"]
     bridge_server: BridgeAPIServer = components["bridge_server"]
 
-    wire_bridge_callbacks(bridge_server, components)
+    wire_bridge_callbacks(bridge_server, components, components.get("routing_config"))
 
     # 启动 Bridge API WebSocket
     await bridge_server.start()
