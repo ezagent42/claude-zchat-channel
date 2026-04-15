@@ -140,10 +140,12 @@ class BridgeAPIServer:
         event_type: str,
         data: dict,
         conversation_id: str,
+        target_capabilities: set[str] | None = None,
     ) -> None:
-        """广播协议级事件到所有已注册 Bridge 连接（无 visibility 过滤）。
+        """广播协议级事件到已注册 Bridge 连接。
 
-        用于 mode.changed 等状态变化通知，所有角色都需要感知。
+        target_capabilities 为 None 时广播到所有连接（用于 mode.changed 等全局状态通知）。
+        传入角色集合时仅发送到拥有匹配 capability 的连接（用于 sla.breach 等运营事件）。
         """
         payload = json.dumps(
             {
@@ -156,6 +158,9 @@ class BridgeAPIServer:
         for conn in list(self._connections.values()):
             if conn.websocket is None:
                 continue
+            if target_capabilities is not None:
+                if not (set(conn.capabilities) & target_capabilities):
+                    continue
             try:
                 await conn.websocket.send(payload)
             except Exception:

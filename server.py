@@ -502,6 +502,7 @@ def wire_bridge_callbacks(
                 "timeout_seconds": duration,
             },
             conv_id,
+            target_capabilities={"operator", "admin"},
         )
         await bridge_server.send_reply(
             conversation_id="__admin",
