@@ -29,6 +29,7 @@ from feishu_bridge.group_manager import GroupManager
 from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.sender import FeishuSender
 from feishu_bridge.visibility_router import VisibilityRouter
+from feishu_bridge.ws_client import CardAwareClient
 
 if TYPE_CHECKING:
     pass
@@ -69,6 +70,9 @@ class FeishuBridge:
         # Auto-hijack 回调钩子（由 app 组装时注入）
         # 签名：(conversation_id: str, operator_id: str, text: str) -> None
         self.on_auto_hijack: Callable[[str, str, str], Any] | None = None
+
+        # Bridge API WebSocket 连接（start 时建立）
+        self._bridge_ws: Any | None = None
 
     # ------------------------------------------------------------------
     # 事件处理器
@@ -176,6 +180,51 @@ class FeishuBridge:
             log.info("Group %s disbanded", chat_id)
 
     # ------------------------------------------------------------------
+    # 卡片回调 (card.action.trigger)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_card_action(payload: dict) -> tuple[int, str] | tuple[None, None]:
+        """从卡片回调 payload 解析 score 和 conv_id。
+
+        Returns:
+            (score, conv_id) 或 (None, None) 如果字段缺失。
+        """
+        try:
+            value = payload["action"]["value"]
+            score_str = value.get("score")
+            conv_id = value.get("conv_id")
+            if score_str is None or conv_id is None:
+                return None, None
+            return int(score_str), conv_id
+        except (KeyError, TypeError, ValueError):
+            return None, None
+
+    def _on_card_action(self, payload: dict) -> None:
+        """卡片点击回调 → 解析 CSAT 评分 → 发送到 Bridge API。"""
+        score, conv_id = self._parse_card_action(payload)
+        if score is None or conv_id is None:
+            log.debug("card action ignored: missing score or conv_id in %s", payload)
+            return
+        if self._bridge_ws is None:
+            log.warning("card action: no bridge_ws connection, dropping csat score=%d conv=%s", score, conv_id)
+            return
+        msg = json.dumps({
+            "type": "customer_message",
+            "conversation_id": conv_id,
+            "csat_score": score,
+        })
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self._bridge_ws.send(msg))
+            else:
+                loop.run_until_complete(self._bridge_ws.send(msg))
+        except Exception:
+            log.exception("Failed to send csat score to bridge API: conv=%s score=%d", conv_id, score)
+
+    # ------------------------------------------------------------------
     # 文件下载
     # ------------------------------------------------------------------
 
@@ -233,12 +282,13 @@ class FeishuBridge:
         )
 
     def start(self) -> None:
-        """启动 WSS 长连接。"""
+        """启动 WSS 长连接（使用 CardAwareClient 支持卡片回调）。"""
         handler = self.build_event_handler()
-        cli = lark.ws.Client(
+        cli = CardAwareClient(
             self.config.feishu.app_id,
             self.config.feishu.app_secret,
             event_handler=handler,
+            card_handler=self._on_card_action,
             log_level=lark.LogLevel.DEBUG,
         )
         cli.start()

@@ -1,14 +1,14 @@
 ---
 type: code-diff
 id: cs-diff-card-thread
-status: draft
+status: confirmed
 producer: skill-3
 created_at: "2026-04-15"
 updated_at: "2026-04-15"
 related:
-  - cs-eval-feishu
-  - cs-plan-feishu
-  - cs-diff-feishu
+  - cs-eval-card-thread
+  - cs-plan-card-thread
+  - cs-report-card-thread
 ---
 
 # Code Diff: Task 4.6.5 — feishu_bridge card+thread 模型 + auto-hijack

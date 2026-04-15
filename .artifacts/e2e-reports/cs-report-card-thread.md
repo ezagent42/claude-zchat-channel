@@ -1,14 +1,14 @@
 ---
 type: e2e-report
 id: cs-report-card-thread
-status: draft
+status: confirmed
 producer: skill-4
 created_at: "2026-04-15"
 updated_at: "2026-04-15"
 related:
+  - cs-eval-card-thread
+  - cs-plan-card-thread
   - cs-diff-card-thread
-  - cs-plan-feishu
-  - cs-eval-feishu
 evidence: []
 ---
 
@@ -16,7 +16,7 @@ evidence: []
 
 ## 测试范围
 
-按测试计划 `cs-plan-feishu`（Task 4.6.5 部分）覆盖 TC-1 ~ TC-9 自动化用例，
+按测试计划 `cs-plan-card-thread` 覆盖 TC-1 ~ TC-9 自动化用例，
 TC-10（完整飞书 live E2E）需真实凭证，本轮跳过。
 
 ## 用例结果
