@@ -202,7 +202,16 @@ def channel_server(
 async def bridge_ws(channel_server, e2e_ports: dict):
     """已注册的 Bridge WebSocket 连接（capabilities 覆盖三角色）。"""
     uri = f"ws://127.0.0.1:{e2e_ports['bridge']}"
-    ws = await websockets.connect(uri)
+    # retry: channel-server Bridge API 可能尚未就绪
+    ws = None
+    for attempt in range(5):
+        try:
+            ws = await websockets.connect(uri)
+            break
+        except (websockets.exceptions.InvalidMessage, OSError):
+            await asyncio.sleep(1)
+    if ws is None:
+        ws = await websockets.connect(uri)  # 最后一次不 catch，让它报错
     await ws.send(
         json.dumps(
             {
