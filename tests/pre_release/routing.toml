@@ -1,0 +1,7 @@
+# Pre-release 测试路由配置
+# 用于 full_stack fixture
+
+[routing]
+default_agents = ["fast-agent"]
+escalation_chain = ["deep-agent", "operator"]
+available_agents = ["fast-agent", "deep-agent"]

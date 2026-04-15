@@ -7,11 +7,15 @@
       "type": "eval-doc",
       "status": "executed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-commands.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-commands"]
+      "related_ids": [
+        "cs-plan-commands"
+      ]
     },
     {
       "id": "cs-plan-commands",
@@ -19,11 +23,16 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-commands.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-commands", "cs-diff-commands"]
+      "related_ids": [
+        "cs-eval-commands",
+        "cs-diff-commands"
+      ]
     },
     {
       "id": "cs-diff-commands",
@@ -31,11 +40,16 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-commands.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-commands", "cs-report-commands"]
+      "related_ids": [
+        "cs-plan-commands",
+        "cs-report-commands"
+      ]
     },
     {
       "id": "cs-report-commands",
@@ -47,7 +61,11 @@
       "path": ".artifacts/e2e-reports/cs-report-commands.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-commands", "cs-eval-commands", "cs-diff-commands"]
+      "related_ids": [
+        "cs-plan-commands",
+        "cs-eval-commands",
+        "cs-diff-commands"
+      ]
     },
     {
       "id": "cs-eval-feishu",
@@ -55,11 +73,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-feishu.md",
       "created_at": "2026-04-15T08:39:00Z",
       "updated_at": "2026-04-15T08:39:00Z",
-      "related_ids": ["cs-plan-feishu", "cs-diff-feishu", "cs-report-feishu"]
+      "related_ids": [
+        "cs-plan-feishu",
+        "cs-diff-feishu",
+        "cs-report-feishu"
+      ]
     },
     {
       "id": "cs-plan-feishu",
@@ -67,11 +91,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-feishu.md",
       "created_at": "2026-04-15T08:45:00Z",
       "updated_at": "2026-04-15T09:20:00Z",
-      "related_ids": ["cs-eval-feishu", "cs-diff-feishu", "cs-report-feishu"]
+      "related_ids": [
+        "cs-eval-feishu",
+        "cs-diff-feishu",
+        "cs-report-feishu"
+      ]
     },
     {
       "id": "cs-diff-feishu",
@@ -79,11 +109,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-feishu.md",
       "created_at": "2026-04-15T09:20:00Z",
       "updated_at": "2026-04-15T09:20:00Z",
-      "related_ids": ["cs-eval-feishu", "cs-plan-feishu", "cs-report-feishu"]
+      "related_ids": [
+        "cs-eval-feishu",
+        "cs-plan-feishu",
+        "cs-report-feishu"
+      ]
     },
     {
       "id": "cs-report-feishu",
@@ -95,7 +131,11 @@
       "path": ".artifacts/e2e-reports/cs-report-feishu.md",
       "created_at": "2026-04-15T09:30:00Z",
       "updated_at": "2026-04-15T09:30:00Z",
-      "related_ids": ["cs-eval-feishu", "cs-plan-feishu", "cs-diff-feishu"]
+      "related_ids": [
+        "cs-eval-feishu",
+        "cs-plan-feishu",
+        "cs-diff-feishu"
+      ]
     },
     {
       "id": "cs-eval-architecture-split",
@@ -103,11 +143,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-architecture-split.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-architecture-split", "cs-diff-architecture-split", "cs-report-architecture-split"]
+      "related_ids": [
+        "cs-plan-architecture-split",
+        "cs-diff-architecture-split",
+        "cs-report-architecture-split"
+      ]
     },
     {
       "id": "cs-plan-architecture-split",
@@ -115,11 +161,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-architecture-split.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-architecture-split", "cs-diff-architecture-split", "cs-report-architecture-split"]
+      "related_ids": [
+        "cs-eval-architecture-split",
+        "cs-diff-architecture-split",
+        "cs-report-architecture-split"
+      ]
     },
     {
       "id": "cs-diff-architecture-split",
@@ -127,11 +179,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-architecture-split.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-architecture-split", "cs-plan-architecture-split", "cs-report-architecture-split"]
+      "related_ids": [
+        "cs-eval-architecture-split",
+        "cs-plan-architecture-split",
+        "cs-report-architecture-split"
+      ]
     },
     {
       "id": "cs-report-architecture-split",
@@ -143,7 +201,11 @@
       "path": ".artifacts/e2e-reports/cs-report-architecture-split.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-architecture-split", "cs-plan-architecture-split", "cs-diff-architecture-split"]
+      "related_ids": [
+        "cs-eval-architecture-split",
+        "cs-plan-architecture-split",
+        "cs-diff-architecture-split"
+      ]
     },
     {
       "id": "cs-eval-card-thread",
@@ -151,11 +213,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-card-thread.md",
       "created_at": "2026-04-15T16:00:00Z",
       "updated_at": "2026-04-15T16:00:00Z",
-      "related_ids": ["cs-plan-card-thread", "cs-diff-card-thread", "cs-report-card-thread"]
+      "related_ids": [
+        "cs-plan-card-thread",
+        "cs-diff-card-thread",
+        "cs-report-card-thread"
+      ]
     },
     {
       "id": "cs-plan-card-thread",
@@ -163,11 +231,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-card-thread.md",
       "created_at": "2026-04-15T16:00:00Z",
       "updated_at": "2026-04-15T16:00:00Z",
-      "related_ids": ["cs-eval-card-thread", "cs-diff-card-thread", "cs-report-card-thread"]
+      "related_ids": [
+        "cs-eval-card-thread",
+        "cs-diff-card-thread",
+        "cs-report-card-thread"
+      ]
     },
     {
       "id": "cs-diff-card-thread",
@@ -175,11 +249,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-card-thread.md",
       "created_at": "2026-04-15T16:00:00Z",
       "updated_at": "2026-04-15T16:00:00Z",
-      "related_ids": ["cs-eval-card-thread", "cs-plan-card-thread", "cs-report-card-thread"]
+      "related_ids": [
+        "cs-eval-card-thread",
+        "cs-plan-card-thread",
+        "cs-report-card-thread"
+      ]
     },
     {
       "id": "cs-report-card-thread",
@@ -191,7 +271,11 @@
       "path": ".artifacts/e2e-reports/cs-report-card-thread.md",
       "created_at": "2026-04-15T16:05:00Z",
       "updated_at": "2026-04-15T16:05:00Z",
-      "related_ids": ["cs-eval-card-thread", "cs-plan-card-thread", "cs-diff-card-thread"]
+      "related_ids": [
+        "cs-eval-card-thread",
+        "cs-plan-card-thread",
+        "cs-diff-card-thread"
+      ]
     },
     {
       "id": "cs-eval-irc-protocol",
@@ -199,11 +283,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-irc-protocol.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-irc-protocol", "cs-diff-irc-protocol", "cs-report-irc-protocol"]
+      "related_ids": [
+        "cs-plan-irc-protocol",
+        "cs-diff-irc-protocol",
+        "cs-report-irc-protocol"
+      ]
     },
     {
       "id": "cs-plan-irc-protocol",
@@ -211,11 +301,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-irc-protocol.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-irc-protocol", "cs-diff-irc-protocol", "cs-report-irc-protocol"]
+      "related_ids": [
+        "cs-eval-irc-protocol",
+        "cs-diff-irc-protocol",
+        "cs-report-irc-protocol"
+      ]
     },
     {
       "id": "cs-diff-irc-protocol",
@@ -223,11 +319,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-irc-protocol.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-irc-protocol", "cs-plan-irc-protocol", "cs-report-irc-protocol"]
+      "related_ids": [
+        "cs-eval-irc-protocol",
+        "cs-plan-irc-protocol",
+        "cs-report-irc-protocol"
+      ]
     },
     {
       "id": "cs-report-irc-protocol",
@@ -239,7 +341,11 @@
       "path": ".artifacts/e2e-reports/cs-report-irc-protocol.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-irc-protocol", "cs-plan-irc-protocol", "cs-diff-irc-protocol"]
+      "related_ids": [
+        "cs-eval-irc-protocol",
+        "cs-plan-irc-protocol",
+        "cs-diff-irc-protocol"
+      ]
     },
     {
       "id": "cs-eval-routing",
@@ -247,11 +353,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-routing.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-routing", "cs-diff-routing", "cs-report-routing"]
+      "related_ids": [
+        "cs-plan-routing",
+        "cs-diff-routing",
+        "cs-report-routing"
+      ]
     },
     {
       "id": "cs-plan-routing",
@@ -259,11 +371,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-routing.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-routing", "cs-diff-routing", "cs-report-routing"]
+      "related_ids": [
+        "cs-eval-routing",
+        "cs-diff-routing",
+        "cs-report-routing"
+      ]
     },
     {
       "id": "cs-diff-routing",
@@ -271,11 +389,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-routing.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-routing", "cs-plan-routing", "cs-report-routing"]
+      "related_ids": [
+        "cs-eval-routing",
+        "cs-plan-routing",
+        "cs-report-routing"
+      ]
     },
     {
       "id": "cs-report-routing",
@@ -287,7 +411,11 @@
       "path": ".artifacts/e2e-reports/cs-report-routing.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-routing", "cs-plan-routing", "cs-diff-routing"]
+      "related_ids": [
+        "cs-eval-routing",
+        "cs-plan-routing",
+        "cs-diff-routing"
+      ]
     },
     {
       "id": "cs-eval-review-sla",
@@ -295,11 +423,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-review-sla.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-plan-review-sla", "cs-diff-review-sla", "cs-report-review-sla"]
+      "related_ids": [
+        "cs-plan-review-sla",
+        "cs-diff-review-sla",
+        "cs-report-review-sla"
+      ]
     },
     {
       "id": "cs-plan-review-sla",
@@ -307,11 +441,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-review-sla.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-review-sla", "cs-diff-review-sla", "cs-report-review-sla"]
+      "related_ids": [
+        "cs-eval-review-sla",
+        "cs-diff-review-sla",
+        "cs-report-review-sla"
+      ]
     },
     {
       "id": "cs-diff-review-sla",
@@ -319,11 +459,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-review-sla.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-review-sla", "cs-plan-review-sla", "cs-report-review-sla"]
+      "related_ids": [
+        "cs-eval-review-sla",
+        "cs-plan-review-sla",
+        "cs-report-review-sla"
+      ]
     },
     {
       "id": "cs-report-review-sla",
@@ -335,7 +481,11 @@
       "path": ".artifacts/e2e-reports/cs-report-review-sla.md",
       "created_at": "2026-04-15T00:00:00Z",
       "updated_at": "2026-04-15T00:00:00Z",
-      "related_ids": ["cs-eval-review-sla", "cs-plan-review-sla", "cs-diff-review-sla"]
+      "related_ids": [
+        "cs-eval-review-sla",
+        "cs-plan-review-sla",
+        "cs-diff-review-sla"
+      ]
     },
     {
       "id": "cs-eval-p2-commands",
@@ -343,11 +493,17 @@
       "type": "eval-doc",
       "status": "executed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-p2-commands.md",
       "created_at": "2026-04-15T17:00:00Z",
       "updated_at": "2026-04-15T17:40:00Z",
-      "related_ids": ["cs-plan-p2-commands", "cs-diff-p2-commands", "cs-report-p2-commands"]
+      "related_ids": [
+        "cs-plan-p2-commands",
+        "cs-diff-p2-commands",
+        "cs-report-p2-commands"
+      ]
     },
     {
       "id": "cs-plan-p2-commands",
@@ -355,11 +511,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-p2-commands.md",
       "created_at": "2026-04-15T17:05:00Z",
       "updated_at": "2026-04-15T17:40:00Z",
-      "related_ids": ["cs-eval-p2-commands", "cs-diff-p2-commands", "cs-report-p2-commands"]
+      "related_ids": [
+        "cs-eval-p2-commands",
+        "cs-diff-p2-commands",
+        "cs-report-p2-commands"
+      ]
     },
     {
       "id": "cs-diff-p2-commands",
@@ -367,11 +529,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-p2-commands.md",
       "created_at": "2026-04-15T17:30:00Z",
       "updated_at": "2026-04-15T17:40:00Z",
-      "related_ids": ["cs-eval-p2-commands", "cs-plan-p2-commands", "cs-report-p2-commands"]
+      "related_ids": [
+        "cs-eval-p2-commands",
+        "cs-plan-p2-commands",
+        "cs-report-p2-commands"
+      ]
     },
     {
       "id": "cs-report-p2-commands",
@@ -383,7 +551,11 @@
       "path": ".artifacts/e2e-reports/cs-report-p2-commands.md",
       "created_at": "2026-04-15T17:40:00Z",
       "updated_at": "2026-04-15T17:40:00Z",
-      "related_ids": ["cs-eval-p2-commands", "cs-plan-p2-commands", "cs-diff-p2-commands"]
+      "related_ids": [
+        "cs-eval-p2-commands",
+        "cs-plan-p2-commands",
+        "cs-diff-p2-commands"
+      ]
     },
     {
       "id": "cs-eval-sla-timers",
@@ -391,11 +563,17 @@
       "type": "eval-doc",
       "status": "executed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-sla-timers.md",
       "created_at": "2026-04-15T18:00:00Z",
       "updated_at": "2026-04-15T18:40:00Z",
-      "related_ids": ["cs-plan-sla-timers", "cs-diff-sla-timers", "cs-report-sla-timers"]
+      "related_ids": [
+        "cs-plan-sla-timers",
+        "cs-diff-sla-timers",
+        "cs-report-sla-timers"
+      ]
     },
     {
       "id": "cs-plan-sla-timers",
@@ -403,11 +581,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-sla-timers.md",
       "created_at": "2026-04-15T18:05:00Z",
       "updated_at": "2026-04-15T18:40:00Z",
-      "related_ids": ["cs-eval-sla-timers", "cs-diff-sla-timers", "cs-report-sla-timers"]
+      "related_ids": [
+        "cs-eval-sla-timers",
+        "cs-diff-sla-timers",
+        "cs-report-sla-timers"
+      ]
     },
     {
       "id": "cs-diff-sla-timers",
@@ -415,11 +599,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-sla-timers.md",
       "created_at": "2026-04-15T18:30:00Z",
       "updated_at": "2026-04-15T18:40:00Z",
-      "related_ids": ["cs-eval-sla-timers", "cs-plan-sla-timers", "cs-report-sla-timers"]
+      "related_ids": [
+        "cs-eval-sla-timers",
+        "cs-plan-sla-timers",
+        "cs-report-sla-timers"
+      ]
     },
     {
       "id": "cs-report-sla-timers",
@@ -431,7 +621,11 @@
       "path": ".artifacts/e2e-reports/cs-report-sla-timers.md",
       "created_at": "2026-04-15T18:40:00Z",
       "updated_at": "2026-04-15T18:40:00Z",
-      "related_ids": ["cs-eval-sla-timers", "cs-plan-sla-timers", "cs-diff-sla-timers"]
+      "related_ids": [
+        "cs-eval-sla-timers",
+        "cs-plan-sla-timers",
+        "cs-diff-sla-timers"
+      ]
     },
     {
       "id": "cs-eval-card-action",
@@ -439,11 +633,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-card-action.md",
       "created_at": "2026-04-15T19:00:00Z",
       "updated_at": "2026-04-15T19:00:00Z",
-      "related_ids": ["cs-plan-card-action", "cs-diff-card-action", "cs-report-card-action"]
+      "related_ids": [
+        "cs-plan-card-action",
+        "cs-diff-card-action",
+        "cs-report-card-action"
+      ]
     },
     {
       "id": "cs-plan-card-action",
@@ -451,11 +651,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-card-action.md",
       "created_at": "2026-04-15T19:05:00Z",
       "updated_at": "2026-04-15T19:30:00Z",
-      "related_ids": ["cs-eval-card-action", "cs-diff-card-action", "cs-report-card-action"]
+      "related_ids": [
+        "cs-eval-card-action",
+        "cs-diff-card-action",
+        "cs-report-card-action"
+      ]
     },
     {
       "id": "cs-diff-card-action",
@@ -463,11 +669,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-card-action.md",
       "created_at": "2026-04-15T19:15:00Z",
       "updated_at": "2026-04-15T19:15:00Z",
-      "related_ids": ["cs-eval-card-action", "cs-plan-card-action", "cs-report-card-action"]
+      "related_ids": [
+        "cs-eval-card-action",
+        "cs-plan-card-action",
+        "cs-report-card-action"
+      ]
     },
     {
       "id": "cs-report-card-action",
@@ -479,7 +691,11 @@
       "path": ".artifacts/e2e-reports/cs-report-card-action.md",
       "created_at": "2026-04-15T19:30:00Z",
       "updated_at": "2026-04-15T19:30:00Z",
-      "related_ids": ["cs-eval-card-action", "cs-plan-card-action", "cs-diff-card-action"]
+      "related_ids": [
+        "cs-eval-card-action",
+        "cs-plan-card-action",
+        "cs-diff-card-action"
+      ]
     },
     {
       "id": "cs-eval-gate-fix",
@@ -487,11 +703,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-gate-fix.md",
       "created_at": "2026-04-15T20:00:00Z",
       "updated_at": "2026-04-15T20:00:00Z",
-      "related_ids": ["cs-plan-gate-fix", "cs-diff-gate-fix", "cs-report-gate-fix"]
+      "related_ids": [
+        "cs-plan-gate-fix",
+        "cs-diff-gate-fix",
+        "cs-report-gate-fix"
+      ]
     },
     {
       "id": "cs-plan-gate-fix",
@@ -499,11 +721,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-gate-fix.md",
       "created_at": "2026-04-15T20:05:00Z",
       "updated_at": "2026-04-15T20:05:00Z",
-      "related_ids": ["cs-eval-gate-fix", "cs-diff-gate-fix", "cs-report-gate-fix"]
+      "related_ids": [
+        "cs-eval-gate-fix",
+        "cs-diff-gate-fix",
+        "cs-report-gate-fix"
+      ]
     },
     {
       "id": "cs-diff-gate-fix",
@@ -511,11 +739,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-gate-fix.md",
       "created_at": "2026-04-15T20:10:00Z",
       "updated_at": "2026-04-15T20:10:00Z",
-      "related_ids": ["cs-eval-gate-fix", "cs-plan-gate-fix", "cs-report-gate-fix"]
+      "related_ids": [
+        "cs-eval-gate-fix",
+        "cs-plan-gate-fix",
+        "cs-report-gate-fix"
+      ]
     },
     {
       "id": "cs-report-gate-fix",
@@ -527,7 +761,11 @@
       "path": ".artifacts/e2e-reports/cs-report-gate-fix.md",
       "created_at": "2026-04-15T20:15:00Z",
       "updated_at": "2026-04-15T20:15:00Z",
-      "related_ids": ["cs-eval-gate-fix", "cs-plan-gate-fix", "cs-diff-gate-fix"]
+      "related_ids": [
+        "cs-eval-gate-fix",
+        "cs-plan-gate-fix",
+        "cs-diff-gate-fix"
+      ]
     },
     {
       "id": "cs-eval-db-consolidation",
@@ -535,11 +773,17 @@
       "type": "eval-doc",
       "status": "confirmed",
       "producer": "skill-5",
-      "consumers": ["skill-2"],
+      "consumers": [
+        "skill-2"
+      ],
       "path": ".artifacts/eval-docs/cs-eval-db-consolidation.md",
       "created_at": "2026-04-15T22:00:00Z",
       "updated_at": "2026-04-15T22:00:00Z",
-      "related_ids": ["cs-plan-db-consolidation", "cs-diff-db-consolidation", "cs-report-db-consolidation"]
+      "related_ids": [
+        "cs-plan-db-consolidation",
+        "cs-diff-db-consolidation",
+        "cs-report-db-consolidation"
+      ]
     },
     {
       "id": "cs-plan-db-consolidation",
@@ -547,11 +791,17 @@
       "type": "test-plan",
       "status": "executed",
       "producer": "skill-2",
-      "consumers": ["skill-3"],
+      "consumers": [
+        "skill-3"
+      ],
       "path": ".artifacts/test-plans/cs-plan-db-consolidation.md",
       "created_at": "2026-04-15T22:05:00Z",
       "updated_at": "2026-04-15T22:05:00Z",
-      "related_ids": ["cs-eval-db-consolidation", "cs-diff-db-consolidation", "cs-report-db-consolidation"]
+      "related_ids": [
+        "cs-eval-db-consolidation",
+        "cs-diff-db-consolidation",
+        "cs-report-db-consolidation"
+      ]
     },
     {
       "id": "cs-diff-db-consolidation",
@@ -559,11 +809,17 @@
       "type": "code-diff",
       "status": "confirmed",
       "producer": "skill-3",
-      "consumers": ["skill-4"],
+      "consumers": [
+        "skill-4"
+      ],
       "path": ".artifacts/code-diffs/cs-diff-db-consolidation.md",
       "created_at": "2026-04-15T22:30:00Z",
       "updated_at": "2026-04-15T22:30:00Z",
-      "related_ids": ["cs-eval-db-consolidation", "cs-plan-db-consolidation", "cs-report-db-consolidation"]
+      "related_ids": [
+        "cs-eval-db-consolidation",
+        "cs-plan-db-consolidation",
+        "cs-report-db-consolidation"
+      ]
     },
     {
       "id": "cs-report-db-consolidation",
@@ -575,7 +831,25 @@
       "path": ".artifacts/e2e-reports/cs-report-db-consolidation.md",
       "created_at": "2026-04-15T22:40:00Z",
       "updated_at": "2026-04-15T22:40:00Z",
-      "related_ids": ["cs-eval-db-consolidation", "cs-plan-db-consolidation", "cs-diff-db-consolidation"]
+      "related_ids": [
+        "cs-eval-db-consolidation",
+        "cs-plan-db-consolidation",
+        "cs-diff-db-consolidation"
+      ]
+    },
+    {
+      "id": "cs-eval-prerelease-infra",
+      "name": "Pre-release 测试基础设施评估",
+      "type": "eval-doc",
+      "status": "open",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-prerelease-infra.md",
+      "created_at": "2026-04-16T00:00:00Z",
+      "updated_at": "2026-04-16T00:00:00Z",
+      "related_ids": []
     }
   ]
 }

@@ -1,0 +1,20 @@
+# Pre-release 飞书 E2E 配置模板
+# 真实 chat_id 需要替换
+
+feishu:
+  app_id: ${FEISHU_APP_ID}
+  app_secret: ${FEISHU_APP_SECRET}
+
+groups:
+  customer_chat: "oc_customer_test_xxx"     # [测试]客户对话
+  squad_chat: "oc_squad_test_xxx"           # [测试]小李分队
+  admin_chat: "oc_admin_test_xxx"           # [测试]管理群
+
+channel_server:
+  url: "ws://localhost:9999"
+
+# 测试环境 timer 缩短（正式环境为 180s/300s/3600s）
+timers:
+  takeover_wait: 10
+  idle_timeout: 12
+  close_timeout: 30
