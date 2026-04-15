@@ -1,0 +1,109 @@
+"""飞书消息发送封装 — text / card / edit / reaction。
+
+使用 lark-oapi SDK 的 im.v1.message API。
+所有方法提供 *_sync 同步版本（WSS 回调线程中使用）。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+
+import lark_oapi as lark
+from lark_oapi.api.im.v1 import (
+    CreateMessageRequest,
+    CreateMessageRequestBody,
+    PatchMessageRequest,
+    PatchMessageRequestBody,
+)
+
+log = logging.getLogger("feishu-bridge.sender")
+
+
+class FeishuSender:
+    """飞书 API 发送封装。"""
+
+    def __init__(self, app_id: str, app_secret: str) -> None:
+        self._client = (
+            lark.Client.builder()
+            .app_id(app_id)
+            .app_secret(app_secret)
+            .build()
+        )
+
+    # ------------------------------------------------------------------
+    # send_text
+    # ------------------------------------------------------------------
+
+    def send_text_sync(self, chat_id: str, text: str) -> str | None:
+        """发送文本消息，返回 message_id 或 None。"""
+        body = (
+            CreateMessageRequestBody.builder()
+            .receive_id(chat_id)
+            .msg_type("text")
+            .content(json.dumps({"text": text}))
+            .build()
+        )
+        req = (
+            CreateMessageRequest.builder()
+            .receive_id_type("chat_id")
+            .request_body(body)
+            .build()
+        )
+        resp = self._client.im.v1.message.create(req)
+        if not resp.success():
+            log.warning("send_text failed: %s %s", resp.code, resp.msg)
+            return None
+        return resp.data.message_id if resp.data else None
+
+    def send_text(self, chat_id: str, text: str) -> str | None:
+        """send_text 别名（同步）。"""
+        return self.send_text_sync(chat_id, text)
+
+    # ------------------------------------------------------------------
+    # send_card
+    # ------------------------------------------------------------------
+
+    def send_card_sync(self, chat_id: str, card: dict) -> str | None:
+        """发送卡片消息。"""
+        body = (
+            CreateMessageRequestBody.builder()
+            .receive_id(chat_id)
+            .msg_type("interactive")
+            .content(json.dumps(card))
+            .build()
+        )
+        req = (
+            CreateMessageRequest.builder()
+            .receive_id_type("chat_id")
+            .request_body(body)
+            .build()
+        )
+        resp = self._client.im.v1.message.create(req)
+        if not resp.success():
+            log.warning("send_card failed: %s %s", resp.code, resp.msg)
+            return None
+        return resp.data.message_id if resp.data else None
+
+    # ------------------------------------------------------------------
+    # update_message (edit)
+    # ------------------------------------------------------------------
+
+    def update_message_sync(self, message_id: str, text: str) -> bool:
+        """编辑已发送的消息。"""
+        body = (
+            PatchMessageRequestBody.builder()
+            .content(json.dumps({"text": text}))
+            .build()
+        )
+        req = (
+            PatchMessageRequest.builder()
+            .message_id(message_id)
+            .request_body(body)
+            .build()
+        )
+        resp = self._client.im.v1.message.patch(req)
+        if not resp.success():
+            log.warning("update_message failed: %s %s", resp.code, resp.msg)
+            return False
+        return True
