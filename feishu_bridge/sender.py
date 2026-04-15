@@ -15,6 +15,8 @@ from lark_oapi.api.im.v1 import (
     CreateMessageRequestBody,
     PatchMessageRequest,
     PatchMessageRequestBody,
+    ReplyMessageRequest,
+    ReplyMessageRequestBody,
 )
 
 log = logging.getLogger("feishu-bridge.sender")
@@ -107,3 +109,67 @@ class FeishuSender:
             log.warning("update_message failed: %s %s", resp.code, resp.msg)
             return False
         return True
+
+    def update_message(self, message_id: str, text: str) -> bool:
+        """update_message 别名（同步）。"""
+        return self.update_message_sync(message_id, text)
+
+    # ------------------------------------------------------------------
+    # update_card（卡片刷新）
+    # ------------------------------------------------------------------
+
+    def update_card_sync(self, message_id: str, card: dict) -> bool:
+        """以卡片内容覆盖已发送的 interactive 消息。"""
+        body = (
+            PatchMessageRequestBody.builder()
+            .content(json.dumps(card))
+            .build()
+        )
+        req = (
+            PatchMessageRequest.builder()
+            .message_id(message_id)
+            .request_body(body)
+            .build()
+        )
+        resp = self._client.im.v1.message.patch(req)
+        if not resp.success():
+            log.warning("update_card failed: %s %s", resp.code, resp.msg)
+            return False
+        return True
+
+    def update_card(self, message_id: str, card: dict) -> bool:
+        """update_card 别名（同步）。"""
+        return self.update_card_sync(message_id, card)
+
+    # ------------------------------------------------------------------
+    # reply_in_thread（thread 回复）
+    # ------------------------------------------------------------------
+
+    def reply_in_thread_sync(self, root_msg_id: str, text: str) -> str | None:
+        """在指定消息的 thread 中回复文本消息。"""
+        body = (
+            ReplyMessageRequestBody.builder()
+            .msg_type("text")
+            .content(json.dumps({"text": text}))
+            .reply_in_thread(True)
+            .build()
+        )
+        req = (
+            ReplyMessageRequest.builder()
+            .message_id(root_msg_id)
+            .request_body(body)
+            .build()
+        )
+        resp = self._client.im.v1.message.reply(req)
+        if not resp.success():
+            log.warning("reply_in_thread failed: %s %s", resp.code, resp.msg)
+            return None
+        return resp.data.message_id if resp.data else None
+
+    def reply_in_thread(self, root_msg_id: str, text: str) -> str | None:
+        """reply_in_thread 别名（同步）。"""
+        return self.reply_in_thread_sync(root_msg_id, text)
+
+    def send_card(self, chat_id: str, card: dict) -> str | None:
+        """send_card 别名（同步）。"""
+        return self.send_card_sync(chat_id, card)

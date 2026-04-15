@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
@@ -66,6 +66,10 @@ class FeishuBridge:
         self._upload_dir = Path(config.upload_dir)
         self._upload_dir.mkdir(parents=True, exist_ok=True)
 
+        # Auto-hijack 回调钩子（由 app 组装时注入）
+        # 签名：(conversation_id: str, operator_id: str, text: str) -> None
+        self.on_auto_hijack: Callable[[str, str, str], Any] | None = None
+
     # ------------------------------------------------------------------
     # 事件处理器
     # ------------------------------------------------------------------
@@ -92,9 +96,40 @@ class FeishuBridge:
 
         text, file_path = parse_message(msg_type, content, msg, self)
 
-        log.info(
-            "[%s] %s: %s", role, event.sender.sender_id.open_id if event.sender else "?", text[:100]
+        sender_open_id = (
+            event.sender.sender_id.open_id
+            if event.sender and event.sender.sender_id
+            else ""
         )
+        log.info("[%s] %s: %s", role, sender_open_id or "?", text[:100])
+
+        # Auto-hijack 检测：已知 operator 在 customer 群内发言 → 触发回调
+        if (
+            role == "customer"
+            and sender_open_id
+            and self.group_manager.is_operator_in_customer_chat(sender_open_id, chat_id)
+        ):
+            self._trigger_auto_hijack(chat_id, sender_open_id, text)
+
+    def _trigger_auto_hijack(
+        self, conversation_id: str, operator_id: str, text: str
+    ) -> None:
+        """已注入回调时触发 auto-hijack。"""
+        if not self.on_auto_hijack:
+            log.debug(
+                "auto-hijack triggered but no callback registered: conv=%s op=%s",
+                conversation_id,
+                operator_id,
+            )
+            return
+        try:
+            self.on_auto_hijack(conversation_id, operator_id, text)
+        except Exception:
+            log.exception(
+                "on_auto_hijack callback raised: conv=%s op=%s",
+                conversation_id,
+                operator_id,
+            )
 
     def _on_bot_added(self, data: P2ImChatMemberBotAddedV1) -> None:
         """bot 被拉入新群 → 自动注册 customer（跳过已配置群）。"""

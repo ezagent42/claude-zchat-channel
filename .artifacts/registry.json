@@ -96,6 +96,30 @@
       "created_at": "2026-04-15T09:30:00Z",
       "updated_at": "2026-04-15T09:30:00Z",
       "related_ids": ["cs-eval-feishu", "cs-plan-feishu", "cs-diff-feishu"]
+    },
+    {
+      "id": "cs-diff-card-thread",
+      "name": "Task 4.6.5 feishu_bridge card+thread 代码变更",
+      "type": "code-diff",
+      "status": "draft",
+      "producer": "skill-3",
+      "consumers": ["skill-4"],
+      "path": ".artifacts/code-diffs/cs-diff-card-thread.md",
+      "created_at": "2026-04-15T16:00:00Z",
+      "updated_at": "2026-04-15T16:00:00Z",
+      "related_ids": ["cs-eval-feishu", "cs-plan-feishu", "cs-diff-feishu", "cs-report-card-thread"]
+    },
+    {
+      "id": "cs-report-card-thread",
+      "name": "Task 4.6.5 feishu_bridge card+thread 测试报告",
+      "type": "e2e-report",
+      "status": "draft",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-card-thread.md",
+      "created_at": "2026-04-15T16:05:00Z",
+      "updated_at": "2026-04-15T16:05:00Z",
+      "related_ids": ["cs-diff-card-thread", "cs-plan-feishu", "cs-eval-feishu"]
     }
   ]
 }

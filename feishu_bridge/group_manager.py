@@ -122,6 +122,19 @@ class GroupManager:
     def has_operator_permission(self, user_id: str, chat_id: str) -> bool:
         return user_id in self._squad_members.get(chat_id, set())
 
+    def is_operator(self, user_id: str) -> bool:
+        """判断 user_id 是否为任一 squad 群的已知 operator。"""
+        return any(user_id in members for members in self._squad_members.values())
+
+    def is_operator_in_customer_chat(self, user_id: str, chat_id: str) -> bool:
+        """判断事件是否为"operator 在客户群内发言"——auto-hijack 触发条件。
+
+        仅当 chat_id 是动态 customer 群、且 user_id 是某个 squad 已知 operator 时返回 True。
+        """
+        if chat_id not in self._dynamic_customer_chats:
+            return False
+        return self.is_operator(user_id)
+
     # ------------------------------------------------------------------
     # 持久化
     # ------------------------------------------------------------------
