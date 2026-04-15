@@ -48,12 +48,6 @@ BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "9999"))
 BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "127.0.0.1")
 
 CS_DB_PATH = os.environ.get("CS_DB_PATH", "conversations.db")
-CS_EVENT_DB_PATH = os.environ.get(
-    "CS_EVENT_DB_PATH", CS_DB_PATH.replace(".db", "_events.db")
-)
-CS_MESSAGE_DB_PATH = os.environ.get(
-    "CS_MESSAGE_DB_PATH", CS_DB_PATH.replace(".db", "_messages.db")
-)
 CS_ROUTING_CONFIG = os.environ.get("CS_ROUTING_CONFIG", "routing.toml")
 CS_PLUGINS_DIR = os.environ.get(
     "CS_PLUGINS_DIR", str(__import__("pathlib").Path(__file__).parent / "plugins")
@@ -523,14 +517,17 @@ def wire_bridge_callbacks(
 
 def build_components() -> dict[str, Any]:
     """组装所有 engine / bridge / transport 组件。不启动 IRC / WebSocket。"""
+    from engine.db import init_db
+
     routing_cfg = load_routing_config(CS_ROUTING_CONFIG)
-    event_bus = EventBus(CS_EVENT_DB_PATH)
-    conversation_manager = ConversationManager(CS_DB_PATH)
+    conn = init_db(CS_DB_PATH)
+    event_bus = EventBus(conn)
+    conversation_manager = ConversationManager(conn)
     mode_manager = ModeManager(event_bus)
     timer_manager = TimerManager(event_bus)
     participant_registry = ParticipantRegistry()
     squad_registry = SquadRegistry()
-    message_store = MessageStore(CS_MESSAGE_DB_PATH)
+    message_store = MessageStore(conn)
     from pathlib import Path as _Path
     plugin_manager = PluginManager(_Path(CS_PLUGINS_DIR))
     bridge_server = BridgeAPIServer(

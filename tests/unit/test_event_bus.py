@@ -8,9 +8,24 @@ from engine.event_bus import EventBus
 from protocol.event import Event, EventType
 
 
+def _seed_conversations(conn, *conv_ids):
+    """预插入 conversation 行以满足 FK 约束。"""
+    for cid in conv_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO conversations (id, state, mode, created_at, updated_at) "
+            "VALUES (?, 'active', 'auto', '2026-01-01', '2026-01-01')",
+            (cid,),
+        )
+    conn.commit()
+
+
 @pytest.fixture
 def bus(tmp_path):
-    return EventBus(str(tmp_path / "events.db"))
+    from engine.db import init_db
+
+    conn = init_db(str(tmp_path / "events.db"))
+    _seed_conversations(conn, "c1")
+    return EventBus(conn)
 
 
 @pytest.mark.asyncio
@@ -74,11 +89,16 @@ async def test_subscriber_exception_is_isolated(bus):
 
 @pytest.mark.asyncio
 async def test_query_persistence_across_instances(tmp_path):
+    from engine.db import init_db
+
     db = str(tmp_path / "events.db")
-    bus1 = EventBus(db)
+    conn1 = init_db(db)
+    _seed_conversations(conn1, "c1")
+    bus1 = EventBus(conn1)
     await bus1.publish(Event(type=EventType.CONVERSATION_CLOSED, conversation_id="c1"))
-    bus1.close()
-    bus2 = EventBus(db)
+    conn1.close()
+    conn2 = init_db(db)
+    bus2 = EventBus(conn2)
     results = bus2.query(conversation_id="c1")
     assert len(results) == 1
     assert results[0].type == EventType.CONVERSATION_CLOSED

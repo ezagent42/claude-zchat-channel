@@ -19,8 +19,6 @@ from protocol.participant import Participant, ParticipantRole
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     monkeypatch.setenv("CS_DB_PATH", str(tmp_path / "conv.db"))
-    monkeypatch.setenv("CS_EVENT_DB_PATH", str(tmp_path / "events.db"))
-    monkeypatch.setenv("CS_MESSAGE_DB_PATH", str(tmp_path / "msg.db"))
     monkeypatch.setenv("BRIDGE_PORT", "0")
     monkeypatch.setenv("AGENT_NAME", "unit-agent")
 

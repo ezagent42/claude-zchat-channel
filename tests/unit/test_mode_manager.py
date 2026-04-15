@@ -13,7 +13,16 @@ from protocol.mode import ConversationMode
 
 @pytest.fixture
 def bus(tmp_path):
-    return EventBus(str(tmp_path / "e.db"))
+    from engine.db import init_db
+
+    conn = init_db(str(tmp_path / "e.db"))
+    # 预插入 conversation 满足 FK 约束
+    conn.execute(
+        "INSERT INTO conversations (id, state, mode, created_at, updated_at) "
+        "VALUES ('c1', 'active', 'auto', '2026-01-01', '2026-01-01')"
+    )
+    conn.commit()
+    return EventBus(conn)
 
 
 @pytest.fixture

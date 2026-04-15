@@ -25,32 +25,12 @@ log = logging.getLogger(__name__)
 class EventBus:
     """事件总线：异步发布，所有事件落盘。"""
 
-    def __init__(self, db_path: str):
+    def __init__(self, conn: sqlite3.Connection):
         self._subscribers: dict[EventType, list[Callable[[Event], Any]]] = defaultdict(
             list
         )
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path)
+        self._conn = conn
         self._conn.row_factory = sqlite3.Row
-        self._init_db()
-
-    def _init_db(self) -> None:
-        self._conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                type TEXT NOT NULL,
-                conversation_id TEXT,
-                data TEXT NOT NULL DEFAULT '{}',
-                timestamp TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_events_conv
-                ON events(conversation_id, timestamp);
-            CREATE INDEX IF NOT EXISTS idx_events_type
-                ON events(type, timestamp);
-            """
-        )
-        self._conn.commit()
 
     def subscribe(
         self, event_type: EventType, callback: Callable[[Event], Any]
@@ -71,8 +51,11 @@ class EventBus:
 
     def _persist(self, event: Event) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO events (id, type, conversation_id, data, timestamp)"
-            " VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO events (id, type, conversation_id, data, timestamp)"
+            " VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT(id) DO UPDATE SET"
+            " type=excluded.type, conversation_id=excluded.conversation_id,"
+            " data=excluded.data, timestamp=excluded.timestamp",
             (
                 event.id,
                 event.type.value,

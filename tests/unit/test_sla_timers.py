@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from engine.db import init_db
 from engine.event_bus import EventBus
 from engine.timer_manager import TimerManager
 from plugins import sla_app
@@ -16,12 +17,21 @@ from plugins.manager import PluginManager
 from protocol.event import EventType
 
 
+def _seed_conversations(conn, *conv_ids):
+    """预插入 conversation 行以满足 FK 约束。"""
+    for cid in conv_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO conversations (id, state, mode, created_at, updated_at) "
+            "VALUES (?, 'active', 'auto', '2026-01-01', '2026-01-01')",
+            (cid,),
+        )
+    conn.commit()
+
+
 def _build_components_with_mem() -> dict:
     from server import build_components
 
     with patch("server.CS_DB_PATH", ":memory:"), \
-         patch("server.CS_EVENT_DB_PATH", ":memory:"), \
-         patch("server.CS_MESSAGE_DB_PATH", ":memory:"), \
          patch("server.CS_ROUTING_CONFIG", "/nonexistent/routing.toml"):
         return build_components()
 
@@ -53,7 +63,9 @@ def _close_components(components: dict) -> None:
 @pytest.mark.asyncio
 async def test_sla_onboard_set_on_conversation_created() -> None:
     """TC-001 (P0): plugin fire 后 TimerManager 含 (conv, sla_onboard) 任务。"""
-    event_bus = EventBus(":memory:")
+    conn = init_db(":memory:")
+    _seed_conversations(conn, "conv-sla-1")
+    event_bus = EventBus(conn)
     tm = TimerManager(event_bus)
     components = {"timer_manager": tm}
 
@@ -65,13 +77,15 @@ async def test_sla_onboard_set_on_conversation_created() -> None:
     task = tm._tasks[("conv-sla-1", "sla_onboard")]
     assert not task.done()
     task.cancel()
-    event_bus.close()
+    conn.close()
 
 
 @pytest.mark.asyncio
 async def test_sla_onboard_breach_publishes_event() -> None:
     """TC-002 (P0): duration=0.1s 超时 → EventBus 收到 TIMER_EXPIRED。"""
-    event_bus = EventBus(":memory:")
+    conn = init_db(":memory:")
+    _seed_conversations(conn, "conv-sla-2")
+    event_bus = EventBus(conn)
     tm = TimerManager(event_bus)
     components = {"timer_manager": tm}
 
@@ -88,13 +102,15 @@ async def test_sla_onboard_breach_publishes_event() -> None:
     ]
     assert len(events) == 1
     assert events[0].data.get("action_type") == "alert"
-    event_bus.close()
+    conn.close()
 
 
 @pytest.mark.asyncio
 async def test_sla_onboard_cancelled_by_agent_public_reply() -> None:
     """TC-003 (P0): agent public reply hook 取消 sla_onboard timer，无 breach。"""
-    event_bus = EventBus(":memory:")
+    conn = init_db(":memory:")
+    _seed_conversations(conn, "conv-sla-3")
+    event_bus = EventBus(conn)
     tm = TimerManager(event_bus)
     components = {"timer_manager": tm}
 
@@ -115,7 +131,7 @@ async def test_sla_onboard_cancelled_by_agent_public_reply() -> None:
     ]
     assert len(breach_events) == 0, "timer should be cancelled, no breach expected"
     assert ("conv-sla-3", "sla_onboard") not in tm._tasks
-    event_bus.close()
+    conn.close()
 
 
 @pytest.mark.asyncio
@@ -126,7 +142,9 @@ async def test_sla_onboard_not_cancelled_by_side_visibility() -> None:
     side visibility 不应 fire 该 hook，因此 plugin 逻辑本身不需要判断 visibility。
     此测试验证：如果上游不 fire，则 timer 保留。
     """
-    event_bus = EventBus(":memory:")
+    conn = init_db(":memory:")
+    _seed_conversations(conn, "conv-sla-4")
+    event_bus = EventBus(conn)
     tm = TimerManager(event_bus)
     components = {"timer_manager": tm}
 
@@ -138,7 +156,7 @@ async def test_sla_onboard_not_cancelled_by_side_visibility() -> None:
     task = tm._tasks[("conv-sla-4", "sla_onboard")]
     assert not task.done()
     task.cancel()
-    event_bus.close()
+    conn.close()
 
 
 # ------------------------------------------------------------------ #
@@ -189,7 +207,9 @@ async def test_plugin_manager_loads_sla_app() -> None:
 @pytest.mark.asyncio
 async def test_sla_onboard_independent_per_conversation() -> None:
     """TC-007 (P2): 两个 conv 并行 sla_onboard，各自独立。"""
-    event_bus = EventBus(":memory:")
+    conn = init_db(":memory:")
+    _seed_conversations(conn, "conv-A", "conv-B")
+    event_bus = EventBus(conn)
     tm = TimerManager(event_bus)
     components = {"timer_manager": tm}
 
@@ -213,7 +233,7 @@ async def test_sla_onboard_independent_per_conversation() -> None:
     ]
     assert len(events_a) == 0, "conv-A should be cancelled"
     assert len(events_b) == 1, "conv-B should breach"
-    event_bus.close()
+    conn.close()
 
 
 # ------------------------------------------------------------------ #

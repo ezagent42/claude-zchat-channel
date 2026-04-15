@@ -11,7 +11,10 @@ from protocol.participant import Participant, ParticipantRole
 
 @pytest.fixture
 def mgr(tmp_path):
-    return ConversationManager(str(tmp_path / "conv.db"), max_operator_concurrent=2)
+    from engine.db import init_db
+
+    conn = init_db(str(tmp_path / "conv.db"))
+    return ConversationManager(conn, max_operator_concurrent=2)
 
 
 def test_create_and_get(mgr):
@@ -110,15 +113,19 @@ def test_invalid_transition_raises(mgr):
 
 
 def test_persistence_survives_restart(tmp_path):
+    from engine.db import init_db
+
     db = str(tmp_path / "conv.db")
-    m1 = ConversationManager(db)
+    conn1 = init_db(db)
+    m1 = ConversationManager(conn1)
     m1.create("c1", metadata={"channel": "feishu"})
     m1.activate("c1")
     op = Participant(id="xiaoli", role=ParticipantRole.OPERATOR)
     m1.add_participant("c1", op)
-    m1.close_db()
+    conn1.close()
 
-    m2 = ConversationManager(db)
+    conn2 = init_db(db)
+    m2 = ConversationManager(conn2)
     conv = m2.get("c1")
     assert conv is not None
     assert conv.state == ConversationState.ACTIVE
@@ -127,13 +134,17 @@ def test_persistence_survives_restart(tmp_path):
 
 
 def test_closed_conversations_not_loaded_into_active_cache(tmp_path):
+    from engine.db import init_db
+
     db = str(tmp_path / "conv.db")
-    m1 = ConversationManager(db)
+    conn1 = init_db(db)
+    m1 = ConversationManager(conn1)
     m1.create("c1")
     m1.activate("c1")
     m1.resolve("c1", "resolved", "xiaoli")
-    m1.close_db()
+    conn1.close()
 
-    m2 = ConversationManager(db)
+    conn2 = init_db(db)
+    m2 = ConversationManager(conn2)
     # closed conversations 仍可通过 get 读出（按需从 db 懒加载），但不出现在 list_active
     assert all(c.id != "c1" for c in m2.list_active())

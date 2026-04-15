@@ -21,8 +21,6 @@ def _build_components_with_mem() -> dict:
     from server import build_components
 
     with patch("server.CS_DB_PATH", ":memory:"), \
-         patch("server.CS_EVENT_DB_PATH", ":memory:"), \
-         patch("server.CS_MESSAGE_DB_PATH", ":memory:"), \
          patch("server.CS_ROUTING_CONFIG", "/nonexistent/routing.toml"):
         return build_components()
 

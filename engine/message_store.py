@@ -11,35 +11,18 @@ from protocol.message_types import Message, MessageVisibility
 
 
 class MessageStore:
-    def __init__(self, db_path: str):
-        self._conn = sqlite3.connect(db_path)
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
         self._conn.row_factory = sqlite3.Row
-        self._init_db()
-
-    def _init_db(self) -> None:
-        self._conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS messages (
-                id TEXT PRIMARY KEY,
-                conversation_id TEXT NOT NULL,
-                source TEXT NOT NULL,
-                content TEXT NOT NULL,
-                visibility TEXT NOT NULL DEFAULT 'public',
-                timestamp TEXT NOT NULL,
-                edit_of TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}'
-            );
-            CREATE INDEX IF NOT EXISTS idx_messages_conv
-                ON messages(conversation_id, timestamp);
-            """
-        )
-        self._conn.commit()
 
     def save(self, message: Message) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO messages "
+            "INSERT INTO messages "
             "(id, conversation_id, source, content, visibility, timestamp, edit_of, metadata) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "content=excluded.content, visibility=excluded.visibility, "
+            "timestamp=excluded.timestamp, edit_of=excluded.edit_of, metadata=excluded.metadata",
             (
                 message.id,
                 message.conversation_id,

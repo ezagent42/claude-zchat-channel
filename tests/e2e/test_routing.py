@@ -62,8 +62,6 @@ def channel_server_with_routing(
         "BRIDGE_PORT": str(e2e_ports["bridge"]),
         "AGENT_NAME": f"cs-routing-{os.getpid() % 1000}",
         "CS_DB_PATH": str(tmp_path / "conv.db"),
-        "CS_EVENT_DB_PATH": str(tmp_path / "events.db"),
-        "CS_MESSAGE_DB_PATH": str(tmp_path / "msg.db"),
         "CS_ROUTING_CONFIG": routing_toml,
         "PYTHONUNBUFFERED": "1",
     }

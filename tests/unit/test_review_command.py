@@ -35,8 +35,6 @@ def test_review_returns_stats() -> None:
     from server import wire_bridge_callbacks, build_components
 
     with patch("server.CS_DB_PATH", ":memory:"), \
-         patch("server.CS_EVENT_DB_PATH", ":memory:"), \
-         patch("server.CS_MESSAGE_DB_PATH", ":memory:"), \
          patch("server.CS_ROUTING_CONFIG", "/nonexistent/routing.toml"):
         components = build_components()
 
@@ -97,8 +95,6 @@ def test_review_empty_data() -> None:
     from server import wire_bridge_callbacks, build_components
 
     with patch("server.CS_DB_PATH", ":memory:"), \
-         patch("server.CS_EVENT_DB_PATH", ":memory:"), \
-         patch("server.CS_MESSAGE_DB_PATH", ":memory:"), \
          patch("server.CS_ROUTING_CONFIG", "/nonexistent/routing.toml"):
         components = build_components()
 
@@ -137,8 +133,6 @@ def test_sla_breach_alert_format() -> None:
     from server import wire_bridge_callbacks, build_components
 
     with patch("server.CS_DB_PATH", ":memory:"), \
-         patch("server.CS_EVENT_DB_PATH", ":memory:"), \
-         patch("server.CS_MESSAGE_DB_PATH", ":memory:"), \
          patch("server.CS_ROUTING_CONFIG", "/nonexistent/routing.toml"):
         components = build_components()
 
@@ -153,6 +147,9 @@ def test_sla_breach_alert_format() -> None:
     bridge.on_customer_connect = None
 
     wire_bridge_callbacks(bridge, components)
+
+    # 预创建 conversation 满足 FK 约束
+    components["conversation_manager"].create("conv-sla-001")
 
     # 模拟 SLA timer 超时
     asyncio.run(event_bus.publish(Event(
@@ -199,8 +196,6 @@ def test_non_sla_timer_no_alert() -> None:
     from server import wire_bridge_callbacks, build_components
 
     with patch("server.CS_DB_PATH", ":memory:"), \
-         patch("server.CS_EVENT_DB_PATH", ":memory:"), \
-         patch("server.CS_MESSAGE_DB_PATH", ":memory:"), \
          patch("server.CS_ROUTING_CONFIG", "/nonexistent/routing.toml"):
         components = build_components()
 
@@ -215,6 +210,9 @@ def test_non_sla_timer_no_alert() -> None:
     bridge.on_customer_connect = None
 
     wire_bridge_callbacks(bridge, components)
+
+    # 预创建 conversation 满足 FK 约束
+    components["conversation_manager"].create("conv-other")
 
     # 模拟非 SLA timer 超时
     asyncio.run(event_bus.publish(Event(

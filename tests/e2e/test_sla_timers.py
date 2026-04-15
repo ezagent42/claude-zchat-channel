@@ -62,8 +62,6 @@ def channel_server_short_sla(
         "BRIDGE_PORT": str(e2e_ports["bridge"]),
         "AGENT_NAME": f"e2e-sla-{os.getpid() % 1000}",
         "CS_DB_PATH": str(tmp_path / "conv.db"),
-        "CS_EVENT_DB_PATH": str(tmp_path / "events.db"),
-        "CS_MESSAGE_DB_PATH": str(tmp_path / "msg.db"),
         "CS_PLUGINS_DIR": str(plugins_dir),
         "PYTHONUNBUFFERED": "1",
     }

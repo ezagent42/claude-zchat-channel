@@ -28,46 +28,12 @@ class ConcurrencyLimitExceeded(Exception):
 
 
 class ConversationManager:
-    def __init__(self, db_path: str, max_operator_concurrent: int = 5):
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path)
+    def __init__(self, conn: sqlite3.Connection, max_operator_concurrent: int = 5):
+        self._conn = conn
         self._conn.row_factory = sqlite3.Row
         self._conversations: dict[str, Conversation] = {}
         self.max_operator_concurrent = max_operator_concurrent
-        self._init_db()
         self._load_active()
-
-    # ---------- schema ----------
-
-    def _init_db(self) -> None:
-        self._conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS conversations (
-                id TEXT PRIMARY KEY,
-                state TEXT NOT NULL DEFAULT 'created',
-                mode TEXT NOT NULL DEFAULT 'auto',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                metadata TEXT NOT NULL DEFAULT '{}'
-            );
-            CREATE TABLE IF NOT EXISTS participants (
-                conversation_id TEXT NOT NULL,
-                participant_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                joined_at TEXT NOT NULL,
-                metadata TEXT NOT NULL DEFAULT '{}',
-                PRIMARY KEY (conversation_id, participant_id)
-            );
-            CREATE TABLE IF NOT EXISTS resolutions (
-                conversation_id TEXT PRIMARY KEY,
-                outcome TEXT NOT NULL,
-                resolved_by TEXT NOT NULL,
-                csat_score INTEGER,
-                timestamp TEXT NOT NULL
-            );
-            """
-        )
-        self._conn.commit()
 
     def _load_active(self) -> None:
         rows = self._conn.execute(
@@ -191,9 +157,11 @@ class ConversationManager:
         if not any(p.id == participant.id for p in conv.participants):
             conv.participants.append(participant)
         self._conn.execute(
-            "INSERT OR REPLACE INTO participants "
+            "INSERT INTO participants "
             "(conversation_id, participant_id, role, joined_at, metadata) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(conversation_id, participant_id) DO UPDATE SET "
+            "role=excluded.role, joined_at=excluded.joined_at, metadata=excluded.metadata",
             (
                 conversation_id,
                 participant.id,
@@ -234,9 +202,12 @@ class ConversationManager:
             outcome=outcome, resolved_by=resolved_by
         )
         self._conn.execute(
-            "INSERT OR REPLACE INTO resolutions "
+            "INSERT INTO resolutions "
             "(conversation_id, outcome, resolved_by, csat_score, timestamp) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(conversation_id) DO UPDATE SET "
+            "outcome=excluded.outcome, resolved_by=excluded.resolved_by, "
+            "csat_score=excluded.csat_score, timestamp=excluded.timestamp",
             (
                 conversation_id,
                 outcome,
@@ -271,9 +242,12 @@ class ConversationManager:
 
     def _upsert_conversation(self, conv: Conversation) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO conversations "
+            "INSERT INTO conversations "
             "(id, state, mode, created_at, updated_at, metadata) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "state=excluded.state, mode=excluded.mode, "
+            "updated_at=excluded.updated_at, metadata=excluded.metadata",
             (
                 conv.id,
                 conv.state.value,

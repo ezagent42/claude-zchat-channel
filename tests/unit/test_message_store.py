@@ -18,9 +18,24 @@ def make_msg(mid: str, conv_id: str, text: str = "hi") -> Message:
     )
 
 
+def _seed_conversations(conn, *conv_ids):
+    """预插入 conversation 行以满足 FK 约束。"""
+    for cid in conv_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO conversations (id, state, mode, created_at, updated_at) "
+            "VALUES (?, 'active', 'auto', '2026-01-01', '2026-01-01')",
+            (cid,),
+        )
+    conn.commit()
+
+
 @pytest.fixture
 def store(tmp_path):
-    return MessageStore(str(tmp_path / "msg.db"))
+    from engine.db import init_db
+
+    conn = init_db(str(tmp_path / "msg.db"))
+    _seed_conversations(conn, "c1", "c2")
+    return MessageStore(conn)
 
 
 def test_save_and_get(store):
@@ -70,9 +85,14 @@ def test_query_preserves_order(store):
 
 
 def test_persistence_across_instances(tmp_path):
+    from engine.db import init_db
+
     db = str(tmp_path / "msg.db")
-    s1 = MessageStore(db)
+    conn1 = init_db(db)
+    _seed_conversations(conn1, "c1")
+    s1 = MessageStore(conn1)
     s1.save(make_msg("m1", "c1", "hello"))
-    s1.close()
-    s2 = MessageStore(db)
+    conn1.close()
+    conn2 = init_db(db)
+    s2 = MessageStore(conn2)
     assert s2.get("m1").content == "hello"

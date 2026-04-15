@@ -12,8 +12,6 @@ import pytest
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     monkeypatch.setenv("CS_DB_PATH", str(tmp_path / "conv.db"))
-    monkeypatch.setenv("CS_EVENT_DB_PATH", str(tmp_path / "events.db"))
-    monkeypatch.setenv("CS_MESSAGE_DB_PATH", str(tmp_path / "msg.db"))
     monkeypatch.setenv("BRIDGE_PORT", "0")
     monkeypatch.setenv("AGENT_NAME", "unit-agent")
 
@@ -69,8 +67,10 @@ def test_bridge_customer_connect_creates_conversation(tmp_path) -> None:
     """
     from bridge_api.ws_server import BridgeAPIServer
     from engine.conversation_manager import ConversationManager
+    from engine.db import init_db
 
-    cm = ConversationManager(str(tmp_path / "conv.db"))
+    conn = init_db(str(tmp_path / "conv.db"))
+    cm = ConversationManager(conn)
     bs = BridgeAPIServer(conversation_manager=cm, port=0)
 
     bs._handle_customer_connect(
