@@ -91,6 +91,9 @@ class FeishuBridge:
         # 已连接的 conversation（避免重复 customer_connect）
         self._known_conversations: set[str] = set()
 
+        # 消息去重（防止飞书延迟重投导致重复处理）
+        self._processed_msg_ids: set[str] = set()
+
         # Bridge API WebSocket 连接（兼容旧的 _on_card_action 引用）
         self._bridge_ws: Any | None = None
 
@@ -105,6 +108,15 @@ class FeishuBridge:
             return
 
         msg = event.message
+
+        # 消息去重：飞书可能延迟重投同一事件
+        msg_id = msg.message_id or ""
+        if msg_id and msg_id in self._processed_msg_ids:
+            log.debug("Duplicate message %s, skipping", msg_id)
+            return
+        if msg_id:
+            self._processed_msg_ids.add(msg_id)
+
         chat_id = msg.chat_id or ""
         role = self.group_manager.identify_role(chat_id)
 
@@ -229,6 +241,11 @@ class FeishuBridge:
             "conversation_id": chat_id,
             "text": text,
             "message_id": message_id,
+        })
+        # 写入 squad thread 让 operator 看到客户消息
+        self.visibility_router.route(chat_id, {
+            "visibility": "system",
+            "text": f"[客户] {text}",
         })
 
     def _forward_operator(
@@ -359,19 +376,37 @@ class FeishuBridge:
             return None, None
 
     def _on_card_action(self, payload: dict) -> None:
-        """卡片点击回调 → 解析 CSAT 评分 → 发送到 Bridge API。"""
-        score, conv_id = self._parse_card_action(payload)
-        if score is None or conv_id is None:
-            log.debug("card action ignored: missing score or conv_id in %s", payload)
+        """卡片点击回调 → 分发：hijack/resolve 转为命令，CSAT 转为评分。"""
+        try:
+            value = payload["action"]["value"]
+        except (KeyError, TypeError):
+            log.debug("card action ignored: invalid payload %s", payload)
             return
-        if not self._bridge_client.connected:
-            log.warning("card action: bridge not connected, dropping csat score=%d conv=%s", score, conv_id)
+
+        action_type = value.get("action")  # "hijack" or "resolve"
+        conv_id = value.get("conv_id")
+
+        if action_type and conv_id:
+            # hijack/resolve → 转发为 operator_command
+            self._bridge_client.send({
+                "type": "operator_command",
+                "conversation_id": conv_id,
+                "command": f"/{action_type}",
+                "operator_id": "card_action",
+            })
             return
-        self._bridge_client.send({
-            "type": "customer_message",
-            "conversation_id": conv_id,
-            "csat_score": score,
-        })
+
+        # CSAT score handling
+        score = value.get("score")
+        if score is not None and conv_id is not None:
+            if not self._bridge_client.connected:
+                log.warning("card action: bridge not connected")
+                return
+            self._bridge_client.send({
+                "type": "customer_message",
+                "conversation_id": conv_id,
+                "csat_score": int(score),
+            })
 
     # ------------------------------------------------------------------
     # 文件下载

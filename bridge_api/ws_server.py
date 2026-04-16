@@ -247,17 +247,35 @@ class BridgeAPIServer:
                         })
                     )
                     if self.on_customer_connect:
-                        await self.on_customer_connect(msg)
+                        try:
+                            await self.on_customer_connect(msg)
+                        except Exception:
+                            logger.exception("on_customer_connect callback failed")
                 elif msg_type == "operator_join" and self.on_operator_join:
-                    await self.on_operator_join(msg)
+                    try:
+                        await self.on_operator_join(msg)
+                    except Exception:
+                        logger.exception("on_operator_join callback failed")
                 elif msg_type == "customer_message" and self.on_customer_message:
-                    await self.on_customer_message(msg)
+                    try:
+                        await self.on_customer_message(msg)
+                    except Exception:
+                        logger.exception("on_customer_message callback failed")
                 elif msg_type == "operator_message" and self.on_operator_message:
-                    await self.on_operator_message(msg)
+                    try:
+                        await self.on_operator_message(msg)
+                    except Exception:
+                        logger.exception("on_operator_message callback failed")
                 elif msg_type == "operator_command" and self.on_operator_command:
-                    await self.on_operator_command(msg, self._parse_operator_command(msg))
+                    try:
+                        await self.on_operator_command(msg, self._parse_operator_command(msg))
+                    except Exception:
+                        logger.exception("on_operator_command callback failed")
                 elif msg_type == "admin_command" and self.on_admin_command:
-                    await self.on_admin_command(msg, self._parse_admin_command(msg))
+                    try:
+                        await self.on_admin_command(msg, self._parse_admin_command(msg))
+                    except Exception:
+                        logger.exception("on_admin_command callback failed")
                 else:
                     logger.debug("unhandled bridge message type: %s", msg_type)
         except websockets.ConnectionClosed:

@@ -43,17 +43,7 @@ def channel_server_short_sla(
     tmp_path: Path,
     server_root: Path,
 ) -> Iterator[subprocess.Popen]:
-    """启动 channel-server 并配置短 SLA（通过自定义 plugins dir）。"""
-    # 创建临时 plugins dir，注入短时长的 sla_app
-    plugins_dir = tmp_path / "plugins"
-    plugins_dir.mkdir()
-    (plugins_dir / "__init__.py").write_text("")
-    sla_src = (server_root / "plugins" / "sla_app.py").read_text()
-    # 把默认 3s 替换为 0.5s
-    sla_src = sla_src.replace("SLA_ONBOARD_DURATION_S: float = 3.0",
-                              "SLA_ONBOARD_DURATION_S: float = 0.5")
-    (plugins_dir / "sla_app.py").write_text(sla_src)
-
+    """启动 channel-server 并配置短 SLA（通过环境变量）。"""
     env = {
         **os.environ,
         "IRC_SERVER": "127.0.0.1",
@@ -62,8 +52,9 @@ def channel_server_short_sla(
         "BRIDGE_PORT": str(e2e_ports["bridge"]),
         "AGENT_NAME": f"e2e-sla-{os.getpid() % 1000}",
         "CS_DB_PATH": str(tmp_path / "conv.db"),
-        "CS_PLUGINS_DIR": str(plugins_dir),
         "PYTHONUNBUFFERED": "1",
+        # 通过环境变量注入短 SLA 时长
+        "SLA_ONBOARD_DURATION_S": "0.5",
     }
     proc = subprocess.Popen(
         ["uv", "run", "python", "-m", "server"],

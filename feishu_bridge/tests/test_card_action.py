@@ -1,12 +1,15 @@
-"""Unit tests: CardAwareClient + _on_card_action CSAT 解析。
+"""Unit tests: CardAwareClient + _on_card_action CSAT / hijack / resolve。
 
-覆盖测试计划 TC-1 ~ TC-6：
+覆盖测试计划 TC-1 ~ TC-9：
 - TC-1 test_card_aware_client_dispatches_card
 - TC-2 test_event_frame_delegates_to_super
 - TC-3 test_card_handler_exception_swallowed
 - TC-4 test_card_action_extracts_score
 - TC-5 test_card_action_sends_csat_to_bridge
 - TC-6 test_card_action_missing_fields_noop
+- TC-7 test_card_action_hijack_sends_operator_command
+- TC-8 test_card_action_resolve_sends_operator_command
+- TC-9 test_card_action_unknown_action_type_noop
 """
 
 from __future__ import annotations
@@ -219,4 +222,77 @@ def test_card_action_missing_fields_noop() -> None:
 
     # 空 payload
     bridge._on_card_action({})
+    mock_client.send.assert_not_called()
+
+
+# ------------------------------------------------------------------ #
+# TC-7: hijack 按钮 → operator_command
+# ------------------------------------------------------------------ #
+
+
+def test_card_action_hijack_sends_operator_command() -> None:
+    """TC-7: hijack 按钮 → 发送 operator_command /hijack。"""
+    from feishu_bridge.bridge import FeishuBridge
+
+    bridge = FeishuBridge.__new__(FeishuBridge)
+    mock_client = MagicMock()
+    mock_client.connected = True
+    bridge._bridge_client = mock_client
+
+    payload = {"action": {"value": {"action": "hijack", "conv_id": "oc_3e33"}}}
+    bridge._on_card_action(payload)
+
+    mock_client.send.assert_called_once()
+    sent = mock_client.send.call_args[0][0]
+    assert sent["type"] == "operator_command"
+    assert sent["conversation_id"] == "oc_3e33"
+    assert sent["command"] == "/hijack"
+    assert sent["operator_id"] == "card_action"
+
+
+# ------------------------------------------------------------------ #
+# TC-8: resolve 按钮 → operator_command
+# ------------------------------------------------------------------ #
+
+
+def test_card_action_resolve_sends_operator_command() -> None:
+    """TC-8: resolve 按钮 → 发送 operator_command /resolve。"""
+    from feishu_bridge.bridge import FeishuBridge
+
+    bridge = FeishuBridge.__new__(FeishuBridge)
+    mock_client = MagicMock()
+    mock_client.connected = True
+    bridge._bridge_client = mock_client
+
+    payload = {"action": {"value": {"action": "resolve", "conv_id": "oc_abc"}}}
+    bridge._on_card_action(payload)
+
+    mock_client.send.assert_called_once()
+    sent = mock_client.send.call_args[0][0]
+    assert sent["type"] == "operator_command"
+    assert sent["conversation_id"] == "oc_abc"
+    assert sent["command"] == "/resolve"
+    assert sent["operator_id"] == "card_action"
+
+
+# ------------------------------------------------------------------ #
+# TC-9: action 字段存在但缺 conv_id → noop
+# ------------------------------------------------------------------ #
+
+
+def test_card_action_unknown_action_type_noop() -> None:
+    """TC-9: action 存在但缺 conv_id → 不发送。"""
+    from feishu_bridge.bridge import FeishuBridge
+
+    bridge = FeishuBridge.__new__(FeishuBridge)
+    mock_client = MagicMock()
+    mock_client.connected = True
+    bridge._bridge_client = mock_client
+
+    # action 存在但没有 conv_id
+    bridge._on_card_action({"action": {"value": {"action": "hijack"}}})
+    mock_client.send.assert_not_called()
+
+    # conv_id 存在但 action 为空字符串（falsy）
+    bridge._on_card_action({"action": {"value": {"action": "", "conv_id": "c1"}}})
     mock_client.send.assert_not_called()
