@@ -850,6 +850,441 @@
       "created_at": "2026-04-16T00:00:00Z",
       "updated_at": "2026-04-16T00:00:00Z",
       "related_ids": []
+    },
+    {
+      "id": "coverage-matrix-001",
+      "name": "cs-coverage-matrix-001",
+      "type": "coverage-matrix",
+      "status": "draft",
+      "producer": "skill-0",
+      "consumers": [],
+      "path": ".artifacts/coverage/cs-coverage-matrix.md",
+      "created_at": "2026-04-14T09:21:50Z",
+      "updated_at": "2026-04-14T09:21:50Z",
+      "related_ids": []
+    },
+    {
+      "id": "cs-eval-cli",
+      "name": "cs-eval-cli",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-cli.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-cli"
+      ]
+    },
+    {
+      "id": "cs-plan-cli",
+      "name": "cs-plan-cli",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [
+        "skill-3",
+        "skill-4"
+      ],
+      "path": ".artifacts/test-plans/cs-plan-cli.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-cli",
+        "cs-diff-cli"
+      ]
+    },
+    {
+      "id": "cs-diff-cli",
+      "name": "cs-diff-cli",
+      "type": "code-diff",
+      "status": "implemented",
+      "producer": "skill-6",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/code-diffs/cs-diff-cli.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-cli",
+        "cs-plan-cli"
+      ]
+    },
+    {
+      "id": "cs-report-cli",
+      "name": "cs-report-cli",
+      "type": "e2e-report",
+      "status": "pass",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-cli.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-cli",
+        "cs-eval-cli",
+        "cs-diff-cli"
+      ]
+    },
+    {
+      "id": "cs-eval-protocol",
+      "name": "cs-eval-protocol",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-protocol.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-protocol"
+      ]
+    },
+    {
+      "id": "cs-plan-protocol",
+      "name": "cs-plan-protocol",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [
+        "skill-3",
+        "skill-4"
+      ],
+      "path": ".artifacts/test-plans/cs-plan-protocol.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-protocol",
+        "cs-diff-protocol"
+      ]
+    },
+    {
+      "id": "cs-diff-protocol",
+      "name": "cs-diff-protocol",
+      "type": "code-diff",
+      "status": "implemented",
+      "producer": "skill-6",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/code-diffs/cs-diff-protocol.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-protocol",
+        "cs-plan-protocol"
+      ]
+    },
+    {
+      "id": "cs-report-protocol",
+      "name": "cs-report-protocol",
+      "type": "e2e-report",
+      "status": "pass",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-protocol.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-protocol",
+        "cs-eval-protocol",
+        "cs-diff-protocol"
+      ]
+    },
+    {
+      "id": "cs-eval-bridge",
+      "name": "cs-eval-bridge",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-bridge.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-bridge"
+      ]
+    },
+    {
+      "id": "cs-plan-bridge",
+      "name": "cs-plan-bridge",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [
+        "skill-3",
+        "skill-4"
+      ],
+      "path": ".artifacts/test-plans/cs-plan-bridge.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-bridge",
+        "cs-diff-bridge"
+      ]
+    },
+    {
+      "id": "cs-diff-bridge",
+      "name": "cs-diff-bridge",
+      "type": "code-diff",
+      "status": "implemented",
+      "producer": "skill-6",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/code-diffs/cs-diff-bridge.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-bridge",
+        "cs-plan-bridge"
+      ]
+    },
+    {
+      "id": "cs-report-bridge",
+      "name": "cs-report-bridge",
+      "type": "e2e-report",
+      "status": "pass",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-bridge.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-bridge",
+        "cs-eval-bridge",
+        "cs-diff-bridge"
+      ]
+    },
+    {
+      "id": "cs-eval-engine",
+      "name": "cs-eval-engine",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-engine.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-engine"
+      ]
+    },
+    {
+      "id": "cs-plan-engine",
+      "name": "cs-plan-engine",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [
+        "skill-3",
+        "skill-4"
+      ],
+      "path": ".artifacts/test-plans/cs-plan-engine.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-engine",
+        "cs-diff-engine"
+      ]
+    },
+    {
+      "id": "cs-diff-engine",
+      "name": "cs-diff-engine",
+      "type": "code-diff",
+      "status": "implemented",
+      "producer": "skill-6",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/code-diffs/cs-diff-engine.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-eval-engine",
+        "cs-plan-engine"
+      ]
+    },
+    {
+      "id": "cs-report-engine",
+      "name": "cs-report-engine",
+      "type": "e2e-report",
+      "status": "pass",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-engine.md",
+      "created_at": "2026-04-14T00:00:00Z",
+      "updated_at": "2026-04-14T00:00:00Z",
+      "related_ids": [
+        "cs-plan-engine",
+        "cs-eval-engine",
+        "cs-diff-engine"
+      ]
+    },
+    {
+      "id": "cs-eval-server",
+      "name": "cs-eval-server",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-server.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-plan-server"
+      ]
+    },
+    {
+      "id": "cs-plan-server",
+      "name": "cs-plan-server",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [
+        "skill-3",
+        "skill-4"
+      ],
+      "path": ".artifacts/test-plans/cs-plan-server.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-eval-server",
+        "cs-diff-server"
+      ]
+    },
+    {
+      "id": "cs-diff-server",
+      "name": "cs-diff-server",
+      "type": "code-diff",
+      "status": "implemented",
+      "producer": "skill-6",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/code-diffs/cs-diff-server.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-eval-server",
+        "cs-plan-server"
+      ]
+    },
+    {
+      "id": "cs-report-server",
+      "name": "cs-report-server",
+      "type": "e2e-report",
+      "status": "pass",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-server.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-plan-server",
+        "cs-eval-server",
+        "cs-diff-server"
+      ]
+    },
+    {
+      "id": "cs-eval-server-v2",
+      "name": "cs-eval-server-v2",
+      "type": "eval-doc",
+      "status": "confirmed",
+      "producer": "skill-5",
+      "consumers": [
+        "skill-2"
+      ],
+      "path": ".artifacts/eval-docs/cs-eval-server-v2.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-plan-server-v2",
+        "cs-report-server"
+      ]
+    },
+    {
+      "id": "cs-plan-server-v2",
+      "name": "cs-plan-server-v2",
+      "type": "test-plan",
+      "status": "executed",
+      "producer": "skill-2",
+      "consumers": [
+        "skill-3",
+        "skill-4"
+      ],
+      "path": ".artifacts/test-plans/cs-plan-server-v2.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-eval-server-v2",
+        "cs-diff-server-v2",
+        "cs-test-diff-server-v2"
+      ]
+    },
+    {
+      "id": "cs-test-diff-server-v2",
+      "name": "cs-test-diff-server-v2",
+      "type": "test-diff",
+      "status": "executed",
+      "producer": "skill-3",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/test-diffs/cs-test-diff-server-v2.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-plan-server-v2",
+        "cs-diff-server-v2"
+      ]
+    },
+    {
+      "id": "cs-diff-server-v2",
+      "name": "cs-diff-server-v2",
+      "type": "code-diff",
+      "status": "implemented",
+      "producer": "skill-6",
+      "consumers": [
+        "skill-4"
+      ],
+      "path": ".artifacts/code-diffs/cs-diff-server-v2.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-eval-server-v2",
+        "cs-plan-server-v2",
+        "cs-test-diff-server-v2"
+      ]
+    },
+    {
+      "id": "cs-report-server-v2",
+      "name": "cs-report-server-v2",
+      "type": "e2e-report",
+      "status": "pass",
+      "producer": "skill-4",
+      "consumers": [],
+      "path": ".artifacts/e2e-reports/cs-report-server-v2.md",
+      "created_at": "2026-04-15T00:00:00Z",
+      "updated_at": "2026-04-15T00:00:00Z",
+      "related_ids": [
+        "cs-plan-server-v2",
+        "cs-eval-server-v2",
+        "cs-diff-server-v2",
+        "cs-test-diff-server-v2"
+      ]
     }
   ]
 }

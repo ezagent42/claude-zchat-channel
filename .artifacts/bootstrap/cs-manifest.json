@@ -1,0 +1,163 @@
+{
+  "project_root": "/home/yaosh/projects/zchat/zchat-channel-server",
+  "files": [
+    {
+      "path": ".claude-plugin/plugin.json",
+      "size_bytes": 185,
+      "lines": 6,
+      "extension": ".json"
+    },
+    {
+      "path": ".git",
+      "size_bytes": 45,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "size_bytes": 306,
+      "lines": 17,
+      "extension": ".yml"
+    },
+    {
+      "path": ".mcp.json",
+      "size_bytes": 155,
+      "lines": 8,
+      "extension": ".json"
+    },
+    {
+      "path": "LICENSE",
+      "size_bytes": 1066,
+      "lines": 21,
+      "extension": ""
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 610,
+      "lines": 25,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/broadcast.md",
+      "size_bytes": 1387,
+      "lines": 41,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/dm.md",
+      "size_bytes": 801,
+      "lines": 29,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/join.md",
+      "size_bytes": 680,
+      "lines": 27,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/reply.md",
+      "size_bytes": 991,
+      "lines": 29,
+      "extension": ".md"
+    },
+    {
+      "path": "env-report.json",
+      "size_bytes": 2062,
+      "lines": 88,
+      "extension": ".json"
+    },
+    {
+      "path": "instructions.md",
+      "size_bytes": 3100,
+      "lines": 67,
+      "extension": ".md"
+    },
+    {
+      "path": "message.py",
+      "size_bytes": 2131,
+      "lines": 63,
+      "extension": ".py"
+    },
+    {
+      "path": "plugins/README.md",
+      "size_bytes": 56,
+      "lines": 2,
+      "extension": ".md"
+    },
+    {
+      "path": "pyproject.toml",
+      "size_bytes": 1124,
+      "lines": 48,
+      "extension": ".toml"
+    },
+    {
+      "path": "pytest.ini",
+      "size_bytes": 160,
+      "lines": 6,
+      "extension": ".ini"
+    },
+    {
+      "path": "server.py",
+      "size_bytes": 12196,
+      "lines": 320,
+      "extension": ".py"
+    },
+    {
+      "path": "skills/.gitkeep",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ""
+    },
+    {
+      "path": "tests/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_legacy.py",
+      "size_bytes": 1335,
+      "lines": 39,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_message.py",
+      "size_bytes": 1544,
+      "lines": 48,
+      "extension": ".py"
+    },
+    {
+      "path": "uv.lock",
+      "size_bytes": 161162,
+      "lines": 1120,
+      "extension": ".lock"
+    }
+  ],
+  "summary": {
+    "total_files": 24,
+    "total_lines": 2005,
+    "by_extension": {
+      ".md": 7,
+      ".py": 7,
+      ".json": 3,
+      "(no ext)": 3,
+      ".lock": 1,
+      ".ini": 1,
+      ".toml": 1,
+      ".yml": 1
+    }
+  }
+}
