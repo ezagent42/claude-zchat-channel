@@ -1,0 +1,111 @@
+"""MessageRouter — 消息路由逻辑提取 (spec §5 Gate + §6 Transport)
+
+从 server.py 提取的两条核心路由路径：
+1. Customer → IRC: 客户消息 → 激活对话 → PRIVMSG 到已 dispatch 的 agent
+2. Agent → Bridge: IRC agent 回复 → 解析前缀 → Gate 判定 → Bridge API 转发
+"""
+
+from __future__ import annotations
+
+import sys
+from typing import TYPE_CHECKING
+
+from zchat_protocol.conversation import ConversationState
+from zchat_protocol.gate import gate_message
+from zchat_protocol.message_types import MessageVisibility
+from zchat_protocol.participant import Participant, ParticipantRole
+
+from transport.irc_transport import IRCTransport, parse_agent_message
+
+if TYPE_CHECKING:
+    from bridge_api.ws_server import BridgeAPIServer
+    from engine.conversation_manager import ConversationManager
+    from engine.message_store import MessageStore
+
+
+class MessageRouter:
+    """消息路由器：负责 customer→IRC 和 agent→Bridge 两条路径的路由逻辑。"""
+
+    def __init__(
+        self,
+        conv_manager: ConversationManager,
+        message_store: MessageStore,
+        bridge_server: BridgeAPIServer,
+        irc_transport: IRCTransport | None = None,
+    ) -> None:
+        self._conv_manager = conv_manager
+        self._message_store = message_store
+        self._bridge_server = bridge_server
+        self._irc_transport = irc_transport
+
+    async def route_customer_message(
+        self, conv_id: str, text: str, sender: str = "customer"
+    ) -> None:
+        """Customer message → activate conversation → PRIVMSG to dispatched agents."""
+        conv = self._conv_manager.get(conv_id)
+        if conv is None:
+            return
+
+        # 激活对话（CREATED→ACTIVE 或 IDLE→ACTIVE）
+        if conv.state == ConversationState.CREATED:
+            self._conv_manager.activate(conv_id)
+        elif conv.state == ConversationState.IDLE:
+            self._conv_manager.activate(conv_id)
+
+        if self._irc_transport is not None:
+            # 发给 conversation channel（留存记录）
+            channel = IRCTransport.conv_channel_name(conv_id)
+            try:
+                self._irc_transport.privmsg(channel, f"{sender}: {text}")
+            except Exception:
+                pass
+            # 发给每个 dispatched agent 的 nick（agent 可能不在 #conv-xxx）
+            for p in conv.participants:
+                if p.role == ParticipantRole.AGENT:
+                    try:
+                        self._irc_transport.privmsg(
+                            p.id,
+                            f"[{conv_id}] {sender}: {text}",
+                        )
+                    except Exception as e:
+                        print(
+                            f"[server] PRIVMSG to {p.id} failed: {e}",
+                            file=sys.stderr,
+                        )
+
+    async def route_agent_message(
+        self, nick: str, body: str, conv_id: str
+    ) -> None:
+        """Agent reply from IRC → parse prefix → Gate → Bridge API send_reply."""
+        parsed = parse_agent_message(body)
+        try:
+            if parsed["type"] == "edit":
+                await self._bridge_server.send_edit(
+                    conv_id, parsed["message_id"], parsed["text"]
+                )
+            elif parsed["type"] == "side":
+                await self._bridge_server.send_reply(
+                    conversation_id=conv_id,
+                    text=parsed["text"],
+                    visibility="side",
+                )
+            else:
+                # 普通消息 — Gate 根据 mode + role 判定 visibility
+                conv = self._conv_manager.get(conv_id)
+                visibility = "public"
+                if conv is not None:
+                    agent_participant = Participant(
+                        id=nick, role=ParticipantRole.AGENT
+                    )
+                    gate_result = gate_message(
+                        conv, agent_participant, MessageVisibility.PUBLIC
+                    )
+                    visibility = gate_result.value
+                await self._bridge_server.send_reply(
+                    conversation_id=conv_id,
+                    text=parsed["text"],
+                    visibility=visibility,
+                    message_id=parsed.get("message_id"),
+                )
+        except Exception as e:
+            print(f"[channel-server] route error: {e}", file=sys.stderr)

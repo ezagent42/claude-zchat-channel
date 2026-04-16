@@ -17,8 +17,10 @@ import sys
 from typing import Any
 
 from bridge_api.ws_server import BridgeAPIServer
+from engine.command_handler import CommandHandler
 from engine.conversation_manager import ConversationManager
 from engine.event_bus import EventBus
+from engine.message_router import MessageRouter
 from engine.message_store import MessageStore
 from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
@@ -32,7 +34,7 @@ from zchat_protocol.message_types import MessageVisibility
 from zchat_protocol.mode import ConversationMode
 from zchat_protocol.participant import Participant, ParticipantRole
 from routing_config import RoutingConfig, load_routing_config
-from transport.irc_transport import IRCTransport, parse_agent_message
+from transport.irc_transport import IRCTransport
 
 # ------------------------------------------------------------------ #
 # 环境变量
@@ -78,6 +80,17 @@ def wire_bridge_callbacks(
     mode_manager: ModeManager = components["mode_manager"]
     rc = routing_config or RoutingConfig()
 
+    # CommandHandler 承载 operator / admin 命令业务逻辑
+    cmd_handler = CommandHandler(
+        conv_manager=conv_manager,
+        mode_manager=mode_manager,
+        event_bus=components["event_bus"],
+        message_store=components["message_store"],
+        bridge_server=bridge_server,
+        squad_registry=components["squad_registry"],
+        routing_config=rc,
+    )
+
     async def _on_operator_join(msg: dict) -> None:
         """Operator 通过 Bridge 加入对话 → 注册参与者 + 触发模式切换。"""
         conv_id = msg.get("conversation_id", "")
@@ -118,292 +131,15 @@ def wire_bridge_callbacks(
                 print(f"[server] mode transition failed: {e}", file=sys.stderr)
 
     async def _on_operator_command(msg: dict, cmd: Any) -> None:
-        """Operator 发送命令（/hijack / /release / /copilot / /resolve）→ 模式切换。"""
+        """Operator 发送命令（/hijack / /release / /copilot / /resolve / /abandon）→ CommandHandler。"""
         conv_id = msg.get("conversation_id", "")
         operator_id = msg.get("operator_id", "unknown")
-
-        conv = conv_manager.get(conv_id)
-        if conv is None:
-            return
-
-        # /abandon → 直接关闭对话（不发 CSAT，不标 outcome）
-        if cmd.name == "abandon":
-            try:
-                if conv.state.value == "created":
-                    conv_manager.activate(conv_id)
-                conv_manager.close(conv_id)
-                event_bus: EventBus = components["event_bus"]
-                await event_bus.publish(
-                    Event(
-                        type=EventType.CONVERSATION_CLOSED,
-                        conversation_id=conv_id,
-                        data={"abandoned_by": operator_id},
-                    )
-                )
-                await bridge_server.send_event(
-                    "conversation.closed",
-                    {"abandoned_by": operator_id, "trigger": "abandon"},
-                    conv_id,
-                )
-                await bridge_server.send_reply(
-                    conversation_id=conv_id,
-                    text=f"[system] 对话已被 {operator_id} 放弃",
-                    visibility="system",
-                )
-            except Exception as e:
-                print(f"[server] /abandon failed: {e}", file=sys.stderr)
-            return
-
-        # /resolve → 结案 + CSAT 流程
-        if cmd.name == "resolve":
-            try:
-                # CREATED 状态需要先激活才能 close
-                if conv.state.value == "created":
-                    conv_manager.activate(conv_id)
-                conv_manager.resolve(conv_id, outcome="resolved", resolved_by=operator_id)
-                await bridge_server.send_event(
-                    "conversation.resolved",
-                    {"outcome": "resolved", "resolved_by": operator_id},
-                    conv_id,
-                )
-                await bridge_server.send_reply(
-                    conversation_id=conv_id,
-                    text="[system] 对话已结案，请评分 1-5",
-                    visibility="public",
-                )
-            except Exception as e:
-                print(f"[server] /resolve failed: {e}", file=sys.stderr)
-            return
-
-        # /hijack /release /copilot → 模式切换
-        target_mode: ConversationMode | None = None
-        if cmd.name == "hijack":
-            target_mode = ConversationMode.TAKEOVER
-        elif cmd.name == "release":
-            target_mode = ConversationMode.AUTO
-        elif cmd.name == "copilot":
-            target_mode = ConversationMode.COPILOT
-
-        if target_mode is None:
-            return
-
-        try:
-            t = await mode_manager.atransition(
-                conv,
-                target_mode,
-                trigger=cmd.name,
-                triggered_by=operator_id,
-            )
-            await bridge_server.send_event(
-                "mode.changed",
-                {"from": t.from_mode.value, "to": t.to_mode.value,
-                 "trigger": cmd.name, "triggered_by": operator_id},
-                conv_id,
-            )
-            # hijack 后发出 side visibility 系统通知（E2E gate enforcement 验证路径）
-            if cmd.name == "hijack":
-                await bridge_server.send_reply(
-                    conversation_id=conv_id,
-                    text=f"[system] takeover activated by {operator_id}",
-                    visibility="side",
-                )
-        except Exception as e:
-            print(f"[server] command {cmd.name} failed: {e}", file=sys.stderr)
+        await cmd_handler.execute_operator_command(cmd, conv_id, operator_id)
 
     async def _on_admin_command(msg: dict, cmd: Any) -> None:
-        """Admin 发送命令（/status / /dispatch / /review / /assign / /reassign / /squad）。"""
+        """Admin 发送命令（/status / /dispatch / /review / /assign / /reassign / /squad）→ CommandHandler。"""
         admin_id = msg.get("admin_id", "unknown")
-        event_bus: EventBus = components["event_bus"]
-        squad_registry: SquadRegistry = components["squad_registry"]
-
-        if cmd.name == "status":
-            convs = conv_manager.list_active()
-            if not convs:
-                text = "[status] 无活跃对话 (0)"
-            else:
-                lines = [f"[status] 活跃对话 ({len(convs)}):"]
-                for c in convs:
-                    p_count = len(c.participants) if c.participants else 0
-                    lines.append(f"  {c.id} | {c.state.value} | {c.mode} | {p_count}人")
-                text = "\n".join(lines)
-            await bridge_server.send_reply(
-                conversation_id="__admin",
-                text=text,
-                visibility="system",
-            )
-            return
-
-        if cmd.name == "dispatch":
-            target_conv_id = cmd.args.get("conversation_id", "")
-            agent_nick = cmd.args.get("agent_nick", "")
-            conv = conv_manager.get(target_conv_id)
-            if conv is None:
-                return
-            # 白名单验证
-            if not rc.is_dispatch_allowed(agent_nick):
-                await bridge_server.send_reply(
-                    conversation_id="__admin",
-                    text=f"[dispatch] rejected: {agent_nick} not in available_agents",
-                    visibility="system",
-                )
-                return
-            try:
-                participant = Participant(id=agent_nick, role=ParticipantRole.AGENT)
-                conv_manager.add_participant(target_conv_id, participant)
-                await bridge_server.send_event(
-                    "agent.dispatched",
-                    {"agent_nick": agent_nick, "dispatched_by": admin_id},
-                    target_conv_id,
-                )
-            except Exception as e:
-                print(f"[server] /dispatch failed: {e}", file=sys.stderr)
-            return
-
-        if cmd.name == "review":
-            from datetime import datetime, timedelta, timezone
-            yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-            # 聚合统计：对话数来自 ConversationManager，其余来自 EventBus
-            all_convs = list(conv_manager._conversations.values())
-            conv_count = len(all_convs)
-            all_events = event_bus.query(since=yesterday)
-            takeover_count = sum(
-                1 for e in all_events
-                if e.type == EventType.MODE_CHANGED
-                and e.data.get("to") == "takeover"
-            )
-            resolved_count = sum(
-                1 for c in all_convs
-                if c.state.value == "closed"
-            )
-            csat_scores = [
-                c.resolution.csat_score for c in all_convs
-                if c.resolution is not None and c.resolution.csat_score is not None
-            ]
-            csat_avg = sum(csat_scores) / len(csat_scores) if csat_scores else 0.0
-            resolve_rate = (
-                round(resolved_count / conv_count * 100, 1)
-                if conv_count > 0 else 0.0
-            )
-
-            if conv_count == 0:
-                text = "[review] 暂无统计数据（过去 24h 无对话）"
-            else:
-                text = (
-                    f"[review] 过去 24h 统计:\n"
-                    f"  对话数: {conv_count}\n"
-                    f"  接管次数: {takeover_count}\n"
-                    f"  结案率: {resolve_rate}%\n"
-                    f"  CSAT 均分: {csat_avg:.1f}"
-                )
-            await bridge_server.send_reply(
-                conversation_id="__admin",
-                text=text,
-                visibility="system",
-            )
-            return
-
-        if cmd.name == "assign":
-            agent_nick = cmd.args.get("agent_nick", "")
-            operator_id = cmd.args.get("operator_id", "")
-            if not agent_nick or not operator_id:
-                await bridge_server.send_reply(
-                    conversation_id="__admin",
-                    text="[assign] usage: /assign <agent_nick> <operator_id>",
-                    visibility="system",
-                )
-                return
-            try:
-                squad_registry.assign(agent_nick, operator_id)
-                await event_bus.publish(
-                    Event(
-                        type=EventType.SQUAD_ASSIGNED,
-                        conversation_id="",
-                        data={
-                            "agent_nick": agent_nick,
-                            "operator_id": operator_id,
-                            "assigned_by": admin_id,
-                        },
-                    )
-                )
-                await bridge_server.send_event(
-                    "squad.assigned",
-                    {"agent_nick": agent_nick, "operator_id": operator_id,
-                     "assigned_by": admin_id},
-                    "__admin",
-                )
-                await bridge_server.send_reply(
-                    conversation_id="__admin",
-                    text=f"[assign] {agent_nick} → {operator_id}",
-                    visibility="system",
-                )
-            except Exception as e:
-                print(f"[server] /assign failed: {e}", file=sys.stderr)
-            return
-
-        if cmd.name == "reassign":
-            agent_nick = cmd.args.get("agent_nick", "")
-            from_op = cmd.args.get("from_operator", "")
-            to_op = cmd.args.get("to_operator", "")
-            if not agent_nick or not to_op:
-                await bridge_server.send_reply(
-                    conversation_id="__admin",
-                    text="[reassign] usage: /reassign <agent_nick> <from_op> <to_op>",
-                    visibility="system",
-                )
-                return
-            try:
-                squad_registry.reassign(agent_nick, to_op)
-                await event_bus.publish(
-                    Event(
-                        type=EventType.SQUAD_REASSIGNED,
-                        conversation_id="",
-                        data={
-                            "agent_nick": agent_nick,
-                            "from_operator": from_op,
-                            "to_operator": to_op,
-                            "reassigned_by": admin_id,
-                        },
-                    )
-                )
-                await bridge_server.send_event(
-                    "squad.reassigned",
-                    {"agent_nick": agent_nick, "from_operator": from_op,
-                     "to_operator": to_op, "reassigned_by": admin_id},
-                    "__admin",
-                )
-                await bridge_server.send_reply(
-                    conversation_id="__admin",
-                    text=f"[reassign] {agent_nick}: {from_op} → {to_op}",
-                    visibility="system",
-                )
-            except Exception as e:
-                print(f"[server] /reassign failed: {e}", file=sys.stderr)
-            return
-
-        if cmd.name == "squad":
-            target = cmd.args.get("target", "")
-            if target:
-                agents = squad_registry.get_squad(target)
-                if agents:
-                    text = f"[squad] {target}: {', '.join(agents)}"
-                else:
-                    text = f"[squad] {target}: 暂无 agent"
-            else:
-                squads = squad_registry.list_all()
-                if not squads:
-                    text = "[squad] 暂无分队"
-                else:
-                    lines = ["[squad] 全部分队:"]
-                    for op_id in sorted(squads.keys()):
-                        agents = squads[op_id]
-                        lines.append(f"  {op_id}: {', '.join(agents)}")
-                    text = "\n".join(lines)
-            await bridge_server.send_reply(
-                conversation_id="__admin",
-                text=text,
-                visibility="system",
-            )
-            return
+        await cmd_handler.execute_admin_command(cmd, admin_id)
 
     async def _on_operator_message(msg: dict) -> None:
         """Operator 通过 Bridge API 发消息 → Gate 判定 visibility → 转发。"""
@@ -433,10 +169,14 @@ def wire_bridge_callbacks(
             message_id=saved.id,
         )
 
+    msg_router = MessageRouter(
+        conv_manager, components.get("message_store"), bridge_server,
+        irc_transport=components.get("irc_transport"),
+    )
+
     async def _on_customer_message(msg: dict) -> None:
         """Customer 消息处理: 转发到 IRC 给 agent + CSAT 评分接收。"""
         conv_id = msg.get("conversation_id", "")
-        text = msg.get("text", "")
         csat_score = msg.get("csat_score")
         if csat_score is not None:
             try:
@@ -445,32 +185,9 @@ def wire_bridge_callbacks(
                 print(f"[server] set_csat failed: {e}", file=sys.stderr)
             return
 
-        # 转发客户消息给已 dispatch 的 agent → PRIVMSG 到 agent nick
+        text = msg.get("text", "")
         if text and conv_id:
-            conv = conv_manager.get(conv_id)
-            if conv is not None:
-                if conv.state == ConversationState.CREATED:
-                    conv_manager.activate(conv_id)
-                elif conv.state == ConversationState.IDLE:
-                    conv_manager.activate(conv_id)
-                irc_transport = components.get("irc_transport")
-                if irc_transport is not None:
-                    # 发给 conversation channel（留存记录）
-                    channel = IRCTransport.conv_channel_name(conv_id)
-                    try:
-                        irc_transport.privmsg(channel, f"customer: {text}")
-                    except Exception:
-                        pass
-                    # 发给每个 dispatched agent 的 nick（agent 可能不在 #conv-xxx）
-                    for p in conv.participants:
-                        if p.role == ParticipantRole.AGENT:
-                            try:
-                                irc_transport.privmsg(
-                                    p.id,
-                                    f"[{conv_id}] customer: {text}",
-                                )
-                            except Exception as e:
-                                print(f"[server] PRIVMSG to {p.id} failed: {e}", file=sys.stderr)
+            await msg_router.route_customer_message(conv_id, text)
 
     async def _on_customer_connect(msg: dict) -> None:
         """Customer 接入 → 创建 conversation + IRC bot JOIN + auto-dispatch。"""
@@ -703,6 +420,11 @@ async def main() -> None:
         file=sys.stderr,
     )
 
+    # MessageRouter 用于 main() 的 IRC→Bridge 路由
+    main_msg_router = MessageRouter(
+        conv_manager, message_store, bridge_server, irc_transport
+    )
+
     async def _route_irc_messages() -> None:
         """从 IRC 队列读取 agent 消息，解析前缀后路由到 Bridge API。"""
         while True:
@@ -711,39 +433,9 @@ async def main() -> None:
             conv_id = IRCTransport.extract_conv_id(channel)
             if conv_id is None:
                 continue
-
-            parsed = parse_agent_message(msg["body"])
-            try:
-                if parsed["type"] == "edit":
-                    await bridge_server.send_edit(
-                        conv_id, parsed["message_id"], parsed["text"]
-                    )
-                elif parsed["type"] == "side":
-                    await bridge_server.send_reply(
-                        conversation_id=conv_id,
-                        text=parsed["text"],
-                        visibility="side",
-                    )
-                else:
-                    # 普通消息 — Gate 根据 mode + role 判定 visibility
-                    conv = conv_manager.get(conv_id)
-                    visibility = "public"
-                    if conv is not None:
-                        agent_participant = Participant(
-                            id=msg["nick"], role=ParticipantRole.AGENT
-                        )
-                        gate_result = gate_message(
-                            conv, agent_participant, MessageVisibility.PUBLIC
-                        )
-                        visibility = gate_result.value
-                    await bridge_server.send_reply(
-                        conversation_id=conv_id,
-                        text=parsed["text"],
-                        visibility=visibility,
-                        message_id=parsed.get("message_id"),
-                    )
-            except Exception as e:
-                print(f"[channel-server] route error: {e}", file=sys.stderr)
+            await main_msg_router.route_agent_message(
+                msg["nick"], msg["body"], conv_id
+            )
 
     # 等待 shutdown 信号
     shutdown = asyncio.Event()
