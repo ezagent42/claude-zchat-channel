@@ -123,6 +123,12 @@ class FeishuBridge:
         chat_id = msg.chat_id or ""
         role = self.group_manager.identify_role(chat_id)
 
+        # Squad 群 thread 回复 → 不转发（这是 operator 在 thread 中的对话，
+        # 由 channel-server 通过 operator_message + Gate 处理 side visibility）
+        if role == "operator" and getattr(msg, "parent_id", None):
+            log.debug("Ignoring squad thread reply in %s (parent_id=%s)", chat_id, msg.parent_id)
+            return
+
         if role == "unknown":
             log.debug("Ignoring message from unknown group %s", chat_id)
             return
@@ -470,17 +476,29 @@ class FeishuBridge:
     # 启动
     # ------------------------------------------------------------------
 
+    def _on_card_action_event(self, data) -> None:
+        """处理通过 EventDispatcherHandler 收到的 card.action.trigger。"""
+        try:
+            event = data.event if hasattr(data, "event") else data
+            action = event.get("action", {}) if isinstance(event, dict) else {}
+            if action:
+                self._on_card_action({"action": action})
+        except Exception:
+            log.exception("_on_card_action_event failed")
+
     def build_event_handler(self) -> lark.EventDispatcherHandler:
         """构建飞书事件分发器。"""
-        return (
+        builder = (
             lark.EventDispatcherHandler.builder("", "")
             .register_p2_im_message_receive_v1(self._on_message)
             .register_p2_im_chat_member_bot_added_v1(self._on_bot_added)
             .register_p2_im_chat_member_user_added_v1(self._on_user_added)
             .register_p2_im_chat_member_user_deleted_v1(self._on_user_deleted)
             .register_p2_im_chat_disbanded_v1(self._on_disbanded)
-            .build()
         )
+        if hasattr(builder, "register_p2_card_action_trigger"):
+            builder = builder.register_p2_card_action_trigger(self._on_card_action_event)
+        return builder.build()
 
     def start(self) -> None:
         """启动 Bridge API 客户端 + 飞书 WSS 长连接。"""
