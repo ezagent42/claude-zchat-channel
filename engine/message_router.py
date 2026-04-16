@@ -52,14 +52,6 @@ class MessageRouter:
         elif conv.state == ConversationState.IDLE:
             self._conv_manager.activate(conv_id)
 
-        # 广播客户消息给所有 bridge（带 sender_id，Bridge 根据 sender 决定渲染）
-        await self._bridge_server.send_reply(
-            conversation_id=conv_id,
-            text=text,
-            visibility="public",
-            sender_id=sender,
-        )
-
         if self._irc_transport is not None:
             # 发给 conversation channel（留存记录）
             channel = IRCTransport.conv_channel_name(conv_id)

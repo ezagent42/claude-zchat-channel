@@ -94,9 +94,6 @@ class FeishuBridge:
         # 消息去重（防止飞书延迟重投导致重复处理）
         self._processed_msg_ids: set[str] = set()
 
-        # 跟踪每个 conversation 的 customer sender_id（出站时判断回显）
-        self._known_customer_senders: dict[str, set[str]] = {}
-
         # Bridge API WebSocket 连接（兼容旧的 _on_card_action 引用）
         self._bridge_ws: Any | None = None
 
@@ -251,8 +248,6 @@ class FeishuBridge:
                 chat_id, metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
             )
             self._known_conversations.add(chat_id)
-        # 跟踪 customer sender_id（出站时判断回显）
-        self._known_customer_senders.setdefault(chat_id, set()).add(sender_id)
         self._bridge_client.send({
             "type": "message",
             "conversation_id": chat_id,
@@ -317,22 +312,7 @@ class FeishuBridge:
     # ------------------------------------------------------------------
 
     def _handle_reply_event(self, conv_id: str, msg: dict) -> None:
-        """处理 reply / message 事件（v2 兼容）。
-
-        v2 出站消息带 sender_id：若 sender 是 customer 本人，
-        不回显到 customer 群，仅写入 squad thread。
-        """
-        sender_id = msg.get("sender_id", "")
-
-        # 若 sender 是该 conversation 的已知 customer → 不回显到 customer 群
-        if sender_id and sender_id in self._known_customer_senders.get(conv_id, set()):
-            thread = self.visibility_router.get_thread(conv_id)
-            if thread and thread.card_msg_id:
-                text = msg.get("text", "")
-                self.sender.reply_in_thread(thread.card_msg_id, f"[客户] {text}")
-            return
-
-        # agent/operator 回复 → 正常可见性路由
+        """处理 reply / message 事件 → VisibilityRouter 按 visibility 路由。"""
         self.visibility_router.route(conv_id, msg)
 
     def _handle_edit_event(self, conv_id: str, msg: dict) -> None:
