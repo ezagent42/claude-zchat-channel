@@ -73,39 +73,61 @@ class MessageRouter:
                             file=sys.stderr,
                         )
 
+    async def _handle_edit(
+        self, conv_id: str, parsed: dict, nick: str
+    ) -> None:
+        """处理 edit 类型消息。"""
+        await self._bridge_server.send_edit(
+            conv_id, parsed["message_id"], parsed["text"]
+        )
+
+    async def _handle_side(
+        self, conv_id: str, parsed: dict, nick: str
+    ) -> None:
+        """处理 side 类型消息。"""
+        await self._bridge_server.send_reply(
+            conversation_id=conv_id,
+            text=parsed["text"],
+            visibility="side",
+        )
+
+    async def _handle_msg(
+        self, conv_id: str, parsed: dict, nick: str
+    ) -> None:
+        """处理普通消息 — Gate 根据 mode + role 判定 visibility。"""
+        conv = self._conv_manager.get(conv_id)
+        visibility = "public"
+        if conv is not None:
+            agent_participant = Participant(
+                id=nick, role=ParticipantRole.AGENT
+            )
+            gate_result = gate_message(
+                conv, agent_participant, MessageVisibility.PUBLIC
+            )
+            visibility = gate_result.value
+        await self._bridge_server.send_reply(
+            conversation_id=conv_id,
+            text=parsed["text"],
+            visibility=visibility,
+            message_id=parsed.get("message_id"),
+        )
+
+    _MSG_HANDLERS: dict[str, str] = {
+        "edit": "_handle_edit",
+        "side": "_handle_side",
+    }
+
     async def route_agent_message(
         self, nick: str, body: str, conv_id: str
     ) -> None:
         """Agent reply from IRC → parse prefix → Gate → Bridge API send_reply."""
         parsed = parse_agent_message(body)
         try:
-            if parsed["type"] == "edit":
-                await self._bridge_server.send_edit(
-                    conv_id, parsed["message_id"], parsed["text"]
-                )
-            elif parsed["type"] == "side":
-                await self._bridge_server.send_reply(
-                    conversation_id=conv_id,
-                    text=parsed["text"],
-                    visibility="side",
-                )
+            handler_name = self._MSG_HANDLERS.get(parsed["type"])
+            if handler_name is not None:
+                handler = getattr(self, handler_name)
+                await handler(conv_id, parsed, nick)
             else:
-                # 普通消息 — Gate 根据 mode + role 判定 visibility
-                conv = self._conv_manager.get(conv_id)
-                visibility = "public"
-                if conv is not None:
-                    agent_participant = Participant(
-                        id=nick, role=ParticipantRole.AGENT
-                    )
-                    gate_result = gate_message(
-                        conv, agent_participant, MessageVisibility.PUBLIC
-                    )
-                    visibility = gate_result.value
-                await self._bridge_server.send_reply(
-                    conversation_id=conv_id,
-                    text=parsed["text"],
-                    visibility=visibility,
-                    message_id=parsed.get("message_id"),
-                )
+                await self._handle_msg(conv_id, parsed, nick)
         except Exception as e:
             print(f"[channel-server] route error: {e}", file=sys.stderr)

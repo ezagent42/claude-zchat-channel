@@ -20,6 +20,7 @@ from zchat_protocol.gate import gate_message
 from zchat_protocol.message_types import MessageVisibility
 from zchat_protocol.mode import ConversationMode
 from zchat_protocol.participant import Participant, ParticipantRole
+from zchat_protocol.sys_messages import encode_sys_for_irc, make_sys_message
 
 if TYPE_CHECKING:
     from engine.conversation_manager import ConversationManager
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from engine.squad_registry import SquadRegistry
     from engine.mode_manager import ModeManager
     from routing_config import RoutingConfig
+    from transport.irc_transport import IRCTransport
 
 
 class BridgeReply(Protocol):
@@ -63,6 +65,7 @@ class CommandHandler:
         bridge_server: BridgeReply,
         squad_registry: SquadRegistry,
         routing_config: RoutingConfig,
+        irc_transport: IRCTransport | None = None,
     ) -> None:
         self._conv_manager = conv_manager
         self._mode_manager = mode_manager
@@ -71,6 +74,41 @@ class CommandHandler:
         self._bridge = bridge_server
         self._squad_registry = squad_registry
         self._rc = routing_config
+        self._irc_transport = irc_transport
+
+        # 命令分发表（声明式，不硬编码）
+        self._operator_commands: dict[str, Any] = {
+            "abandon": self._handle_abandon,
+            "resolve": self._handle_resolve,
+            "hijack": self._handle_mode_switch,
+            "release": self._handle_mode_switch,
+            "copilot": self._handle_mode_switch,
+        }
+        self._admin_commands: dict[str, Any] = {
+            "status": self._handle_status,
+            "dispatch": self._handle_dispatch,
+            "review": self._handle_review,
+            "assign": self._handle_assign,
+            "reassign": self._handle_reassign,
+            "squad": self._handle_squad,
+        }
+
+    # ------------------------------------------------------------------ #
+    # IRC sys.join_request helper
+    # ------------------------------------------------------------------ #
+
+    def _send_join_request(self, conv_id: str, agent_nick: str) -> None:
+        """通过 IRC PRIVMSG 向 agent 发送 sys.join_request，让其 JOIN 对话频道。"""
+        if self._irc_transport is None:
+            return
+        from transport.irc_transport import IRCTransport
+
+        channel = IRCTransport.conv_channel_name(conv_id)
+        sys_msg = make_sys_message("cs-bot", "sys.join_request", {"channel": channel})
+        try:
+            self._irc_transport.privmsg(agent_nick, encode_sys_for_irc(sys_msg))
+        except Exception as e:
+            print(f"[server] sys.join_request to {agent_nick} failed: {e}", file=sys.stderr)
 
     # ------------------------------------------------------------------ #
     # Bridge 回调 — operator_join / customer_connect / escalation
@@ -156,6 +194,7 @@ class CommandHandler:
                     {"agent_nick": agent_nick, "dispatched_by": "__auto"},
                     conv_id,
                 )
+                self._send_join_request(conv_id, agent_nick)
             except Exception as e:
                 print(f"[server] auto-dispatch {agent_nick} failed: {e}", file=sys.stderr)
 
@@ -168,7 +207,11 @@ class CommandHandler:
         )
 
     async def handle_operator_message(self, msg: dict) -> None:
-        """Operator 通过 Bridge API 发消息 → Gate 判定 visibility → 存储 + 转发。"""
+        """Operator 通过 Bridge API 发消息 → Gate 判定 visibility → 存储 + 转发。
+
+        当 visibility=side（copilot 模式下 operator 建议）时，
+        额外通过 IRC @mention 注入给 conversation 中的 agent（PRD 旅程 3）。
+        """
         conv_id = msg.get("conversation_id", "")
         conv = self._conv_manager.get(conv_id)
         if conv is None:
@@ -184,6 +227,20 @@ class CommandHandler:
         await self._bridge.send_reply(
             conversation_id=conv_id, text=text, visibility=visibility, message_id=saved.id,
         )
+
+        # T5: side 消息注入给 agent — 走 IRC #conv-{id} @mention
+        if visibility == "side" and self._irc_transport is not None:
+            from transport.irc_transport import IRCTransport
+            channel = IRCTransport.conv_channel_name(conv_id)
+            for p in conv.participants:
+                if p.role == ParticipantRole.AGENT:
+                    try:
+                        self._irc_transport.privmsg(
+                            channel,
+                            f"@{p.id} __side:{operator_id}: {text}",
+                        )
+                    except Exception as e:
+                        print(f"[server] side inject to {p.id} failed: {e}", file=sys.stderr)
 
     async def handle_customer_message(self, msg: dict, msg_router: Any) -> None:
         """Customer 消息: 转发到 IRC + CSAT 评分接收。"""
@@ -246,6 +303,7 @@ class CommandHandler:
                     {"agent_nick": target, "dispatched_by": "__escalation"},
                     conv_id,
                 )
+                self._send_join_request(conv_id, target)
                 return
             except Exception as e:
                 print(f"[server] escalation dispatch {target} failed: {e}", file=sys.stderr)
@@ -265,21 +323,14 @@ class CommandHandler:
         if conv is None:
             return
 
-        if cmd.name == "abandon":
-            await self._handle_abandon(conv_id, conv, operator_id)
-            return
-
-        if cmd.name == "resolve":
-            await self._handle_resolve(conv_id, conv, operator_id)
-            return
-
-        # /hijack /release /copilot → 模式切换
-        await self._handle_mode_switch(cmd, conv_id, conv, operator_id)
+        handler = self._operator_commands.get(cmd.name)
+        if handler:
+            await handler(cmd, conv_id, conv, operator_id)
 
     # -- private operator handlers --
 
     async def _handle_abandon(
-        self, conv_id: str, conv: Any, operator_id: str
+        self, cmd: Command, conv_id: str, conv: Any, operator_id: str
     ) -> None:
         """/abandon → 直接关闭对话（不发 CSAT，不标 outcome）。"""
         try:
@@ -307,7 +358,7 @@ class CommandHandler:
             print(f"[server] /abandon failed: {e}", file=sys.stderr)
 
     async def _handle_resolve(
-        self, conv_id: str, conv: Any, operator_id: str
+        self, cmd: Command, conv_id: str, conv: Any, operator_id: str
     ) -> None:
         """/resolve → 结案 + CSAT 流程。"""
         try:
@@ -378,33 +429,13 @@ class CommandHandler:
 
     async def execute_admin_command(self, cmd: Command, admin_id: str) -> None:
         """执行 admin 命令：/status /dispatch /review /assign /reassign /squad。"""
-        if cmd.name == "status":
-            await self._handle_status()
-            return
-
-        if cmd.name == "dispatch":
-            await self._handle_dispatch(cmd, admin_id)
-            return
-
-        if cmd.name == "review":
-            await self._handle_review()
-            return
-
-        if cmd.name == "assign":
-            await self._handle_assign(cmd, admin_id)
-            return
-
-        if cmd.name == "reassign":
-            await self._handle_reassign(cmd, admin_id)
-            return
-
-        if cmd.name == "squad":
-            await self._handle_squad(cmd)
-            return
+        handler = self._admin_commands.get(cmd.name)
+        if handler:
+            await handler(cmd, admin_id)
 
     # -- private admin handlers --
 
-    async def _handle_status(self) -> None:
+    async def _handle_status(self, cmd: Command, admin_id: str) -> None:
         """/status → 列出活跃对话。"""
         convs = self._conv_manager.list_active()
         if not convs:
@@ -446,10 +477,11 @@ class CommandHandler:
                 {"agent_nick": agent_nick, "dispatched_by": admin_id},
                 target_conv_id,
             )
+            self._send_join_request(target_conv_id, agent_nick)
         except Exception as e:
             print(f"[server] /dispatch failed: {e}", file=sys.stderr)
 
-    async def _handle_review(self) -> None:
+    async def _handle_review(self, cmd: Command, admin_id: str) -> None:
         """/review → 聚合统计。"""
         yesterday = datetime.now(timezone.utc) - timedelta(days=1)
         # 聚合统计：对话数来自 ConversationManager，其余来自 EventBus
@@ -580,7 +612,7 @@ class CommandHandler:
         except Exception as e:
             print(f"[server] /reassign failed: {e}", file=sys.stderr)
 
-    async def _handle_squad(self, cmd: Command) -> None:
+    async def _handle_squad(self, cmd: Command, admin_id: str) -> None:
         """/squad → 列出分队信息。"""
         target = cmd.args.get("target", "")
         if target:

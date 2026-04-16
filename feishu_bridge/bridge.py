@@ -207,6 +207,68 @@ class FeishuBridge:
     # Bridge API 协议适配（入站：飞书 → channel-server）
     # ------------------------------------------------------------------
 
+    def _forward_customer(
+        self, chat_id: str, text: str, message_id: str, sender_id: str,
+    ) -> None:
+        """Customer 消息转发：首次消息 → connect + squad card + message。"""
+        if chat_id not in self._known_conversations:
+            customer_data = {"id": sender_id, "name": sender_id}
+            self._bridge_client.send({
+                "type": "customer_connect",
+                "conversation_id": chat_id,
+                "customer": customer_data,
+                "metadata": {"source": "feishu"},
+            })
+            # 在 squad 群创建 conversation card（thread root）
+            self.visibility_router.on_conversation_created(
+                chat_id, metadata={"customer": customer_data, "source": "feishu"},
+            )
+            self._known_conversations.add(chat_id)
+        self._bridge_client.send({
+            "type": "customer_message",
+            "conversation_id": chat_id,
+            "text": text,
+            "message_id": message_id,
+        })
+
+    def _forward_operator(
+        self, chat_id: str, text: str, message_id: str, sender_id: str,
+    ) -> None:
+        """Operator 消息转发：/ 开头 → command，否则 → message。"""
+        conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
+        if not conv_id:
+            log.debug("operator message in squad %s but no active conversation", chat_id)
+            return
+        if text.startswith("/"):
+            self._bridge_client.send({
+                "type": "operator_command",
+                "conversation_id": conv_id,
+                "command": text,
+                "operator_id": sender_id,
+            })
+        else:
+            self._bridge_client.send({
+                "type": "operator_message",
+                "conversation_id": conv_id,
+                "text": text,
+                "operator_id": sender_id,
+            })
+
+    def _forward_admin(
+        self, chat_id: str, text: str, message_id: str, sender_id: str,
+    ) -> None:
+        """Admin 命令转发。"""
+        self._bridge_client.send({
+            "type": "admin_command",
+            "command": text,
+        })
+
+    _ROLE_FORWARDERS: dict[str, str] = {
+        "customer": "_forward_customer",
+        "operator": "_forward_operator",
+        "admin": "_forward_admin",
+    }
+
     def _forward_to_bridge(
         self, role: str, chat_id: str, text: str,
         message_id: str, sender_id: str,
@@ -214,90 +276,64 @@ class FeishuBridge:
         """根据角色将飞书消息转发到 channel-server Bridge API。"""
         if not self._bridge_client.connected:
             return
-        if role == "customer":
-            # 首次消息 → customer_connect + squad card + customer_message
-            if chat_id not in self._known_conversations:
-                customer_data = {"id": sender_id, "name": sender_id}
-                self._bridge_client.send({
-                    "type": "customer_connect",
-                    "conversation_id": chat_id,
-                    "customer": customer_data,
-                    "metadata": {"source": "feishu"},
-                })
-                # 在 squad 群创建 conversation card（thread root）
-                self.visibility_router.on_conversation_created(
-                    chat_id, metadata={"customer": customer_data, "source": "feishu"},
-                )
-                self._known_conversations.add(chat_id)
-            self._bridge_client.send({
-                "type": "customer_message",
-                "conversation_id": chat_id,
-                "text": text,
-                "message_id": message_id,
-            })
-
-        elif role == "operator":
-            # / 开头 → operator_command，否则 → operator_message
-            conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
-            if not conv_id:
-                log.debug("operator message in squad %s but no active conversation", chat_id)
-                return
-            if text.startswith("/"):
-                self._bridge_client.send({
-                    "type": "operator_command",
-                    "conversation_id": conv_id,
-                    "command": text,
-                    "operator_id": sender_id,
-                })
-            else:
-                self._bridge_client.send({
-                    "type": "operator_message",
-                    "conversation_id": conv_id,
-                    "text": text,
-                    "operator_id": sender_id,
-                })
-
-        elif role == "admin":
-            self._bridge_client.send({
-                "type": "admin_command",
-                "command": text,
-            })
+        handler_name = self._ROLE_FORWARDERS.get(role)
+        if handler_name is not None:
+            handler = getattr(self, handler_name)
+            handler(chat_id, text, message_id, sender_id)
 
     # ------------------------------------------------------------------
     # Bridge API 协议适配（出站：channel-server → 飞书）
     # ------------------------------------------------------------------
+
+    def _handle_reply_event(self, conv_id: str, msg: dict) -> None:
+        """处理 reply 事件。"""
+        self.visibility_router.route(conv_id, msg)
+
+    def _handle_edit_event(self, conv_id: str, msg: dict) -> None:
+        """处理 edit 事件。"""
+        cs_msg_id = msg.get("message_id", "")
+        text = msg.get("text", "")
+        self.visibility_router.on_edit(conv_id, cs_msg_id, text)
+
+    def _handle_conv_created(self, conv_id: str, msg: dict) -> None:
+        """处理 conversation.created 事件。"""
+        metadata = msg.get("metadata", {})
+        self.visibility_router.on_conversation_created(conv_id, metadata)
+
+    def _handle_mode_changed(self, conv_id: str, msg: dict) -> None:
+        """处理 mode.changed 事件。"""
+        mode = msg.get("mode", "fast")
+        self.visibility_router.on_mode_changed(conv_id, mode)
+
+    def _handle_conv_closed(self, conv_id: str, msg: dict) -> None:
+        """处理 conversation.closed 事件。"""
+        resolution = msg.get("resolution")
+        self.visibility_router.on_conversation_closed(conv_id, resolution)
+
+    def _handle_csat_request(self, conv_id: str, msg: dict) -> None:
+        """处理 csat_request 事件。"""
+        self.visibility_router.route(conv_id, msg)
+
+    _EVENT_HANDLERS: dict[str, str] = {
+        "reply": "_handle_reply_event",
+        "edit": "_handle_edit_event",
+        "conversation.created": "_handle_conv_created",
+        "mode.changed": "_handle_mode_changed",
+        "conversation.closed": "_handle_conv_closed",
+        "csat_request": "_handle_csat_request",
+    }
 
     def _on_bridge_event(self, msg: dict) -> None:
         """处理从 channel-server 收到的 Bridge API 事件。"""
         msg_type = msg.get("type", "")
         conv_id = msg.get("conversation_id", "")
 
-        if msg_type == "reply":
-            self.visibility_router.route(conv_id, msg)
-
-        elif msg_type == "edit":
-            cs_msg_id = msg.get("message_id", "")
-            text = msg.get("text", "")
-            self.visibility_router.on_edit(conv_id, cs_msg_id, text)
-
-        elif msg_type == "conversation.created":
-            metadata = msg.get("metadata", {})
-            self.visibility_router.on_conversation_created(conv_id, metadata)
-
-        elif msg_type == "mode.changed":
-            mode = msg.get("mode", "fast")
-            self.visibility_router.on_mode_changed(conv_id, mode)
-
-        elif msg_type == "conversation.closed":
-            resolution = msg.get("resolution")
-            self.visibility_router.on_conversation_closed(conv_id, resolution)
-
-        elif msg_type == "csat_request":
-            self.visibility_router.route(conv_id, msg)
-
+        handler_name = self._EVENT_HANDLERS.get(msg_type)
+        if handler_name is not None:
+            handler = getattr(self, handler_name)
+            handler(conv_id, msg)
         elif msg_type in ("registered", "customer_connected"):
             log.debug("ack: %s", msg_type)
-
         else:
             log.debug("unhandled bridge event: %s", msg_type)
 

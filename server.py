@@ -51,6 +51,7 @@ def wire_bridge_callbacks(
         event_bus=components["event_bus"], message_store=components["message_store"],
         bridge_server=bridge_server, squad_registry=components["squad_registry"],
         routing_config=rc,
+        irc_transport=components.get("irc_transport"),
     )
     msg_router = MessageRouter(
         conv_manager, components.get("message_store"), bridge_server,
