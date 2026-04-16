@@ -25,6 +25,12 @@ class PluginManager:
         self._loaded_modules: list[str] = []
         if plugins_dir.is_dir():
             self._load_all()
+        else:
+            print(
+                f"[PluginManager] WARNING: plugins_dir does not exist: {plugins_dir}. "
+                "Plugin-based features (SLA timers, etc.) will be disabled.",
+                file=sys.stderr,
+            )
 
     def _load_all(self) -> None:
         for py_file in sorted(self._plugins_dir.glob("*.py")):

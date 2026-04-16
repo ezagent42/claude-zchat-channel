@@ -67,6 +67,11 @@ def wire_bridge_callbacks(
     """将业务回调注入到 BridgeAPIServer 的钩子槽中。
 
     从 main() 中独立出来便于单元测试。
+
+    线程安全说明: ConversationManager/MessageStore 的同步 SQLite 操作在 asyncio
+    协程内调用是安全的 — asyncio 是协作式调度，SQLite 操作是瞬时 CPU-bound，
+    不会在操作中间被 await 中断。check_same_thread=False 仅因为 Connection 在
+    build_components() 中创建，在此处使用。
     """
     conv_manager: ConversationManager = components["conversation_manager"]
     mode_manager: ModeManager = components["mode_manager"]
@@ -399,6 +404,33 @@ def wire_bridge_callbacks(
             )
             return
 
+    async def _on_operator_message(msg: dict) -> None:
+        """Operator 通过 Bridge API 发消息 → Gate 判定 visibility → 转发。"""
+        conv_id = msg.get("conversation_id", "")
+        operator_id = msg.get("operator_id", "unknown")
+        text = msg.get("text", "")
+
+        conv = conv_manager.get(conv_id)
+        if conv is None:
+            print(f"[server] operator_message: conversation {conv_id!r} not found", file=sys.stderr)
+            return
+
+        from protocol.gate import gate_message
+        visibility = gate_message(conv.mode, "operator", "public")
+        message_store: MessageStore = components["message_store"]
+        saved = message_store.save(
+            conversation_id=conv_id,
+            source=operator_id,
+            content=text,
+            visibility=visibility,
+        )
+        await bridge_server.send_reply(
+            conversation_id=conv_id,
+            text=text,
+            visibility=visibility,
+            message_id=saved.id,
+        )
+
     async def _on_customer_message(msg: dict) -> None:
         """Customer 消息处理（含 CSAT 评分接收）。"""
         conv_id = msg.get("conversation_id", "")
@@ -478,6 +510,7 @@ def wire_bridge_callbacks(
     bridge_server.on_operator_join = _on_operator_join
     bridge_server.on_operator_command = _on_operator_command
     bridge_server.on_admin_command = _on_admin_command
+    bridge_server.on_operator_message = _on_operator_message
     bridge_server.on_customer_message = _on_customer_message
     bridge_server.on_customer_connect = _on_customer_connect
 
@@ -572,6 +605,13 @@ async def main() -> None:
 
     wire_bridge_callbacks(bridge_server, components, components.get("routing_config"))
 
+    # 组件就绪检查
+    plugin_mgr = components.get("plugin_manager")
+    if plugin_mgr and plugin_mgr.hook_names():
+        print(f"[channel-server] plugins loaded: {sorted(plugin_mgr.hook_names())}", file=sys.stderr)
+    else:
+        print("[channel-server] WARNING: no plugins loaded", file=sys.stderr)
+
     # 启动 Bridge API WebSocket
     await bridge_server.start()
     print(
@@ -664,6 +704,9 @@ async def main() -> None:
         print("[channel-server] shutting down...", file=sys.stderr)
         irc_transport.disconnect("Server shutting down")
         await bridge_server.stop()
+        # WAL checkpoint 确保所有写入持久化
+        conn = components["event_bus"]._conn
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         components["event_bus"].close()
         components["conversation_manager"].close_db()
         components["message_store"].close()

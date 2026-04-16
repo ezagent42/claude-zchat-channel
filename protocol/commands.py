@@ -46,5 +46,7 @@ def parse_command(text: str) -> Command | None:
     for i, param_name in enumerate(param_names):
         if i < len(positional):
             args[param_name] = positional[i]
+        else:
+            args[param_name] = ""  # 缺失参数填空字符串，handler 侧校验
 
     return Command(name=name, args=args, raw=text)
