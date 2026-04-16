@@ -416,8 +416,9 @@ def wire_bridge_callbacks(
             print(f"[server] operator_message: conversation {conv_id!r} not found", file=sys.stderr)
             return
 
-        from zchat_protocol.gate import gate_message
-        visibility = gate_message(conv.mode, "operator", "public")
+        operator_participant = Participant(id=operator_id, role=ParticipantRole.OPERATOR)
+        gate_result = gate_message(conv, operator_participant, MessageVisibility.PUBLIC)
+        visibility = gate_result.value
         message_store: MessageStore = components["message_store"]
         saved = message_store.save(
             conversation_id=conv_id,
