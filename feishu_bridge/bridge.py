@@ -123,12 +123,6 @@ class FeishuBridge:
         chat_id = msg.chat_id or ""
         role = self.group_manager.identify_role(chat_id)
 
-        # Squad 群 thread 回复 → 不转发（这是 operator 在 thread 中的对话，
-        # 由 channel-server 通过 operator_message + Gate 处理 side visibility）
-        if role == "operator" and getattr(msg, "parent_id", None):
-            log.debug("Ignoring squad thread reply in %s (parent_id=%s)", chat_id, msg.parent_id)
-            return
-
         if role == "unknown":
             log.debug("Ignoring message from unknown group %s", chat_id)
             return
@@ -147,6 +141,19 @@ class FeishuBridge:
             else ""
         )
         log.info("[%s] %s: %s", role, sender_open_id or "?", text[:100])
+
+        # Squad thread 回复 → 作为 operator side 消息转发到 channel-server
+        if role == "operator" and getattr(msg, "parent_id", None):
+            conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
+            if conv_id and self._bridge_client.connected:
+                self._bridge_client.send({
+                    "type": "message",
+                    "conversation_id": conv_id,
+                    "sender_id": sender_open_id,
+                    "text": text,
+                    "visibility_hint": "side",
+                })
+            return
 
         # Auto-hijack 检测：已知 operator 在 customer 群内发言 → 触发回调
         if (

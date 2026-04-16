@@ -259,8 +259,9 @@ class CommandHandler:
                 print(f"[server] set_csat failed: {e}", file=sys.stderr)
             return
         text = msg.get("text", "")
+        sender_id = msg.get("sender_id", "customer")
         if text and conv_id:
-            await msg_router.route_customer_message(conv_id, text)
+            await msg_router.route_customer_message(conv_id, text, sender=sender_id)
 
     async def handle_sla_breach(self, event: "Event") -> None:
         """SLA timer 超时 → 向 admin 发送告警。"""
