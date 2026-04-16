@@ -30,7 +30,7 @@ class GroupsConfig:
 class BridgeConfig:
     feishu: FeishuConfig
     groups: GroupsConfig
-    channel_server_url: str = "ws://localhost:9999"
+    channel_server_url: str = "ws://127.0.0.1:9999"
     upload_dir: str = ".feishu-bridge/uploads"
     customer_chats_path: str = ".feishu-bridge/customer_chats.json"
 
@@ -77,7 +77,7 @@ def load_config(path: str | Path) -> BridgeConfig:
             admin_chat_id=groups.get("admin_chat_id", ""),
             squad_chats=groups.get("squad_chats", []),
         ),
-        channel_server_url=cs.get("url", "ws://localhost:9999"),
+        channel_server_url=cs.get("url", "ws://127.0.0.1:9999"),
         upload_dir=storage.get("upload_dir", ".feishu-bridge/uploads"),
         customer_chats_path=storage.get(
             "customer_chats_path", ".feishu-bridge/customer_chats.json"

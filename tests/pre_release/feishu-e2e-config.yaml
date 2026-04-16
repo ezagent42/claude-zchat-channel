@@ -18,7 +18,7 @@ test:
   customer_chat_id: "oc_3e33d9eddc980a800c3eefa01c6ca0f7"  # cs-customer
 
 channel_server:
-  url: "ws://localhost:9999"
+  url: "ws://127.0.0.1:9999"
 
 # 测试环境 timer 缩短（正式环境为 180s/300s/3600s）
 timers:
