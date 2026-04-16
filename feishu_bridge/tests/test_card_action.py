@@ -231,7 +231,7 @@ def test_card_action_missing_fields_noop() -> None:
 
 
 def test_card_action_hijack_sends_operator_command() -> None:
-    """TC-7: hijack 按钮 → 发送 operator_command /hijack。"""
+    """TC-7: hijack 按钮 → 发送 command /hijack (v2 格式)。"""
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
@@ -244,10 +244,10 @@ def test_card_action_hijack_sends_operator_command() -> None:
 
     mock_client.send.assert_called_once()
     sent = mock_client.send.call_args[0][0]
-    assert sent["type"] == "operator_command"
+    assert sent["type"] == "command"
     assert sent["conversation_id"] == "oc_3e33"
     assert sent["command"] == "/hijack"
-    assert sent["operator_id"] == "card_action"
+    assert sent["sender_id"] == "card_action"
 
 
 # ------------------------------------------------------------------ #
@@ -256,7 +256,7 @@ def test_card_action_hijack_sends_operator_command() -> None:
 
 
 def test_card_action_resolve_sends_operator_command() -> None:
-    """TC-8: resolve 按钮 → 发送 operator_command /resolve。"""
+    """TC-8: resolve 按钮 → 发送 command /resolve (v2 格式)。"""
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
@@ -269,10 +269,10 @@ def test_card_action_resolve_sends_operator_command() -> None:
 
     mock_client.send.assert_called_once()
     sent = mock_client.send.call_args[0][0]
-    assert sent["type"] == "operator_command"
+    assert sent["type"] == "command"
     assert sent["conversation_id"] == "oc_abc"
     assert sent["command"] == "/resolve"
-    assert sent["operator_id"] == "card_action"
+    assert sent["sender_id"] == "card_action"
 
 
 # ------------------------------------------------------------------ #

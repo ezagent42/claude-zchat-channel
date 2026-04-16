@@ -41,7 +41,7 @@ class MessageRouter:
     async def route_customer_message(
         self, conv_id: str, text: str, sender: str = "customer"
     ) -> None:
-        """Customer message → activate conversation → PRIVMSG to dispatched agents."""
+        """Customer message → activate conversation → PRIVMSG to agents → broadcast to bridges."""
         conv = self._conv_manager.get(conv_id)
         if conv is None:
             return
@@ -51,6 +51,14 @@ class MessageRouter:
             self._conv_manager.activate(conv_id)
         elif conv.state == ConversationState.IDLE:
             self._conv_manager.activate(conv_id)
+
+        # 广播客户消息给所有 bridge（带 sender_id，Bridge 根据 sender 决定渲染）
+        await self._bridge_server.send_reply(
+            conversation_id=conv_id,
+            text=text,
+            visibility="public",
+            sender_id=sender,
+        )
 
         if self._irc_transport is not None:
             # 发给 conversation channel（留存记录）
@@ -89,6 +97,7 @@ class MessageRouter:
             conversation_id=conv_id,
             text=parsed["text"],
             visibility="side",
+            sender_id=nick,
         )
 
     async def _handle_msg(
@@ -110,6 +119,7 @@ class MessageRouter:
             text=parsed["text"],
             visibility=visibility,
             message_id=parsed.get("message_id"),
+            sender_id=nick,
         )
 
     _MSG_HANDLERS: dict[str, str] = {

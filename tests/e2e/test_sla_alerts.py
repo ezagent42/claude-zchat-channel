@@ -32,7 +32,7 @@ async def test_review_command_e2e(bridge_ws, channel_server) -> None:
 
     raw = await asyncio.wait_for(ws.recv(), timeout=5)
     msg = json.loads(raw)
-    assert msg["type"] == "reply", f"expected reply, got: {msg}"
+    assert msg["type"] in ("reply", "message"), f"expected reply, got: {msg}"
     assert msg["visibility"] == "system", f"expected system visibility, got: {msg}"
     assert "[review]" in msg.get("text", ""), f"expected [review] prefix, got: {msg}"
 

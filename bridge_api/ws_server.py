@@ -4,6 +4,8 @@
 按 visibility 规则路由回复到对应 Bridge 端。
 
 IRC 是内部 transport；所有人类用户都通过 Bridge API 接入 channel-server。
+
+v2 协议：支持统一的 connect / message / command 消息类型（向后兼容 v1）。
 """
 
 from __future__ import annotations
@@ -22,12 +24,15 @@ from zchat_protocol.commands import Command, parse_command
 logger = logging.getLogger(__name__)
 
 
-# visibility → 目标角色集合（spec §5 路由表）
-_VISIBILITY_ROUTING: dict[str, frozenset[str]] = {
+# visibility → 目标角色集合（spec §5 路由表，v1 默认值）
+_DEFAULT_VISIBILITY_ROUTING: dict[str, frozenset[str]] = {
     "public": frozenset({"customer", "operator", "admin"}),
     "side": frozenset({"operator", "admin"}),
     "system": frozenset({"operator", "admin"}),
 }
+
+# 保持向后兼容：模块级引用（已有代码可能 import 此常量）
+_VISIBILITY_ROUTING = _DEFAULT_VISIBILITY_ROUTING
 
 
 @dataclass
@@ -44,7 +49,8 @@ class BridgeAPIServer:
     """WebSocket server + 消息路由。
 
     只做 transport 层的解析和分发：
-    - 解析 register / customer_* / operator_* / admin_* 消息
+    - 解析 register / customer_* / operator_* / admin_* 消息（v1）
+    - 解析 connect / message / command 消息（v2）
     - 调用 ConversationManager / 命令处理器等上层协程
     - 按 visibility 路由回复到合适的 Bridge 连接
     """
@@ -54,12 +60,20 @@ class BridgeAPIServer:
         conversation_manager: Any,
         port: int = 9999,
         host: str = "127.0.0.1",
+        visibility_routing: dict[str, frozenset[str]] | None = None,
     ) -> None:
         self._conversation_manager = conversation_manager
         self._host = host
         self._port = port
         self._connections: dict[str, BridgeConnection] = {}
         self._server: Any = None
+
+        # 可配置的 visibility 路由表（v2: 配置驱动）
+        self._visibility_routing: dict[str, frozenset[str]] = (
+            visibility_routing
+            if visibility_routing is not None
+            else dict(_DEFAULT_VISIBILITY_ROUTING)
+        )
 
         # 可选钩子（由 server.py 组装时注入）
         self.on_customer_message: Callable[[dict], Awaitable[None]] | None = None
@@ -70,18 +84,20 @@ class BridgeAPIServer:
         self.on_customer_connect: Callable[[dict], Awaitable[None]] | None = None
 
     # ------------------------------------------------------------------ #
-    # 静态路由表
+    # 可见性路由表
     # ------------------------------------------------------------------ #
 
-    @staticmethod
-    def compute_visibility_targets(visibility: str) -> set[str]:
+    def compute_visibility_targets(self, visibility: str) -> set[str]:
         """根据 visibility 决定应该转发给哪些 Bridge 角色端。
 
         public → customer + operator + admin
         side / system → operator + admin（客户看不到）
+
+        v2: 路由表从实例的 _visibility_routing 加载（可配置），
+        不再依赖模块级常量。
         """
         try:
-            return set(_VISIBILITY_ROUTING[visibility])
+            return set(self._visibility_routing[visibility])
         except KeyError as e:
             raise ValueError(f"unknown visibility: {visibility!r}") from e
 
@@ -168,20 +184,32 @@ class BridgeAPIServer:
 
     async def send_reply(
         self,
-        conversation_id: str,
-        text: str,
-        visibility: str,
+        conversation_id: str | None = None,
+        text: str | None = None,
+        visibility: str | None = None,
         message_id: str | None = None,
+        *,
+        sender_id: str | None = None,
     ) -> None:
-        """按 visibility 广播回复消息到匹配角色的 Bridge 连接。"""
+        """按 visibility 广播回复消息到匹配角色的 Bridge 连接。
+
+        v2: 出站消息类型改为 "message"（与入站统一），增加 sender_id 字段。
+        v1 客户端仍可通过 type 字段区分（"message" vs 旧 "reply"）。
+        """
+        # 防御：必须参数校验（兼容关键字和位置调用）
+        if conversation_id is None or text is None or visibility is None:
+            raise TypeError("send_reply() requires conversation_id, text, visibility")
+
         targets = self.compute_visibility_targets(visibility)
-        payload = {
-            "type": "reply",
+        payload: dict[str, Any] = {
+            "type": "message",
             "conversation_id": conversation_id,
             "text": text,
             "message_id": message_id,
             "visibility": visibility,
         }
+        if sender_id is not None:
+            payload["sender_id"] = sender_id
         data = json.dumps(payload)
         sent: set[str] = set()
         for role in targets:
@@ -232,11 +260,19 @@ class BridgeAPIServer:
                     continue
 
                 msg_type = msg.get("type")
+
+                # ---------------------------------------------------------- #
+                # 通用：register（v1 + v2 共用）
+                # ---------------------------------------------------------- #
                 if msg_type == "register":
                     registered = self._handle_register(msg, websocket)
                     await websocket.send(
                         json.dumps({"type": "registered", "instance_id": registered.instance_id})
                     )
+
+                # ---------------------------------------------------------- #
+                # v1 消息类型（向后兼容）
+                # ---------------------------------------------------------- #
                 elif msg_type == "customer_connect":
                     self._handle_customer_connect(msg)
                     # ack 先发，再触发 on_customer_connect（可能产生 auto-dispatch 事件）
@@ -276,6 +312,46 @@ class BridgeAPIServer:
                         await self.on_admin_command(msg, self._parse_admin_command(msg))
                     except Exception:
                         logger.exception("on_admin_command callback failed")
+
+                # ---------------------------------------------------------- #
+                # v2 统一消息类型
+                # ---------------------------------------------------------- #
+                elif msg_type == "connect":
+                    # v2 connect — 等价于 customer_connect
+                    self._handle_customer_connect(msg)
+                    await websocket.send(
+                        json.dumps({
+                            "type": "connected",
+                            "conversation_id": msg.get("conversation_id", ""),
+                        })
+                    )
+                    if self.on_customer_connect:
+                        try:
+                            await self.on_customer_connect(msg)
+                        except Exception:
+                            logger.exception("on_customer_connect callback failed")
+
+                elif msg_type == "message":
+                    # v2 统一 message — 委托到 on_customer_message
+                    # Bridge 通过 sender_id 区分来源；channel-server 不区分角色
+                    if self.on_customer_message:
+                        try:
+                            await self.on_customer_message(msg)
+                        except Exception:
+                            logger.exception("on_customer_message callback failed")
+
+                elif msg_type == "command":
+                    # v2 统一 command — 解析后委托到 on_operator_command
+                    raw_cmd = msg.get("command", "")
+                    cmd = parse_command(raw_cmd)
+                    if cmd is not None and self.on_operator_command:
+                        try:
+                            await self.on_operator_command(msg, cmd)
+                        except Exception:
+                            logger.exception("on_operator_command callback failed")
+                    elif cmd is None:
+                        logger.warning("v2 command: not a valid command: %r", raw_cmd)
+
                 else:
                     logger.debug("unhandled bridge message type: %s", msg_type)
         except websockets.ConnectionClosed:

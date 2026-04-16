@@ -160,6 +160,7 @@ def test_route_agent_msg_public_sends_reply(
         text="hello customer",
         visibility="public",
         message_id=None,
+        sender_id="agent-a",
     )
 
 
@@ -174,6 +175,7 @@ def test_route_agent_msg_side_sends_side(
         conversation_id="c1",
         text="internal note",
         visibility="side",
+        sender_id="agent-a",
     )
 
 
@@ -205,6 +207,7 @@ def test_route_agent_gate_applied_in_takeover(
         text="reply to customer",
         visibility="side",
         message_id=None,
+        sender_id="agent-a",
     )
 
 
@@ -226,6 +229,7 @@ def test_route_agent_msg_with_message_id(
         text="hello",
         visibility="public",
         message_id="uuid-456",
+        sender_id="agent-a",
     )
 
 
@@ -244,4 +248,5 @@ def test_route_agent_message_conv_not_found(
         text="message",
         visibility="public",
         message_id=None,
+        sender_id="agent-a",
     )

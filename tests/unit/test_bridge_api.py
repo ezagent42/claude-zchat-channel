@@ -55,20 +55,20 @@ def test_admin_command_status(server):
     assert cmd.name == "status"
 
 
-def test_visibility_routing_public():
-    assert BridgeAPIServer.compute_visibility_targets("public") == {
+def test_visibility_routing_public(server):
+    assert server.compute_visibility_targets("public") == {
         "customer",
         "operator",
         "admin",
     }
 
 
-def test_visibility_routing_side():
-    assert BridgeAPIServer.compute_visibility_targets("side") == {"operator", "admin"}
+def test_visibility_routing_side(server):
+    assert server.compute_visibility_targets("side") == {"operator", "admin"}
 
 
-def test_visibility_routing_system():
-    assert BridgeAPIServer.compute_visibility_targets("system") == {"operator", "admin"}
+def test_visibility_routing_system(server):
+    assert server.compute_visibility_targets("system") == {"operator", "admin"}
 
 
 def test_register_creates_connection(server):

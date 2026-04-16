@@ -62,7 +62,7 @@ async def test_resolve_emits_event_and_csat(bridge_ws, channel_server):
     )
 
     # CSAT reply 也应收到
-    replies = [m for m in msgs if m.get("type") == "reply"]
+    replies = [m for m in msgs if m.get("type") in ("reply", "message")]
     assert any("评分" in r.get("text", "") or "csat" in r.get("text", "").lower() for r in replies), (
         f"expected CSAT invitation reply, got replies: {replies}"
     )
@@ -89,7 +89,7 @@ async def test_status_returns_formatted_reply(bridge_ws, channel_server):
     # 2. 收到 system reply
     raw = await asyncio.wait_for(bridge_ws.recv(), timeout=5)
     msg = json.loads(raw)
-    assert msg["type"] == "reply", f"expected reply, got: {msg}"
+    assert msg["type"] in ("reply", "message"), f"expected reply, got: {msg}"
     assert msg["visibility"] == "system", f"expected system visibility, got: {msg}"
     assert "[status]" in msg.get("text", ""), (
         f"expected [status] prefix in reply text, got: {msg}"

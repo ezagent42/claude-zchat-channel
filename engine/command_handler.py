@@ -50,6 +50,7 @@ class BridgeReply(Protocol):
         text: str,
         visibility: str,
         message_id: str | None = None,
+        sender_id: str | None = None,
     ) -> None: ...
 
 

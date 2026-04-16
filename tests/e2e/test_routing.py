@@ -186,7 +186,7 @@ async def test_dispatch_whitelist_reject_e2e(routing_ws) -> None:
 
     raw = await asyncio.wait_for(ws.recv(), timeout=5)
     msg = json.loads(raw)
-    assert msg["type"] == "reply", f"expected reply, got: {msg}"
+    assert msg["type"] in ("reply", "message"), f"expected reply, got: {msg}"
     assert "rejected" in msg["text"], f"expected rejection, got: {msg}"
     assert "rogue-agent" in msg["text"]
 

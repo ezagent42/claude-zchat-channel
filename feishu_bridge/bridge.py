@@ -88,11 +88,14 @@ class FeishuBridge:
         )
         self._bridge_client.on_message = self._on_bridge_event
 
-        # 已连接的 conversation（避免重复 customer_connect）
+        # 已连接的 conversation（避免重复 connect）
         self._known_conversations: set[str] = set()
 
         # 消息去重（防止飞书延迟重投导致重复处理）
         self._processed_msg_ids: set[str] = set()
+
+        # 跟踪每个 conversation 的 customer sender_id（出站时判断回显）
+        self._known_customer_senders: dict[str, set[str]] = {}
 
         # Bridge API WebSocket 连接（兼容旧的 _on_card_action 引用）
         self._bridge_ws: Any | None = None
@@ -224,21 +227,23 @@ class FeishuBridge:
     ) -> None:
         """Customer 消息转发：首次消息 → connect + squad card + message。"""
         if chat_id not in self._known_conversations:
-            customer_data = {"id": sender_id, "name": sender_id}
             self._bridge_client.send({
-                "type": "customer_connect",
+                "type": "connect",
                 "conversation_id": chat_id,
-                "customer": customer_data,
-                "metadata": {"source": "feishu"},
+                "sender_id": sender_id,
+                "metadata": {"source": "feishu", "name": sender_id},
             })
             # 在 squad 群创建 conversation card（thread root）
             self.visibility_router.on_conversation_created(
-                chat_id, metadata={"customer": customer_data, "source": "feishu"},
+                chat_id, metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
             )
             self._known_conversations.add(chat_id)
+        # 跟踪 customer sender_id（出站时判断回显）
+        self._known_customer_senders.setdefault(chat_id, set()).add(sender_id)
         self._bridge_client.send({
-            "type": "customer_message",
+            "type": "message",
             "conversation_id": chat_id,
+            "sender_id": sender_id,
             "text": text,
             "message_id": message_id,
         })
@@ -253,17 +258,17 @@ class FeishuBridge:
             return
         if text.startswith("/"):
             self._bridge_client.send({
-                "type": "operator_command",
+                "type": "command",
                 "conversation_id": conv_id,
+                "sender_id": sender_id,
                 "command": text,
-                "operator_id": sender_id,
             })
         else:
             self._bridge_client.send({
-                "type": "operator_message",
+                "type": "message",
                 "conversation_id": conv_id,
+                "sender_id": sender_id,
                 "text": text,
-                "operator_id": sender_id,
             })
 
     def _forward_admin(
@@ -271,7 +276,8 @@ class FeishuBridge:
     ) -> None:
         """Admin 命令转发。"""
         self._bridge_client.send({
-            "type": "admin_command",
+            "type": "command",
+            "sender_id": sender_id,
             "command": text,
         })
 
@@ -298,7 +304,22 @@ class FeishuBridge:
     # ------------------------------------------------------------------
 
     def _handle_reply_event(self, conv_id: str, msg: dict) -> None:
-        """处理 reply 事件。"""
+        """处理 reply / message 事件（v2 兼容）。
+
+        v2 出站消息带 sender_id：若 sender 是 customer 本人，
+        不回显到 customer 群，仅写入 squad thread。
+        """
+        sender_id = msg.get("sender_id", "")
+
+        # 若 sender 是该 conversation 的已知 customer → 不回显到 customer 群
+        if sender_id and sender_id in self._known_customer_senders.get(conv_id, set()):
+            thread = self.visibility_router.get_thread(conv_id)
+            if thread and thread.card_msg_id:
+                text = msg.get("text", "")
+                self.sender.reply_in_thread(thread.card_msg_id, f"[客户] {text}")
+            return
+
+        # agent/operator 回复 → 正常可见性路由
         self.visibility_router.route(conv_id, msg)
 
     def _handle_edit_event(self, conv_id: str, msg: dict) -> None:
@@ -327,7 +348,8 @@ class FeishuBridge:
         self.visibility_router.route(conv_id, msg)
 
     _EVENT_HANDLERS: dict[str, str] = {
-        "reply": "_handle_reply_event",
+        "reply": "_handle_reply_event",      # v1 backward compat
+        "message": "_handle_reply_event",    # v2: same handler
         "edit": "_handle_edit_event",
         "conversation.created": "_handle_conv_created",
         "mode.changed": "_handle_mode_changed",
@@ -382,12 +404,12 @@ class FeishuBridge:
         conv_id = value.get("conv_id")
 
         if action_type and conv_id:
-            # hijack/resolve → 转发为 operator_command
+            # hijack/resolve → 转发为 command (v2)
             self._bridge_client.send({
-                "type": "operator_command",
+                "type": "command",
                 "conversation_id": conv_id,
+                "sender_id": "card_action",
                 "command": f"/{action_type}",
-                "operator_id": "card_action",
             })
             return
 

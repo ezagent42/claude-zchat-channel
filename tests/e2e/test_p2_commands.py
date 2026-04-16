@@ -62,7 +62,7 @@ async def test_abandon_e2e_flow(bridge_ws, channel_server):
     assert closed_events[0]["data"].get("abandoned_by") == "op-e2e"
 
     # 不应有 CSAT 邀请 reply（和 /resolve 区分）
-    replies = [m for m in msgs if m.get("type") == "reply"]
+    replies = [m for m in msgs if m.get("type") in ("reply", "message")]
     assert not any("评分" in r.get("text", "") for r in replies), (
         f"abandon should not send CSAT prompt: {replies}"
     )
@@ -108,7 +108,7 @@ async def test_assign_then_squad_e2e(bridge_ws, channel_server):
         try:
             raw = await asyncio.wait_for(bridge_ws.recv(), timeout=5)
             m = json.loads(raw)
-            if m.get("type") == "reply" and "[squad]" in m.get("text", ""):
+            if m.get("type") in ("reply", "message") and "[squad]" in m.get("text", ""):
                 squad_reply = m
                 break
         except asyncio.TimeoutError:

@@ -109,7 +109,7 @@ async def test_side_e2e_flow(channel_server, bridge_ws, agent_irc, e2e_ports) ->
     while time.time() < deadline:
         try:
             data = json.loads(await asyncio.wait_for(bridge_ws.recv(), timeout=5))
-            if data.get("type") == "reply" and data.get("visibility") == "side":
+            if data.get("type") in ("reply", "message") and data.get("visibility") == "side":
                 assert data["text"] == "这是一条内部建议"
                 assert data["conversation_id"] == conv_id
                 return

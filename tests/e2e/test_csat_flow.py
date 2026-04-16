@@ -67,7 +67,7 @@ async def _assert_server_responsive(ws) -> None:
     )
     raw = await asyncio.wait_for(ws.recv(), timeout=5)
     msg = json.loads(raw)
-    assert msg["type"] == "reply", f"expected reply, got: {msg}"
+    assert msg["type"] in ("reply", "message"), f"expected reply, got: {msg}"
     assert msg["visibility"] == "system"
 
 
