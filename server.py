@@ -25,12 +25,12 @@ from engine.participant_registry import ParticipantRegistry
 from engine.squad_registry import SquadRegistry
 from engine.timer_manager import TimerManager
 from plugins.manager import PluginManager
-from protocol.conversation import ConversationState
-from protocol.event import Event, EventType
-from protocol.gate import gate_message
-from protocol.message_types import MessageVisibility
-from protocol.mode import ConversationMode
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.conversation import ConversationState
+from zchat_protocol.event import Event, EventType
+from zchat_protocol.gate import gate_message
+from zchat_protocol.message_types import MessageVisibility
+from zchat_protocol.mode import ConversationMode
+from zchat_protocol.participant import Participant, ParticipantRole
 from routing_config import RoutingConfig, load_routing_config
 from transport.irc_transport import IRCTransport, parse_agent_message
 
@@ -416,7 +416,7 @@ def wire_bridge_callbacks(
             print(f"[server] operator_message: conversation {conv_id!r} not found", file=sys.stderr)
             return
 
-        from protocol.gate import gate_message
+        from zchat_protocol.gate import gate_message
         visibility = gate_message(conv.mode, "operator", "public")
         message_store: MessageStore = components["message_store"]
         saved = message_store.save(

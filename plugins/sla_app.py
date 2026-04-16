@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from protocol.timer import TimerAction
+from zchat_protocol.timer import TimerAction
 
 # SLA 默认时长（秒）。测试可 patch。
 SLA_ONBOARD_DURATION_S: float = 3.0

@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable
 import websockets
 from websockets.legacy.server import WebSocketServerProtocol  # 兼容旧版 API
 
-from protocol.commands import Command, parse_command
+from zchat_protocol.commands import Command, parse_command
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from protocol.commands import parse_command
+from zchat_protocol.commands import parse_command
 
 
 def test_parse_hijack():

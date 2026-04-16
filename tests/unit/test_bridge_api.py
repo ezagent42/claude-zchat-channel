@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from bridge_api.ws_server import BridgeAPIServer, BridgeConnection
-from protocol.commands import parse_command  # noqa: F401  确认依赖可导入
+from zchat_protocol.commands import parse_command  # noqa: F401  确认依赖可导入
 
 
 @pytest.fixture

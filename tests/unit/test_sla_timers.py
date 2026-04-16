@@ -14,7 +14,7 @@ from engine.event_bus import EventBus
 from engine.timer_manager import TimerManager
 from plugins import sla_app
 from plugins.manager import PluginManager
-from protocol.event import EventType
+from zchat_protocol.event import EventType
 
 
 def _seed_conversations(conn, *conv_ids):

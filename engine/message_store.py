@@ -7,7 +7,7 @@ import sqlite3
 import uuid
 from datetime import datetime
 
-from protocol.message_types import Message, MessageVisibility
+from zchat_protocol.message_types import Message, MessageVisibility
 
 
 class MessageStore:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from engine.event_bus import EventBus
-from protocol.event import Event, EventType
+from zchat_protocol.event import Event, EventType
 
 
 def _seed_conversations(conn, *conv_ids):

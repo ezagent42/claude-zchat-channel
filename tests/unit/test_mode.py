@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import pytest
-from protocol.mode import ConversationMode, validate_transition, VALID_MODE_TRANSITIONS
+from zchat_protocol.mode import ConversationMode, validate_transition, VALID_MODE_TRANSITIONS
 
 
 def test_auto_to_copilot():

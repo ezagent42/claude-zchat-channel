@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from engine.participant_registry import ParticipantRegistry
-from protocol.participant import ParticipantRole
+from zchat_protocol.participant import ParticipantRole
 
 
 @pytest.fixture

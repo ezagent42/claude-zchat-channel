@@ -188,12 +188,12 @@ def test_shared_connection(conn):
 
     # EventBus 通过同一连接可见
     import asyncio
-    from protocol.event import Event, EventType
+    from zchat_protocol.event import Event, EventType
 
     asyncio.run(eb.publish(Event(type=EventType.CONVERSATION_CREATED, conversation_id="c1")))
 
     # MessageStore 通过同一连接可见
-    from protocol.message_types import Message, MessageVisibility
+    from zchat_protocol.message_types import Message, MessageVisibility
 
     ms.save(
         Message(

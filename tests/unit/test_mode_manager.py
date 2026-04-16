@@ -6,9 +6,9 @@ import pytest
 
 from engine.event_bus import EventBus
 from engine.mode_manager import ModeManager
-from protocol.conversation import Conversation, ConversationState
-from protocol.event import EventType
-from protocol.mode import ConversationMode
+from zchat_protocol.conversation import Conversation, ConversationState
+from zchat_protocol.event import EventType
+from zchat_protocol.mode import ConversationMode
 
 
 @pytest.fixture

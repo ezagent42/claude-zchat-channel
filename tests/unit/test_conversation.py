@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import pytest
-from protocol.conversation import (
+from zchat_protocol.conversation import (
     Conversation, ConversationState, ConversationResolution,
     create_conversation, transition_state, VALID_STATE_TRANSITIONS,
 )

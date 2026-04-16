@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from protocol.commands import Command
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.commands import Command
+from zchat_protocol.participant import Participant, ParticipantRole
 
 
 @pytest.fixture(autouse=True)

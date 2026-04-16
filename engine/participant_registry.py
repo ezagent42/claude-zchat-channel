@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.participant import Participant, ParticipantRole
 
 
 class ParticipantRegistry:

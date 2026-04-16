@@ -9,8 +9,8 @@ import pytest
 
 from engine.event_bus import EventBus
 from engine.timer_manager import TimerManager
-from protocol.event import EventType
-from protocol.timer import TimerAction
+from zchat_protocol.event import EventType
+from zchat_protocol.timer import TimerAction
 
 
 @pytest.fixture

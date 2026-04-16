@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from protocol.event import Event, EventType
+from zchat_protocol.event import Event, EventType
 
 
 def test_event_creation():

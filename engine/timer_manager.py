@@ -12,8 +12,8 @@ import asyncio
 from datetime import datetime, timedelta
 
 from engine.event_bus import EventBus
-from protocol.event import Event, EventType
-from protocol.timer import Timer, TimerAction
+from zchat_protocol.event import Event, EventType
+from zchat_protocol.timer import Timer, TimerAction
 
 
 class TimerManager:

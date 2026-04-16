@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from engine.squad_registry import SquadRegistry
-from protocol.commands import parse_command
-from protocol.event import EventType
+from zchat_protocol.commands import parse_command
+from zchat_protocol.event import EventType
 
 
 # ------------------------------------------------------------------ #

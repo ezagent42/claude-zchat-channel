@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.participant import Participant, ParticipantRole
 
 
 def test_create_customer():

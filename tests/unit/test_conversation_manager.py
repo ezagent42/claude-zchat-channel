@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from engine.conversation_manager import ConcurrencyLimitExceeded, ConversationManager
-from protocol.conversation import ConversationState
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.conversation import ConversationState
+from zchat_protocol.participant import Participant, ParticipantRole
 
 
 @pytest.fixture

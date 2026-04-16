@@ -14,10 +14,10 @@ from engine.conversation_manager import ConversationManager
 from engine.db import init_db
 from engine.event_bus import EventBus
 from engine.message_store import MessageStore
-from protocol.conversation import ConversationState
-from protocol.event import Event, EventType
-from protocol.message_types import Message, MessageVisibility
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.conversation import ConversationState
+from zchat_protocol.event import Event, EventType
+from zchat_protocol.message_types import Message, MessageVisibility
+from zchat_protocol.participant import Participant, ParticipantRole
 
 
 @pytest.fixture

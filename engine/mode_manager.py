@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from engine.event_bus import EventBus
-from protocol.conversation import Conversation
-from protocol.event import Event, EventType
-from protocol.mode import (
+from zchat_protocol.conversation import Conversation
+from zchat_protocol.event import Event, EventType
+from zchat_protocol.mode import (
     ConversationMode,
     ModeTransition,
     validate_transition,

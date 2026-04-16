@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from engine.message_store import MessageStore
-from protocol.message_types import Message, MessageVisibility
+from zchat_protocol.message_types import Message, MessageVisibility
 
 
 def make_msg(mid: str, conv_id: str, text: str = "hi") -> Message:

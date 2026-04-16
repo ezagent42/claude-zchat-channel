@@ -17,7 +17,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Callable
 
-from protocol.event import Event, EventType
+from zchat_protocol.event import Event, EventType
 
 log = logging.getLogger(__name__)
 

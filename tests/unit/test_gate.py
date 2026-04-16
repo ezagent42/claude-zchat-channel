@@ -1,11 +1,11 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from protocol.message_types import MessageVisibility
-from protocol.participant import Participant, ParticipantRole
-from protocol.conversation import Conversation, ConversationState
-from protocol.mode import ConversationMode
-from protocol.gate import gate_message
+from zchat_protocol.message_types import MessageVisibility
+from zchat_protocol.participant import Participant, ParticipantRole
+from zchat_protocol.conversation import Conversation, ConversationState
+from zchat_protocol.mode import ConversationMode
+from zchat_protocol.gate import gate_message
 
 
 def _conv(mode: ConversationMode) -> Conversation:

@@ -14,13 +14,13 @@ import sqlite3
 from datetime import datetime
 from typing import Any
 
-from protocol.conversation import (
+from zchat_protocol.conversation import (
     Conversation,
     ConversationResolution,
     ConversationState,
     transition_state,
 )
-from protocol.participant import Participant, ParticipantRole
+from zchat_protocol.participant import Participant, ParticipantRole
 
 
 class ConcurrencyLimitExceeded(Exception):
