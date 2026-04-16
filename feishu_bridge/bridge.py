@@ -242,11 +242,10 @@ class FeishuBridge:
             "text": text,
             "message_id": message_id,
         })
-        # 写入 squad thread 让 operator 看到客户消息（side = 仅 squad thread，不发 admin）
-        self.visibility_router.route(chat_id, {
-            "visibility": "side",
-            "text": f"[客户] {text}",
-        })
+        # 写入 squad thread 让 operator 看到客户消息（直接写 thread，不走 visibility 路由）
+        thread = self.visibility_router.get_thread(chat_id)
+        if thread and thread.card_msg_id:
+            self.sender.reply_in_thread(thread.card_msg_id, f"[客户] {text}")
 
     def _forward_operator(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
