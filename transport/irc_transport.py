@@ -242,7 +242,31 @@ class IRCTransport:
             except Exception as e:
                 print(f"[irc_transport] Reconnect failed: {e}", file=sys.stderr)
 
+        def _on_namreply(conn, event):
+            # event.arguments = ["yaosh", "=", "#general", "@cs-bot yaosh yaosh-fast-agent"]
+            if len(event.arguments) >= 3:
+                chan = event.arguments[1].lstrip("=*@ ")
+                if not chan.startswith("#"):
+                    chan = event.arguments[2] if len(event.arguments) > 2 else ""
+                nicks_str = event.arguments[-1]
+                nicks = {n.lstrip("@+%~&") for n in nicks_str.split()}
+                if "general" in chan:
+                    if not hasattr(self, '_cached_general_nicks'):
+                        self._cached_general_nicks = set()
+                    self._cached_general_nicks.update(nicks)
+
+        def _on_join(conn, event):
+            # Track users joining #general
+            nick = event.source.nick
+            channel = event.target
+            if "general" in channel and nick != self.nick:
+                if not hasattr(self, '_cached_general_nicks'):
+                    self._cached_general_nicks = set()
+                self._cached_general_nicks.add(nick)
+
         connection.add_global_handler("welcome", on_welcome)
+        connection.add_global_handler("namreply", _on_namreply)
+        connection.add_global_handler("join", _on_join)
         connection.add_global_handler("pubmsg", _on_pubmsg)
         connection.add_global_handler("privmsg", _on_privmsg)
         connection.add_global_handler("disconnect", on_disconnect)
@@ -271,6 +295,33 @@ class IRCTransport:
         ch = channel.lstrip("#")
         self._connection.join(f"#{ch}")
         self.joined_channels.add(ch)
+
+    def invite_general_users(self, channel: str) -> None:
+        """INVITE all users in #general to a channel."""
+        if self._connection is None:
+            return
+        ch = channel if channel.startswith("#") else f"#{channel}"
+        # IRC NAMES 是异步的，用已知的 nick 列表
+        # 简化：直接 INVITE 所有非 bot 用户（通过 IRC raw command）
+        try:
+            self._connection.send_raw(f"NAMES #general")
+        except Exception:
+            pass
+        # 因为 NAMES 是异步回调，这里用一个简单方案：
+        # 让 channel 设为 +n 但 cs-bot 是 op，可以 INVITE
+        # 实际上更简单的方案：不要求 INVITE，让 WeeChat auto-join
+        # 通过给 WeeChat 发 PRIVMSG 告知新 channel
+        try:
+            for nick in list(self._general_nicks):
+                if nick != self.nick:
+                    self._connection.invite(nick, ch)
+        except Exception:
+            pass
+
+    @property
+    def _general_nicks(self) -> set:
+        """已知 #general 中的 nicks（从 on_namreply 事件收集）。"""
+        return getattr(self, '_cached_general_nicks', set())
 
     def disconnect(self, reason: str = "shutdown") -> None:
         if self._connection is not None:

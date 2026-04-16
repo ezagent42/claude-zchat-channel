@@ -178,13 +178,18 @@ class CommandHandler:
             metadata["customer"] = customer
         self._conv_manager.create(conv_id, metadata=metadata)
 
-        # IRC bot auto-JOIN
+        # IRC bot auto-JOIN + INVITE all #general users
         if irc_transport is not None:
             channel = IRCTransport.conv_channel_name(conv_id)
             print(f"[server] joining {channel}", file=sys.stderr)
             try:
                 irc_transport.join(channel)
                 print(f"[server] joined {channel}", file=sys.stderr)
+                # INVITE all users in #general to the new channel
+                try:
+                    irc_transport.invite_general_users(channel)
+                except Exception as e:
+                    print(f"[server] invite failed: {e}", file=sys.stderr)
             except Exception as e:
                 print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
         else:
