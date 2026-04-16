@@ -140,7 +140,13 @@ class FeishuBridge:
         log.info("[%s] %s: %s", role, sender_open_id or "?", text[:100])
 
         # Squad thread 回复 → 作为 operator side 消息转发到 channel-server
-        if role == "operator" and getattr(msg, "parent_id", None):
+        # lark-oapi message 对象的 thread 字段：parent_id 或 root_id
+        is_thread_reply = (
+            getattr(msg, "parent_id", None)
+            or getattr(msg, "root_id", None)
+            or getattr(msg, "thread_id", None)
+        )
+        if role == "operator" and is_thread_reply:
             conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
             if conv_id and self._bridge_client.connected:
                 self._bridge_client.send({
