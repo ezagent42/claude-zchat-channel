@@ -6,9 +6,16 @@ feishu:
   app_secret: ${FEISHU_APP_SECRET}
 
 groups:
-  customer_chat: "oc_customer_test_xxx"     # [测试]客户对话
-  squad_chat: "oc_squad_test_xxx"           # [测试]小李分队
-  admin_chat: "oc_admin_test_xxx"           # [测试]管理群
+  # customer_chat 由 GroupManager 动态管理（bot 被拉入群时注册）
+  # 以下是 load_config() 需要的 key
+  admin_chat_id: "oc_885883b976c16911366a75006d4a8dd6"     # cs-admin
+  squad_chats:
+    - chat_id: "oc_ee40c7c69521c7a30184b9d5b1ce2736"       # cs-squad
+      name: "cs-squad"
+
+# customer chat_id 用于 FeishuTestClient 直接发消息
+test:
+  customer_chat_id: "oc_3e33d9eddc980a800c3eefa01c6ca0f7"  # cs-customer
 
 channel_server:
   url: "ws://localhost:9999"
