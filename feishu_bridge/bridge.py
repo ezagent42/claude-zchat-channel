@@ -163,13 +163,13 @@ class FeishuBridge:
                 })
             return
 
-        # Auto-hijack 检测：已知 operator 在 customer 群内发言 → 触发回调
-        if (
-            role == "customer"
-            and sender_open_id
-            and self.group_manager.is_operator_in_customer_chat(sender_open_id, chat_id)
-        ):
-            self._trigger_auto_hijack(chat_id, sender_open_id, text)
+        # Auto-hijack 暂时关闭 — 通过手动 /hijack 命令切换身份
+        # if (
+        #     role == "customer"
+        #     and sender_open_id
+        #     and self.group_manager.is_operator_in_customer_chat(sender_open_id, chat_id)
+        # ):
+        #     self._trigger_auto_hijack(chat_id, sender_open_id, text)
 
         # ── 转发到 channel-server Bridge API ──────────────────────
         message_id = msg.message_id or ""
