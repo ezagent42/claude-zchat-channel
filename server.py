@@ -27,22 +27,15 @@ from zchat_protocol.event import Event, EventType
 from routing_config import RoutingConfig, load_routing_config
 from transport.irc_transport import IRCTransport
 
-AGENT_NAME = os.environ.get("AGENT_NAME", "cs-bot")
-IRC_SERVER = os.environ.get("IRC_SERVER", "127.0.0.1")
-IRC_PORT = int(os.environ.get("IRC_PORT", "6667"))
-IRC_CHANNELS = os.environ.get("IRC_CHANNELS", "general")
-IRC_TLS = os.environ.get("IRC_TLS", "false").lower() == "true"
-IRC_AUTH_TOKEN = os.environ.get("IRC_AUTH_TOKEN", "")
-
-BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "9999"))
-BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "127.0.0.1")
-
-CS_DB_PATH = os.environ.get("CS_DB_PATH", "conversations.db")
-CS_ROUTING_CONFIG = os.environ.get("CS_ROUTING_CONFIG", "routing.toml")
-CS_PLUGINS_DIR = os.environ.get(
-    "CS_PLUGINS_DIR", str(__import__("pathlib").Path(__file__).parent / "plugins")
-)
-
+_e = os.environ.get
+AGENT_NAME = _e("AGENT_NAME", "cs-bot")
+IRC_SERVER, IRC_PORT = _e("IRC_SERVER", "127.0.0.1"), int(_e("IRC_PORT", "6667"))
+IRC_CHANNELS, IRC_TLS = _e("IRC_CHANNELS", "general"), _e("IRC_TLS", "false").lower() == "true"
+IRC_AUTH_TOKEN = _e("IRC_AUTH_TOKEN", "")
+BRIDGE_PORT, BRIDGE_HOST = int(_e("BRIDGE_PORT", "9999")), _e("BRIDGE_HOST", "127.0.0.1")
+CS_DB_PATH = _e("CS_DB_PATH", "conversations.db")
+CS_ROUTING_CONFIG = _e("CS_ROUTING_CONFIG", "routing.toml")
+CS_PLUGINS_DIR = _e("CS_PLUGINS_DIR", str(__import__("pathlib").Path(__file__).parent / "plugins"))
 
 
 def wire_bridge_callbacks(
@@ -101,7 +94,6 @@ def wire_bridge_callbacks(
     event_bus.subscribe(EventType.TIMER_EXPIRED, _on_sla_breach)
 
 
-
 def build_components() -> dict[str, Any]:
     """组装所有 engine / bridge / transport 组件。不启动 IRC / WebSocket。"""
     from pathlib import Path as _Path
@@ -127,7 +119,6 @@ def build_components() -> dict[str, Any]:
         "routing_config": load_routing_config(CS_ROUTING_CONFIG),
         "plugin_manager": PluginManager(_Path(CS_PLUGINS_DIR)),
     }
-
 
 
 async def main() -> None:
