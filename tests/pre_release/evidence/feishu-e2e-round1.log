@@ -1,0 +1,2811 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /home/yaosh/projects/zchat/zchat-channel-server/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/yaosh/projects/zchat/zchat-channel-server
+configfile: pytest.ini
+plugins: asyncio-1.3.0, anyio-4.12.1, timeout-2.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+timeout: 120.0s
+timeout method: signal
+timeout func_only: False
+collecting ... collected 23 items
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard ERROR [  4%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step2_squad_card_notification ERROR [  8%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step3_copilot_in_squad_thread ERROR [ 13%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step4_auto_hijack ERROR [ 17%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step5_operator_message_reaches_customer ERROR [ 21%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step6_resolve_and_csat ERROR [ 26%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_placeholder_then_edit ERROR [ 30%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_edit_visible_in_squad ERROR [ 34%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_agent_escalation_notifies_squad ERROR [ 39%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_timeout_reverts_to_auto ERROR [ 43%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuCSATFlow::test_csat_score_submission ERROR [ 47%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuConversationReactivation::test_reactivation_loads_history ERROR [ 52%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_takeover_agent_side_not_in_customer ERROR [ 56%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_copilot_operator_thread_not_in_customer ERROR [ 60%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_status_command ERROR [ 65%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_dispatch_command ERROR [ 69%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_review_command ERROR [ 73%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuSLABreach::test_sla_breach_alert ERROR [ 78%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_group_auto_registered_on_bot_added ERROR [ 82%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_operator_in_squad_group_can_use_operator_commands ERROR [ 86%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_admin_in_admin_group_can_use_admin_commands ERROR [ 91%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_cannot_use_operator_commands ERROR [ 95%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_group_disbanded_archives_conversation ERROR [100%]
+
+==================================== ERRORS ====================================
+_____ ERROR at setup of TestFeishuFullJourney.test_step1_customer_onboard ______
+
+fixturedef = <FixtureDef argname='full_stack' scope='module' baseid='tests/pre_release'>
+request = <SubRequest 'full_stack' for <Function test_step1_customer_onboard>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+
+.venv/lib/python3.13/site-packages/pytest_asyncio/plugin.py:730: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:92: in full_stack
+    _run_zchat("project", "use", "prerelease-test")
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+---------------------------- Captured stdout setup -----------------------------
+Default project set to 'prerelease-test'.
+[?1049h[?1l=[r[?1000l[?1002l[?1003l[?1005l[?1006l[?12l[>1uergo stopped.
+---------------------------- Captured stderr setup -----------------------------
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+
+thread 'main' (4751) panicked at zellij-client/src/os_input_output.rs:166:48:
+could not enable raw mode: Os { code: 6, kind: Uncategorized, message: "No such device or address" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /home/yaosh/projects/zchat/zchat/cli/app.py:1049 in cmd_agent_stop           │
+│                                                                              │
+│   1046 │   """Stop a running agent."""                                       │
+│   1047 │   mgr = _get_agent_manager(ctx)                                     │
+│   1048 │   scoped = mgr.scoped(name)                                         │
+│ ❱ 1049 │   mgr.stop(name, force=True)                                        │
+│   1050 │   typer.echo(f"Stopped {scoped}")                                   │
+│   1051                                                                       │
+│   1052 @agent_app.command("list")                                            │
+│                                                                              │
+│ /home/yaosh/projects/zchat/zchat/cli/agent_manager.py:112 in stop            │
+│                                                                              │
+│   109 │   │   name = self.scoped(name)                                       │
+│   110 │   │   agent = self._agents.get(name)                                 │
+│   111 │   │   if not agent:                                                  │
+│ ❱ 112 │   │   │   raise ValueError(f"Unknown agent: {name}")                 │
+│   113 │   │   if agent["status"] == "offline":                               │
+│   114 │   │   │   raise ValueError(f"{name} is already offline")             │
+│   115 │   │   self._force_stop(name)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ValueError: Unknown agent: yaosh-fast-agent
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /home/yaosh/projects/zchat/zchat/cli/app.py:1049 in cmd_agent_stop           │
+│                                                                              │
+│   1046 │   """Stop a running agent."""                                       │
+│   1047 │   mgr = _get_agent_manager(ctx)                                     │
+│   1048 │   scoped = mgr.scoped(name)                                         │
+│ ❱ 1049 │   mgr.stop(name, force=True)                                        │
+│   1050 │   typer.echo(f"Stopped {scoped}")                                   │
+│   1051                                                                       │
+│   1052 @agent_app.command("list")                                            │
+│                                                                              │
+│ /home/yaosh/projects/zchat/zchat/cli/agent_manager.py:112 in stop            │
+│                                                                              │
+│   109 │   │   name = self.scoped(name)                                       │
+│   110 │   │   agent = self._agents.get(name)                                 │
+│   111 │   │   if not agent:                                                  │
+│ ❱ 112 │   │   │   raise ValueError(f"Unknown agent: {name}")                 │
+│   113 │   │   if agent["status"] == "offline":                               │
+│   114 │   │   │   raise ValueError(f"{name} is already offline")             │
+│   115 │   │   self._force_stop(name)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ValueError: Unknown agent: yaosh-deep-agent
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+__ ERROR at setup of TestFeishuFullJourney.test_step2_squad_card_notification __
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+__ ERROR at setup of TestFeishuFullJourney.test_step3_copilot_in_squad_thread __
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+________ ERROR at setup of TestFeishuFullJourney.test_step4_auto_hijack ________
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuFullJourney.test_step5_operator_message_reaches_customer _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_____ ERROR at setup of TestFeishuFullJourney.test_step6_resolve_and_csat ______
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+__ ERROR at setup of TestFeishuPlaceholderAndEdit.test_placeholder_then_edit ___
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+__ ERROR at setup of TestFeishuPlaceholderAndEdit.test_edit_visible_in_squad ___
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuTimerAndEscalation.test_agent_escalation_notifies_squad _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuTimerAndEscalation.test_timeout_reverts_to_auto __
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_______ ERROR at setup of TestFeishuCSATFlow.test_csat_score_submission ________
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuConversationReactivation.test_reactivation_loads_history _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuGateIsolation.test_takeover_agent_side_not_in_customer _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuGateIsolation.test_copilot_operator_thread_not_in_customer _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+________ ERROR at setup of TestFeishuAdminCommands.test_status_command _________
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_______ ERROR at setup of TestFeishuAdminCommands.test_dispatch_command ________
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+________ ERROR at setup of TestFeishuAdminCommands.test_review_command _________
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_________ ERROR at setup of TestFeishuSLABreach.test_sla_breach_alert __________
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuAuthorizationModel.test_customer_group_auto_registered_on_bot_added _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuAuthorizationModel.test_operator_in_squad_group_can_use_operator_commands _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuAuthorizationModel.test_admin_in_admin_group_can_use_admin_commands _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuAuthorizationModel.test_customer_cannot_use_operator_commands _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+_ ERROR at setup of TestFeishuAuthorizationModel.test_group_disbanded_archives_conversation _
+
+feishu_config = {'channel_server': {'url': 'ws://127.0.0.1:9999'}, 'feishu': {'app_id': '${FEISHU_APP_ID}', 'app_secret': '${FEISHU_AP...c7a30184b9d5b1ce2736', 'name': 'cs-squad'}]}, 'test': {'customer_chat_id': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7'}, ...}
+
+    @pytest.fixture(scope="module")
+    def full_stack(feishu_config: dict):
+        """7 步启动全栈环境，yield 后反向拆除。
+    
+        启动顺序:
+          1. zchat project use prerelease-test
+          2. zchat irc daemon start
+          3. channel-server (subprocess)
+          4. 验证 Bridge API 端口可达
+          5. zchat agent create fast-agent
+          6. zchat agent create deep-agent
+          7. feishu_bridge (subprocess)
+    
+        拆除顺序: 7→4（反向）
+        """
+        cs_proc: subprocess.Popen | None = None
+        bridge_proc: subprocess.Popen | None = None
+    
+        def _run_zchat(*args: str, timeout: int = 30) -> None:
+            """在 zchat 根目录执行 zchat CLI 命令。"""
+            subprocess.run(
+                ["uv", "run", "zchat", *args],
+                cwd=str(ZCHAT_ROOT),
+                check=True,
+                timeout=timeout,
+            )
+    
+        try:
+            # 1. 切换项目
+>           _run_zchat("project", "use", "prerelease-test")
+
+tests/pre_release/conftest.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:83: in _run_zchat
+    subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = 30, check = True
+popenargs = (['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test'],)
+kwargs = {'cwd': '/home/yaosh/projects/zchat'}
+process = <Popen: returncode: 101 args: ['uv', 'run', 'zchat', 'project', 'use', 'prer...>
+stdout = None, stderr = None, retcode = 101
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['uv', 'run', 'zchat', 'project', 'use', 'prerelease-test']' returned non-zero exit status 101.
+
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/subprocess.py:577: CalledProcessError
+=============================== warnings summary ===============================
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26: DeprecationWarning: There is no current event loop
+    loop = asyncio.get_event_loop()
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67: DeprecationWarning: websockets.InvalidStatusCode is deprecated
+    def _parse_ws_conn_exception(e: websockets.InvalidStatusCode):
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step2_squad_card_notification
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step3_copilot_in_squad_thread
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step4_auto_hijack
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step5_operator_message_reaches_customer
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step6_resolve_and_csat
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_placeholder_then_edit
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_edit_visible_in_squad
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_agent_escalation_notifies_squad
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_timeout_reverts_to_auto
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuCSATFlow::test_csat_score_submission
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuConversationReactivation::test_reactivation_loads_history
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_takeover_agent_side_not_in_customer
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_copilot_operator_thread_not_in_customer
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_status_command
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_dispatch_command
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_review_command
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuSLABreach::test_sla_breach_alert
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_group_auto_registered_on_bot_added
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_operator_in_squad_group_can_use_operator_commands
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_admin_in_admin_group_can_use_admin_commands
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_cannot_use_operator_commands
+ERROR tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_group_disbanded_archives_conversation
+======================= 4 warnings, 23 errors in 28.70s ========================

@@ -25,6 +25,7 @@ from engine.participant_registry import ParticipantRegistry
 from engine.squad_registry import SquadRegistry
 from engine.timer_manager import TimerManager
 from plugins.manager import PluginManager
+from protocol.conversation import ConversationState
 from protocol.event import Event, EventType
 from protocol.gate import gate_message
 from protocol.message_types import MessageVisibility
@@ -432,20 +433,56 @@ def wire_bridge_callbacks(
         )
 
     async def _on_customer_message(msg: dict) -> None:
-        """Customer 消息处理（含 CSAT 评分接收）。"""
+        """Customer 消息处理: 转发到 IRC 给 agent + CSAT 评分接收。"""
         conv_id = msg.get("conversation_id", "")
+        text = msg.get("text", "")
         csat_score = msg.get("csat_score")
         if csat_score is not None:
             try:
                 conv_manager.set_csat(conv_id, int(csat_score))
             except Exception as e:
                 print(f"[server] set_csat failed: {e}", file=sys.stderr)
+            return
+
+        # 转发客户消息给已 dispatch 的 agent → PRIVMSG 到 agent nick
+        if text and conv_id:
+            conv = conv_manager.get(conv_id)
+            if conv is not None:
+                if conv.state == ConversationState.CREATED:
+                    conv_manager.activate(conv_id)
+                elif conv.state == ConversationState.IDLE:
+                    conv_manager.activate(conv_id)
+                irc_transport = components.get("irc_transport")
+                if irc_transport is not None:
+                    # 发给 conversation channel（留存记录）
+                    channel = IRCTransport.conv_channel_name(conv_id)
+                    try:
+                        irc_transport.privmsg(channel, f"customer: {text}")
+                    except Exception:
+                        pass
+                    # 发给每个 dispatched agent 的 nick（agent 可能不在 #conv-xxx）
+                    for p in conv.participants:
+                        if p.role == ParticipantRole.AGENT:
+                            try:
+                                irc_transport.privmsg(
+                                    p.id,
+                                    f"[{conv_id}] customer: {text}",
+                                )
+                            except Exception as e:
+                                print(f"[server] PRIVMSG to {p.id} failed: {e}", file=sys.stderr)
 
     async def _on_customer_connect(msg: dict) -> None:
-        """Customer 接入 → IRC bot JOIN 对应 #conv-{id} 频道 + auto-dispatch。"""
+        """Customer 接入 → 创建 conversation + IRC bot JOIN + auto-dispatch。"""
         conv_id = msg.get("conversation_id", "")
         if not conv_id:
             return
+        # 创建 conversation（幂等）
+        metadata = dict(msg.get("metadata", {}))
+        customer = msg.get("customer")
+        if customer is not None:
+            metadata["customer"] = customer
+        conv = conv_manager.create(conv_id, metadata=metadata)
+
         # IRC bot auto-JOIN
         irc_transport = components.get("irc_transport")
         if irc_transport is not None:
@@ -454,6 +491,7 @@ def wire_bridge_callbacks(
                 irc_transport.join(channel)
             except Exception as e:
                 print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
+
         # auto-dispatch default_agents
         for agent_nick in rc.default_agents:
             try:
@@ -637,7 +675,28 @@ async def main() -> None:
             {"nick": nick, "channel": channel, "body": body},
         )
 
-    irc_transport.start(queue, loop, on_pubmsg=_on_pubmsg)
+    def _on_privmsg(nick: str, body: str):
+        """Agent 回复 cs-bot 的 PRIVMSG → 入队待路由。"""
+        print(f"[server] PRIVMSG from {nick}: {body[:80]}", file=sys.stderr)
+        print(f"[server] conversations: {list(conv_manager._conversations.keys())}", file=sys.stderr)
+        # 从 agent 的 participant 记录中找到其参与的 conversation
+        conv_id = None
+        for cid, conv in conv_manager._conversations.items():
+            for p in conv.participants:
+                if p.id == nick and p.role == ParticipantRole.AGENT:
+                    conv_id = cid
+                    break
+            if conv_id:
+                break
+        if conv_id is None:
+            return
+        channel = IRCTransport.conv_channel_name(conv_id)
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            {"nick": nick, "channel": channel, "body": body},
+        )
+
+    irc_transport.start(queue, loop, on_pubmsg=_on_pubmsg, on_privmsg_text=_on_privmsg)
     print(
         f"[channel-server] IRC bot '{AGENT_NAME}' connecting to {IRC_SERVER}:{IRC_PORT}",
         file=sys.stderr,

@@ -15,6 +15,8 @@ from lark_oapi.api.im.v1 import (
     CreateMessageRequestBody,
     GetMessageRequest,
     ListMessageRequest,
+    ReplyMessageRequest,
+    ReplyMessageRequestBody,
 )
 
 log = logging.getLogger("feishu-bridge.test_client")
@@ -96,6 +98,7 @@ class FeishuTestClient:
                     "msg_type": item.msg_type,
                     "content": item.body.content if item.body else "",
                     "create_time": item.create_time,
+                    "root_id": getattr(item, "root_id", None),
                 }
             )
         return results
@@ -144,3 +147,116 @@ class FeishuTestClient:
                 raise AssertionError(
                     f"Message containing '{contains}' should NOT appear in {chat_id}"
                 )
+
+    def assert_message_edited(
+        self, chat_id: str, message_id: str, contains: str, timeout: int = 30
+    ) -> dict:
+        """轮询直到指定消息内容变更为包含指定文本。"""
+        start = time.time()
+        while time.time() - start < timeout:
+            msg = self.get_message(message_id)
+            if contains in msg.get("content", ""):
+                return msg
+            time.sleep(2)
+        raise AssertionError(
+            f"Message {message_id} did not contain '{contains}' within {timeout}s"
+        )
+
+    def assert_card_appears(
+        self, chat_id: str, contains: str, timeout: int = 30
+    ) -> dict:
+        """轮询直到群内出现包含指定内容的卡片消息。"""
+        start = time.time()
+        start_ts = str(int(start))
+        while time.time() - start < timeout:
+            messages = self.list_messages(chat_id, start_time=start_ts)
+            for m in messages:
+                if m.get("msg_type") == "interactive":
+                    if contains in m.get("content", ""):
+                        return m
+            time.sleep(2)
+        raise AssertionError(
+            f"Card containing '{contains}' not found in {chat_id} within {timeout}s"
+        )
+
+    def assert_card_updated(
+        self, chat_id: str, contains: str, timeout: int = 30
+    ) -> dict:
+        """轮询直到群内某张卡片消息内容更新为包含指定文本。"""
+        start = time.time()
+        start_ts = str(int(start))
+        while time.time() - start < timeout:
+            messages = self.list_messages(chat_id, start_time=start_ts)
+            for m in messages:
+                if m.get("msg_type") == "interactive":
+                    msg_id = m.get("message_id", "")
+                    if msg_id:
+                        updated = self.get_message(msg_id)
+                        if contains in updated.get("content", ""):
+                            return updated
+            time.sleep(2)
+        raise AssertionError(
+            f"Card containing '{contains}' not updated in {chat_id} within {timeout}s"
+        )
+
+    def send_thread_reply(
+        self, chat_id: str, root_msg_id: str, text: str
+    ) -> str:
+        """在消息线程中回复，返回 message_id。"""
+        body = (
+            ReplyMessageRequestBody.builder()
+            .msg_type("text")
+            .content(json.dumps({"text": text}))
+            .reply_in_thread(True)
+            .build()
+        )
+        req = (
+            ReplyMessageRequest.builder()
+            .message_id(root_msg_id)
+            .request_body(body)
+            .build()
+        )
+        resp = self.client.im.v1.message.reply(req)
+        if not resp.success():
+            raise RuntimeError(
+                f"send_thread_reply failed: {resp.code} {resp.msg}"
+            )
+        return resp.data.message_id
+
+    def assert_thread_message_appears(
+        self,
+        chat_id: str,
+        root_msg_id: str,
+        contains: str,
+        timeout: int = 30,
+    ) -> dict:
+        """轮询直到线程内出现包含指定文本的消息。"""
+        start = time.time()
+        start_ts = str(int(start))
+        while time.time() - start < timeout:
+            messages = self.list_messages(chat_id, start_time=start_ts)
+            for m in messages:
+                if m.get("root_id") == root_msg_id:
+                    if contains in m.get("content", ""):
+                        return m
+            time.sleep(2)
+        raise AssertionError(
+            f"Thread message containing '{contains}' under {root_msg_id} "
+            f"not found in {chat_id} within {timeout}s"
+        )
+
+    def send_message_as_operator(self, chat_id: str, text: str) -> str:
+        """以 operator 身份发消息（测试场景下 bot 即 operator）。"""
+        return self.send_message(chat_id, text)
+
+    def click_card_action(
+        self, chat_id: str, action_value: str, conv_id: str = ""
+    ) -> None:
+        """模拟卡片按钮点击，构造 card action payload 供测试注入。
+
+        注意：飞书 API 不支持直接模拟卡片点击，此方法仅构造并存储
+        payload。需要真实卡片点击的测试应标记 pytest.skip。
+        """
+        self._last_card_action_payload = {
+            "action": {"value": {"score": action_value, "conv_id": conv_id}}
+        }

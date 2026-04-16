@@ -24,6 +24,7 @@ class FeishuConfig:
 class GroupsConfig:
     admin_chat_id: str
     squad_chats: list[dict] = field(default_factory=list)
+    customer_chats: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -76,6 +77,7 @@ def load_config(path: str | Path) -> BridgeConfig:
         groups=GroupsConfig(
             admin_chat_id=groups.get("admin_chat_id", ""),
             squad_chats=groups.get("squad_chats", []),
+            customer_chats=groups.get("customer_chats", []),
         ),
         channel_server_url=cs.get("url", "ws://127.0.0.1:9999"),
         upload_dir=storage.get("upload_dir", ".feishu-bridge/uploads"),

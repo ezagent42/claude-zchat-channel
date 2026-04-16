@@ -2,6 +2,6 @@
 # 用于 full_stack fixture
 
 [routing]
-default_agents = ["fast-agent"]
-escalation_chain = ["deep-agent", "operator"]
-available_agents = ["fast-agent", "deep-agent"]
+default_agents = ["yaosh-fast-agent"]
+escalation_chain = ["yaosh-deep-agent", "operator"]
+available_agents = ["yaosh-fast-agent", "yaosh-deep-agent"]

@@ -1,0 +1,2473 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /home/yaosh/projects/zchat/zchat-channel-server/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/yaosh/projects/zchat/zchat-channel-server
+configfile: pytest.ini
+plugins: asyncio-1.3.0, anyio-4.12.1, timeout-2.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+timeout: 180.0s
+timeout method: signal
+timeout func_only: False
+collecting ... collected 23 items
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard FAILED [  4%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step2_squad_card_notification FAILED [  8%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step3_copilot_in_squad_thread FAILED [ 13%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step4_auto_hijack FAILED [ 17%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step5_operator_message_reaches_customer FAILED [ 21%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step6_resolve_and_csat FAILED [ 26%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_placeholder_then_edit FAILED [ 30%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_edit_visible_in_squad FAILED [ 34%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_agent_escalation_notifies_squad FAILED [ 39%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_timeout_reverts_to_auto FAILED [ 43%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuCSATFlow::test_csat_score_submission FAILED [ 47%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuConversationReactivation::test_reactivation_loads_history FAILED [ 52%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_takeover_agent_side_not_in_customer FAILED [ 56%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_copilot_operator_thread_not_in_customer FAILED [ 60%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_status_command FAILED [ 65%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_dispatch_command FAILED [ 69%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_review_command FAILED [ 73%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuSLABreach::test_sla_breach_alert FAILED [ 78%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_group_auto_registered_on_bot_added FAILED [ 82%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_operator_in_squad_group_can_use_operator_commands FAILED [ 86%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_admin_in_admin_group_can_use_admin_commands FAILED [ 91%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_cannot_use_operator_commands FAILED [ 95%]
+tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_group_disbanded_archives_conversation SKIPPED [100%]
+
+=================================== FAILURES ===================================
+______________ TestFeishuFullJourney.test_step1_customer_onboard _______________
+
+self = <test_feishu_e2e.TestFeishuFullJourney object at 0x74a1a9e0ead0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_step1_customer_onboard(self, feishu, groups, bridge_ws, full_stack):
+        """US-2.1: 客户接入 → agent 回复
+    
+        通过 Bridge API 发送 customer_connect + customer_message
+        → channel-server 创建 conversation → dispatch agent
+        → agent 回复 → feishu_bridge → 飞书 customer 群收到回复
+        """
+        conv_id = groups["customer_chat"]
+        bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+        bridge_ws.customer_message(conv_id, "B 套餐多少钱")
+    
+        # 验证: 飞书 customer 群收到 agent 回复
+>       msg = feishu.assert_message_appears(
+            groups["customer_chat"],
+            contains="",  # agent 任意回复即可
+            timeout=30,
+        )
+
+tests/pre_release/test_feishu_e2e.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+chat_id = 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', contains = '', timeout = 30
+
+    def assert_message_appears(
+        self, chat_id: str, contains: str, timeout: int = 30
+    ) -> dict:
+        """轮询直到群内出现包含指定文本的消息。"""
+        start = time.time()
+        start_ts = str(int(start))
+        while time.time() - start < timeout:
+            messages = self.list_messages(chat_id, start_time=start_ts)
+            for m in messages:
+                if contains in m.get("content", ""):
+                    return m
+            time.sleep(2)
+>       raise AssertionError(
+            f"Message containing '{contains}' not found in {chat_id} within {timeout}s"
+        )
+E       AssertionError: Message containing '' not found in oc_3e33d9eddc980a800c3eefa01c6ca0f7 within 30s
+
+feishu_bridge/test_client.py:134: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+Default project set to 'prerelease-test'.
+Skip attaching session.
+ergo running (pid 23595, port 6667).
+Created yaosh-fast-agent (type: claude)
+  tab: yaosh-fast-agent
+  workspace: /home/yaosh/.zchat/projects/prerelease-test/agents/yaosh-fast-agent
+Created yaosh-deep-agent (type: claude)
+  tab: yaosh-deep-agent
+  workspace: /home/yaosh/.zchat/projects/prerelease-test/agents/yaosh-deep-agent
+[Lark] [2026-04-16 13:06:02,101] [INFO] connected to wss://msg-frontier.feishu.cn/ws/v2?fpid=493&aid=552564&device_id=7629218957425282269&access_key=0f98c044752e8a44c0bb25635931c1eb&service_id=33554678&ticket=5a6fe0f8-a8bf-4189-a17d-600501252b3c [conn_id=7629218957425282269]
+[Lark] [2026-04-16 13:06:02,102] [DEBUG] ping success [conn_id=7629218957425282269]
+---------------------------- Captured stderr setup -----------------------------
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[channel-server] plugins loaded: ['on_agent_public_message', 'on_conversation_created', 'on_edit_sent', 'on_placeholder_sent']
+[channel-server] Bridge API listening on 127.0.0.1:9999
+[channel-server] IRC bot 'cs-bot' connecting to 127.0.0.1:6667
+[irc_transport] Joined #general
+[irc_transport] cs-bot ready on IRC (127.0.0.1:6667)
+opening handshake failed
+Traceback (most recent call last):
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/http11.py", line 138, in parse
+    request_line = yield from parse_line(read_line)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/http11.py", line 320, in parse_line
+    line = yield from read_line(MAX_LINE_LENGTH)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/streams.py", line 46, in read_line
+    raise EOFError(f"stream ends after {p} bytes, before end of line")
+EOFError: stream ends after 0 bytes, before end of line
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/server.py", line 547, in parse
+    request = yield from Request.parse(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.reader.read_line,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/http11.py", line 140, in parse
+    raise EOFError("connection closed while reading HTTP request line") from exc
+EOFError: connection closed while reading HTTP request line
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/asyncio/server.py", line 356, in conn_handler
+    await connection.handshake(
+    ...<3 lines>...
+    )
+  File "/home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/asyncio/server.py", line 207, in handshake
+    raise self.protocol.handshake_exc
+websockets.exceptions.InvalidMessage: did not receive a valid HTTP request
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=zchat-channel-server/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+----------------------------- Captured stdout call -----------------------------
+[Lark] [2026-04-16 13:06:02,206] [DEBUG] receive pong [conn_id=7629218957425282269]
+[Lark] [2026-04-16 13:06:05,364] [DEBUG] POST https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal 200, headers: {"User-Agent": "oapi-sdk-python/v1.5.3"}, params: [], body: {"app_id": "cli_a954c9f4d438dcb2", "app_secret": "9NPcVUHRfSGBm2xA2QX5mbwlFFMqeMfX"}
+[Lark] [2026-04-16 13:06:05,785] [DEBUG] POST https://open.feishu.cn/open-apis/im/v1/messages 200, headers: {"User-Agent": "oapi-sdk-python/v1.5.3", "Content-Type": "application/json; charset=utf-8", "Authorization": "Bearer t-g1044gbL26KPMTHM7MVD35SU4Y426J7IPKLWDONE"}, params: [["receive_id_type", "chat_id"]], body: {"receive_id": "oc_885883b976c16911366a75006d4a8dd6", "msg_type": "text", "content": "{\"text\": \"[\\u7cfb\\u7edf] [escalation] \\u9700\\u8981\\u4eba\\u5de5\\u4ecb\\u5165: oc_3e33d9eddc980a800c3eefa01c6ca0f7\"}"}
+[Lark] [2026-04-16 13:06:06,291] [DEBUG] POST https://open.feishu.cn/open-apis/im/v1/messages 200, headers: {"User-Agent": "oapi-sdk-python/v1.5.3", "Content-Type": "application/json; charset=utf-8", "Authorization": "Bearer t-g1044gbL26KPMTHM7MVD35SU4Y426J7IPKLWDONE"}, params: [["receive_id_type", "chat_id"]], body: {"receive_id": "oc_885883b976c16911366a75006d4a8dd6", "msg_type": "text", "content": "{\"text\": \"[\\u7cfb\\u7edf] [SLA \\u544a\\u8b66] conv_id=oc_3e33d9eddc980a800c3eefa01c6ca0f7 breach=sla_onboard timeout=3.0s\"}"}
+___________ TestFeishuFullJourney.test_step2_squad_card_notification ___________
+
+self = <test_feishu_e2e.TestFeishuFullJourney object at 0x74a1a9e0efd0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_step2_squad_card_notification(self, feishu, groups, full_stack):
+        """US-2.3: 分队群收到 interactive card（不是纯文本）
+    
+        conversation.created 事件 → feishu_bridge VisibilityRouter
+        → 在 squad 群发 interactive card（thread root）
+        """
+>       card = feishu.assert_card_appears(
+            groups["squad_chat"],
+            contains="进行中",
+            timeout=15,
+        )
+
+tests/pre_release/test_feishu_e2e.py:59: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+chat_id = 'oc_ee40c7c69521c7a30184b9d5b1ce2736', contains = '进行中', timeout = 15
+
+    def assert_card_appears(
+        self, chat_id: str, contains: str, timeout: int = 30
+    ) -> dict:
+        """轮询直到群内出现包含指定内容的卡片消息。"""
+        start = time.time()
+        start_ts = str(int(start))
+        while time.time() - start < timeout:
+            messages = self.list_messages(chat_id, start_time=start_ts)
+            for m in messages:
+                if m.get("msg_type") == "interactive":
+                    if contains in m.get("content", ""):
+                        return m
+            time.sleep(2)
+>       raise AssertionError(
+            f"Card containing '{contains}' not found in {chat_id} within {timeout}s"
+        )
+E       AssertionError: Card containing '进行中' not found in oc_ee40c7c69521c7a30184b9d5b1ce2736 within 15s
+
+feishu_bridge/test_client.py:178: AssertionError
+___________ TestFeishuFullJourney.test_step3_copilot_in_squad_thread ___________
+
+self = <test_feishu_e2e.TestFeishuFullJourney object at 0x74a1a9d43490>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_step3_copilot_in_squad_thread(self, feishu, groups, bridge_ws, full_stack):
+        """US-2.4: copilot 模式 — operator 在 squad thread 发建议，客户群看不到
+    
+        operator_message(side) → channel-server Gate 判定 side
+        → feishu_bridge 只发到 squad thread，不发到 customer 群
+        """
+        conv_id = _state.get("conv_id")
+        if not conv_id:
+>           pytest.fail("conv_id 未在 step1 中设置")
+E           Failed: conv_id 未在 step1 中设置
+
+tests/pre_release/test_feishu_e2e.py:76: Failed
+_________________ TestFeishuFullJourney.test_step4_auto_hijack _________________
+
+self = <test_feishu_e2e.TestFeishuFullJourney object at 0x74a1a9d436f0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_step4_auto_hijack(self, feishu, groups, bridge_ws, full_stack):
+        """US-2.5: operator 发 /hijack → mode 切换为 takeover
+    
+        operator_command(/hijack) → channel-server mode.changed
+        → feishu_bridge 更新 squad card 状态
+        """
+        conv_id = _state.get("conv_id")
+        if not conv_id:
+>           pytest.fail("conv_id 未在 step1 中设置")
+E           Failed: conv_id 未在 step1 中设置
+
+tests/pre_release/test_feishu_e2e.py:97: Failed
+______ TestFeishuFullJourney.test_step5_operator_message_reaches_customer ______
+
+self = <test_feishu_e2e.TestFeishuFullJourney object at 0x74a1a9c65fd0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_step5_operator_message_reaches_customer(self, feishu, groups, bridge_ws, full_stack):
+        """US-2.6: takeover 下 operator 消息 → 客户可见
+    
+        operator_message 在 takeover 模式下 → Gate 判定 public
+        → feishu_bridge 发到 customer 群
+        """
+        conv_id = _state.get("conv_id")
+        if not conv_id:
+>           pytest.fail("conv_id 未在 step1 中设置")
+E           Failed: conv_id 未在 step1 中设置
+
+tests/pre_release/test_feishu_e2e.py:117: Failed
+______________ TestFeishuFullJourney.test_step6_resolve_and_csat _______________
+
+self = <test_feishu_e2e.TestFeishuFullJourney object at 0x74a1a9dc2cf0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_step6_resolve_and_csat(self, feishu, groups, bridge_ws, full_stack):
+        """US-2.6: /resolve → CSAT 卡片"""
+        conv_id = _state.get("conv_id")
+        if not conv_id:
+>           pytest.fail("conv_id 未在 step1 中设置")
+E           Failed: conv_id 未在 step1 中设置
+
+tests/pre_release/test_feishu_e2e.py:133: Failed
+___________ TestFeishuPlaceholderAndEdit.test_placeholder_then_edit ____________
+
+self = <test_feishu_e2e.TestFeishuPlaceholderAndEdit object at 0x74a1a9e0ee90>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_placeholder_then_edit(self, feishu, groups, bridge_ws, full_stack):
+        """US-2.2: 复杂查询 → fast-agent 占位 → deep-agent edit 替换"""
+        conv_id = groups["customer_chat"]
+    
+        # 发起新 conversation（如果未连接）
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "A 和 B 套餐的详细对比？能不能自定义？")
+
+tests/pre_release/test_feishu_e2e.py:166: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+___________ TestFeishuPlaceholderAndEdit.test_edit_visible_in_squad ____________
+
+self = <test_feishu_e2e.TestFeishuPlaceholderAndEdit object at 0x74a1a9e0f110>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_edit_visible_in_squad(self, feishu, groups, full_stack):
+        """编辑后的消息在分队群 thread 中也能看到"""
+>       feishu.assert_message_appears(
+            groups["squad_chat"],
+            contains="",  # squad thread 中有任意消息
+            timeout=15,
+        )
+
+tests/pre_release/test_feishu_e2e.py:180: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+chat_id = 'oc_ee40c7c69521c7a30184b9d5b1ce2736', contains = '', timeout = 15
+
+    def assert_message_appears(
+        self, chat_id: str, contains: str, timeout: int = 30
+    ) -> dict:
+        """轮询直到群内出现包含指定文本的消息。"""
+        start = time.time()
+        start_ts = str(int(start))
+        while time.time() - start < timeout:
+            messages = self.list_messages(chat_id, start_time=start_ts)
+            for m in messages:
+                if contains in m.get("content", ""):
+                    return m
+            time.sleep(2)
+>       raise AssertionError(
+            f"Message containing '{contains}' not found in {chat_id} within {timeout}s"
+        )
+E       AssertionError: Message containing '' not found in oc_ee40c7c69521c7a30184b9d5b1ce2736 within 15s
+
+feishu_bridge/test_client.py:134: AssertionError
+______ TestFeishuTimerAndEscalation.test_agent_escalation_notifies_squad _______
+
+self = <test_feishu_e2e.TestFeishuTimerAndEscalation object at 0x74a1a9e0f250>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_agent_escalation_notifies_squad(self, feishu, groups, bridge_ws, full_stack):
+        """Agent 判断超出能力 → escalation → squad 群通知"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "我要退货，你们客服经理在吗")
+
+tests/pre_release/test_feishu_e2e.py:198: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+__________ TestFeishuTimerAndEscalation.test_timeout_reverts_to_auto ___________
+
+self = <test_feishu_e2e.TestFeishuTimerAndEscalation object at 0x74a1a9e0f390>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_timeout_reverts_to_auto(self, feishu, groups, bridge_ws, full_stack):
+        """escalation 后无人接管 → timer → 安抚消息"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "我要找经理投诉")
+
+tests/pre_release/test_feishu_e2e.py:214: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+________________ TestFeishuCSATFlow.test_csat_score_submission _________________
+
+self = <test_feishu_e2e.TestFeishuCSATFlow object at 0x74a1a9e0f4d0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_csat_score_submission(self, feishu, groups, bridge_ws, full_stack):
+        """客户点击评分 → csat_response → set_csat 闭环"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "你好")
+
+tests/pre_release/test_feishu_e2e.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+______ TestFeishuConversationReactivation.test_reactivation_loads_history ______
+
+self = <test_feishu_e2e.TestFeishuConversationReactivation object at 0x74a1a9e0f610>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_reactivation_loads_history(self, feishu, groups, bridge_ws, full_stack):
+        """闲置对话重新激活"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+        # 第一轮对话
+>       bridge_ws.customer_message(conv_id, "B 套餐多少钱")
+
+tests/pre_release/test_feishu_e2e.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_______ TestFeishuGateIsolation.test_takeover_agent_side_not_in_customer _______
+
+self = <test_feishu_e2e.TestFeishuGateIsolation object at 0x74a1a9e0f750>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_takeover_agent_side_not_in_customer(self, feishu, groups, bridge_ws, full_stack):
+        """takeover 下 agent side 消息 → 客户看不到"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "需要帮助")
+
+tests/pre_release/test_feishu_e2e.py:299: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_____ TestFeishuGateIsolation.test_copilot_operator_thread_not_in_customer _____
+
+self = <test_feishu_e2e.TestFeishuGateIsolation object at 0x74a1a9e0f890>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_copilot_operator_thread_not_in_customer(self, feishu, groups, bridge_ws, full_stack):
+        """copilot 下 operator 消息降为 side → 客户看不到"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "你好")
+
+tests/pre_release/test_feishu_e2e.py:322: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_________________ TestFeishuAdminCommands.test_status_command __________________
+
+self = <test_feishu_e2e.TestFeishuAdminCommands object at 0x74a1a9e0f9d0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_status_command(self, feishu, groups, bridge_ws, full_stack):
+        """US-3.2: /status → admin 群收到状态响应"""
+        # 先确保有活跃对话
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+>       bridge_ws.customer_message(conv_id, "你好")
+
+tests/pre_release/test_feishu_e2e.py:345: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+________________ TestFeishuAdminCommands.test_dispatch_command _________________
+
+self = <test_feishu_e2e.TestFeishuAdminCommands object at 0x74a1a9e0fb10>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_dispatch_command(self, feishu, groups, bridge_ws, full_stack):
+        """US-3.2: /dispatch"""
+        conv_id = _state.get("conv_id", groups["customer_chat"])
+>       bridge_ws.admin_command(f"/dispatch {conv_id} deep-agent")
+
+tests/pre_release/test_feishu_e2e.py:360: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:191: in admin_command
+    self.send({
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_________________ TestFeishuAdminCommands.test_review_command __________________
+
+self = <test_feishu_e2e.TestFeishuAdminCommands object at 0x74a1a9d435c0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_review_command(self, feishu, groups, bridge_ws, full_stack):
+        """US-3.2: /review → 统计汇总"""
+>       bridge_ws.admin_command("/review")
+
+tests/pre_release/test_feishu_e2e.py:369: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:191: in admin_command
+    self.send({
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+__________________ TestFeishuSLABreach.test_sla_breach_alert ___________________
+
+self = <test_feishu_e2e.TestFeishuSLABreach object at 0x74a1a9e0fc50>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_sla_breach_alert(self, feishu, groups, bridge_ws, full_stack):
+        """SLA breach → admin 群告警"""
+        conv_id = groups["customer_chat"]
+        if conv_id not in _state.get("connected_convs", set()):
+            bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+            _state.setdefault("connected_convs", set()).add(conv_id)
+    
+>       bridge_ws.customer_message(conv_id, "我要找经理投诉，马上解决")
+
+tests/pre_release/test_feishu_e2e.py:390: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_ TestFeishuAuthorizationModel.test_customer_group_auto_registered_on_bot_added _
+
+self = <test_feishu_e2e.TestFeishuAuthorizationModel object at 0x74a1a9e0fd90>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_customer_group_auto_registered_on_bot_added(self, feishu, groups, bridge_ws, full_stack):
+        """customer_connect → 有回复"""
+        conv_id = groups["customer_chat"]
+>       bridge_ws.customer_connect(conv_id, customer_name="TestCustomer")
+
+tests/pre_release/test_feishu_e2e.py:411: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:151: in customer_connect
+    self.send({
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_ TestFeishuAuthorizationModel.test_operator_in_squad_group_can_use_operator_commands _
+
+self = <test_feishu_e2e.TestFeishuAuthorizationModel object at 0x74a1a9e0fed0>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_operator_in_squad_group_can_use_operator_commands(self, feishu, groups, bridge_ws, full_stack):
+        """operator /hijack → squad card 更新"""
+        conv_id = _state.get("conv_id", groups["customer_chat"])
+>       bridge_ws.operator_command(conv_id, "/hijack")
+
+tests/pre_release/test_feishu_e2e.py:422: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:184: in operator_command
+    self.send({
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+_ TestFeishuAuthorizationModel.test_admin_in_admin_group_can_use_admin_commands _
+
+self = <test_feishu_e2e.TestFeishuAuthorizationModel object at 0x74a1a9d43820>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_admin_in_admin_group_can_use_admin_commands(self, feishu, groups, bridge_ws, full_stack):
+        """admin /status → 有响应"""
+>       bridge_ws.admin_command("/status")
+
+tests/pre_release/test_feishu_e2e.py:431: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:191: in admin_command
+    self.send({
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+___ TestFeishuAuthorizationModel.test_customer_cannot_use_operator_commands ____
+
+self = <test_feishu_e2e.TestFeishuAuthorizationModel object at 0x74a1a9d43950>
+feishu = <feishu_bridge.test_client.FeishuTestClient object at 0x74a1a4408c20>
+groups = {'admin_chat': 'oc_885883b976c16911366a75006d4a8dd6', 'customer_chat': 'oc_3e33d9eddc980a800c3eefa01c6ca0f7', 'squad_chat': 'oc_ee40c7c69521c7a30184b9d5b1ce2736'}
+bridge_ws = <conftest.bridge_ws.<locals>.BridgeWSClient object at 0x74a1a3f102f0>
+full_stack = {'bridge_proc': <Popen: returncode: None args: ['uv', 'run', 'python', '-m', 'feishu_bridge'...>, 'cs_proc': <Popen: returncode: None args: ['uv', 'run', 'zchat-channel']>}
+
+    def test_customer_cannot_use_operator_commands(self, feishu, groups, bridge_ws, full_stack):
+        """customer 发 /hijack → 不应出现 takeover 确认"""
+        conv_id = groups["customer_chat"]
+>       bridge_ws.customer_message(conv_id, "/hijack")
+
+tests/pre_release/test_feishu_e2e.py:441: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/pre_release/conftest.py:173: in customer_message
+    self.send(msg)
+tests/pre_release/conftest.py:148: in send
+    self._loop.run_until_complete(_send())
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/pre_release/conftest.py:147: in _send
+    await self._ws.send(_json.dumps(msg))
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:478: in send
+    async with self.send_context():
+               ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/lib/python3.13/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <websockets.asyncio.client.ClientConnection object at 0x74a1a3f11d30>
+
+    @contextlib.asynccontextmanager
+    async def send_context(
+        self,
+        *,
+        expected_state: State = OPEN,  # CONNECTING during the opening handshake
+    ) -> AsyncIterator[None]:
+        """
+        Create a context for writing to the connection from user code.
+    
+        On entry, :meth:`send_context` checks that the connection is open; on
+        exit, it writes outgoing data to the socket::
+    
+            async with self.send_context():
+                self.protocol.send_text(message.encode())
+    
+        When the connection isn't open on entry, when the connection is expected
+        to close on exit, or when an unexpected error happens, terminating the
+        connection, :meth:`send_context` waits until the connection is closed
+        then raises :exc:`~websockets.exceptions.ConnectionClosed`.
+    
+        """
+        # Should we wait until the connection is closed?
+        wait_for_close = False
+        # Should we close the transport and raise ConnectionClosed?
+        raise_close_exc = False
+        # What exception should we chain ConnectionClosed to?
+        original_exc: BaseException | None = None
+    
+        if self.protocol.state is expected_state:
+            # Let the caller interact with the protocol.
+            try:
+                yield
+            except (ProtocolError, ConcurrencyError):
+                # The protocol state wasn't changed. Exit immediately.
+                raise
+            except Exception as exc:
+                self.logger.error("unexpected internal error", exc_info=True)
+                # This branch should never run. It's a safety net in case of
+                # bugs. Since we don't know what happened, we will close the
+                # connection and raise the exception to the caller.
+                wait_for_close = False
+                raise_close_exc = True
+                original_exc = exc
+            else:
+                # Check if the connection is expected to close soon.
+                if self.protocol.close_expected():
+                    wait_for_close = True
+                    # Set the close deadline based on the close timeout.
+                    # Since we tested earlier that protocol.state is OPEN
+                    # (or CONNECTING), self.close_deadline is still None.
+                    assert self.close_deadline is None
+                    if self.close_timeout is not None:
+                        self.close_deadline = self.loop.time() + self.close_timeout
+                # Write outgoing data to the socket with flow control.
+                try:
+                    self.send_data()
+                    await self.drain()
+                except Exception as exc:
+                    if self.debug:
+                        self.logger.debug(
+                            "! error while sending data",
+                            exc_info=True,
+                        )
+                    # While the only expected exception here is OSError,
+                    # other exceptions would be treated identically.
+                    wait_for_close = False
+                    raise_close_exc = True
+                    original_exc = exc
+    
+        else:  # self.protocol.state is not expected_state
+            # Minor layering violation: we assume that the connection
+            # will be closing soon if it isn't in the expected state.
+            wait_for_close = True
+            # Calculate close_deadline if it wasn't set yet.
+            if self.close_deadline is None:
+                if self.close_timeout is not None:
+                    self.close_deadline = self.loop.time() + self.close_timeout
+            raise_close_exc = True
+    
+        # If the connection is expected to close soon and the close timeout
+        # elapses, close the socket to terminate the connection.
+        if wait_for_close:
+            try:
+                async with asyncio_timeout_at(self.close_deadline):
+                    await asyncio.shield(self.connection_lost_waiter)
+            except TimeoutError:
+                # There's no risk of overwriting another error because
+                # original_exc is never set when wait_for_close is True.
+                assert original_exc is None
+                original_exc = TimeoutError("timed out while closing connection")
+                # Set recv_exc before closing the transport in order to get
+                # proper exception reporting.
+                raise_close_exc = True
+                self.set_recv_exc(original_exc)
+    
+        # If an error occurred, close the transport to terminate the connection and
+        # raise an exception.
+        if raise_close_exc:
+            self.transport.abort()
+            # Wait for the protocol state to be CLOSED before accessing close_exc.
+            await asyncio.shield(self.connection_lost_waiter)
+>           raise self.protocol.close_exc from original_exc
+E           websockets.exceptions.ConnectionClosedError: received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout
+
+.venv/lib/python3.13/site-packages/websockets/asyncio/connection.py:965: ConnectionClosedError
+=============================== warnings summary ===============================
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26: DeprecationWarning: There is no current event loop
+    loop = asyncio.get_event_loop()
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67: DeprecationWarning: websockets.InvalidStatusCode is deprecated
+    def _parse_ws_conn_exception(e: websockets.InvalidStatusCode):
+
+tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step1_customer_onboard
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step2_squad_card_notification
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step3_copilot_in_squad_thread
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step4_auto_hijack
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step5_operator_message_reaches_customer
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuFullJourney::test_step6_resolve_and_csat
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_placeholder_then_edit
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuPlaceholderAndEdit::test_edit_visible_in_squad
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_agent_escalation_notifies_squad
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuTimerAndEscalation::test_timeout_reverts_to_auto
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuCSATFlow::test_csat_score_submission
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuConversationReactivation::test_reactivation_loads_history
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_takeover_agent_side_not_in_customer
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuGateIsolation::test_copilot_operator_thread_not_in_customer
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_status_command
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_dispatch_command
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAdminCommands::test_review_command
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuSLABreach::test_sla_breach_alert
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_group_auto_registered_on_bot_added
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_operator_in_squad_group_can_use_operator_commands
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_admin_in_admin_group_can_use_admin_commands
+FAILED tests/pre_release/test_feishu_e2e.py::TestFeishuAuthorizationModel::test_customer_cannot_use_operator_commands
+============ 22 failed, 1 skipped, 4 warnings in 224.74s (0:03:44) =============

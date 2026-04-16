@@ -1,0 +1,38 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /home/yaosh/projects/zchat/zchat-channel-server/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/yaosh/projects/zchat/zchat-channel-server
+configfile: pytest.ini
+plugins: asyncio-1.3.0, anyio-4.12.1, timeout-2.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+timeout: 60.0s
+timeout method: signal
+timeout func_only: False
+collecting ... collected 24 items
+
+tests/e2e/test_bridge_registration.py::test_register_returns_registered_ack PASSED [  4%]
+tests/e2e/test_bridge_registration.py::test_register_capabilities_preserved PASSED [  8%]
+tests/e2e/test_command_handlers.py::test_resolve_emits_event_and_csat PASSED [ 12%]
+tests/e2e/test_command_handlers.py::test_status_returns_formatted_reply PASSED [ 16%]
+tests/e2e/test_command_handlers.py::test_dispatch_emits_agent_dispatched PASSED [ 20%]
+tests/e2e/test_csat_flow.py::test_csat_e2e_card_to_score PASSED          [ 25%]
+tests/e2e/test_csat_flow.py::test_csat_e2e_invalid_score_ignored PASSED  [ 29%]
+tests/e2e/test_customer_connect.py::test_customer_connect_creates_conversation PASSED [ 33%]
+tests/e2e/test_db_lifecycle.py::test_full_lifecycle_single_db PASSED     [ 37%]
+tests/e2e/test_gate_enforcement.py::test_side_message_not_received_by_customer PASSED [ 41%]
+tests/e2e/test_gate_enforcement.py::test_mode_changed_event_broadcast_to_all PASSED [ 45%]
+tests/e2e/test_message_protocol.py::test_edit_e2e_flow PASSED            [ 50%]
+tests/e2e/test_message_protocol.py::test_side_e2e_flow PASSED            [ 54%]
+tests/e2e/test_mode_switching.py::test_operator_join_triggers_copilot PASSED [ 58%]
+tests/e2e/test_mode_switching.py::test_hijack_triggers_takeover PASSED   [ 62%]
+tests/e2e/test_p2_commands.py::test_abandon_e2e_flow PASSED              [ 66%]
+tests/e2e/test_p2_commands.py::test_assign_then_squad_e2e PASSED         [ 70%]
+tests/e2e/test_routing.py::test_auto_dispatch_on_create PASSED           [ 75%]
+tests/e2e/test_routing.py::test_dispatch_whitelist_reject_e2e PASSED     [ 79%]
+tests/e2e/test_routing.py::test_dispatch_whitelist_pass_e2e PASSED       [ 83%]
+tests/e2e/test_server_startup.py::test_server_subprocess_alive PASSED    [ 87%]
+tests/e2e/test_sla_alerts.py::test_review_command_e2e PASSED             [ 91%]
+tests/e2e/test_sla_alerts.py::test_review_with_conversation PASSED       [ 95%]
+tests/e2e/test_sla_timers.py::test_sla_onboard_breach_e2e PASSED         [100%]
+
+======================== 24 passed in 164.63s (0:02:44) ========================

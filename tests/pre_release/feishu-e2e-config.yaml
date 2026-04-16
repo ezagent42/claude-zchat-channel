@@ -6,12 +6,13 @@ feishu:
   app_secret: ${FEISHU_APP_SECRET}
 
 groups:
-  # customer_chat 由 GroupManager 动态管理（bot 被拉入群时注册）
-  # 以下是 load_config() 需要的 key
   admin_chat_id: "oc_885883b976c16911366a75006d4a8dd6"     # cs-admin
   squad_chats:
     - chat_id: "oc_ee40c7c69521c7a30184b9d5b1ce2736"       # cs-squad
       name: "cs-squad"
+  # 预注册 customer chat（正式环境通过 bot_added 事件动态注册）
+  customer_chats:
+    - "oc_3e33d9eddc980a800c3eefa01c6ca0f7"                # cs-customer
 
 # customer chat_id 用于 FeishuTestClient 直接发消息
 test:

@@ -261,6 +261,19 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
 
     channels = [c.strip() for c in IRC_CHANNELS.split(",") if c.strip()]
+
+    # 文件锁避免 Claude Code 启动多个 MCP 实例时 IRC nick collision
+    # 只有拿到锁的实例连 IRC，其他实例只提供 MCP tools
+    import fcntl
+    lock_path = os.path.join(os.environ.get("WORKSPACE", "/tmp"), ".irc.lock")
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        irc_primary = True
+    except (IOError, OSError):
+        irc_primary = False
+        print(f"[agent-mcp] IRC lock held by another instance, skipping IRC", file=sys.stderr)
+
     irc_transport = IRCTransport(
         server=IRC_SERVER,
         port=IRC_PORT,
@@ -268,7 +281,7 @@ async def main() -> None:
         channels=channels,
         tls=IRC_TLS,
         auth_token=IRC_AUTH_TOKEN,
-    )
+    ) if irc_primary else None
 
     server = create_server()
     state: dict = {}
@@ -292,15 +305,27 @@ async def main() -> None:
         loop.call_soon_threadsafe(queue.put_nowait, (msg, channel))
 
     def _on_privmsg(nick: str, body: str):
+        # PRIVMSG 格式: "[conv_id] sender: text"
+        # 提取 conv_id 作为 chat_id（agent reply 发回给 sender nick，
+        # 消息内容带 conv_id 前缀让 server 知道属于哪个 conversation）
+        actual_body = body
+        conv_id = ""
+        if body.startswith("[") and "] " in body:
+            bracket_end = body.index("] ")
+            conv_id = body[1:bracket_end]
+            actual_body = body[bracket_end + 2:]
+        # context = sender nick; agent reply 发回给 sender（cs-bot）
+        # conv_id 嵌在 inject 的 meta.chat_id 里让 Claude 用于 reply 的 chat_id
+        context = nick
         msg = {
             "id": os.urandom(4).hex(),
             "nick": nick,
             "type": "msg",
-            "body": body,
+            "body": actual_body,
             "ts": time.time(),
         }
-        print(f"[agent-mcp] [private:{nick}] {nick}: {body}", file=sys.stderr)
-        loop.call_soon_threadsafe(queue.put_nowait, (msg, nick))
+        print(f"[agent-mcp] [private:{nick} conv={conv_id}] {actual_body}", file=sys.stderr)
+        loop.call_soon_threadsafe(queue.put_nowait, (msg, context))
 
     init_opts = InitializationOptions(
         server_name=f"zchat-agent-{AGENT_NAME}",
@@ -313,19 +338,22 @@ async def main() -> None:
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await anyio.sleep(2)
-        connection = irc_transport.start(
-            queue,
-            loop,
-            on_pubmsg=_on_pubmsg,
-            on_privmsg_text=_on_privmsg,
-        )
-        state["irc_connection"] = connection
+        if irc_transport is not None:
+            connection = irc_transport.start(
+                queue,
+                loop,
+                on_pubmsg=_on_pubmsg,
+                on_privmsg_text=_on_privmsg,
+            )
+            state["irc_connection"] = connection
         try:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(server.run, read_stream, write_stream, init_opts)
-                tg.start_soon(poll_irc_queue, queue, write_stream)
+                if irc_transport is not None:
+                    tg.start_soon(poll_irc_queue, queue, write_stream)
         finally:
-            irc_transport.disconnect("Agent shutting down")
+            if irc_transport is not None:
+                irc_transport.disconnect("Agent shutting down")
 
 
 def entry_point() -> None:

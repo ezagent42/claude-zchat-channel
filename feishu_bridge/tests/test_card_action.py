@@ -177,14 +177,15 @@ async def test_card_action_sends_csat_to_bridge() -> None:
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
-    mock_ws = AsyncMock()
-    bridge._bridge_ws = mock_ws
+    mock_client = MagicMock()
+    mock_client.connected = True
+    bridge._bridge_client = mock_client
 
     payload = {"action": {"value": {"score": "3", "conv_id": "conv_42"}}}
     bridge._on_card_action(payload)
 
-    mock_ws.send.assert_called_once()
-    sent = json.loads(mock_ws.send.call_args[0][0])
+    mock_client.send.assert_called_once()
+    sent = mock_client.send.call_args[0][0]
     assert sent["type"] == "customer_message"
     assert sent["conversation_id"] == "conv_42"
     assert sent["csat_score"] == 3
@@ -200,21 +201,22 @@ def test_card_action_missing_fields_noop() -> None:
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
-    mock_ws = AsyncMock()
-    bridge._bridge_ws = mock_ws
+    mock_client = MagicMock()
+    mock_client.connected = True
+    bridge._bridge_client = mock_client
 
     # 缺 score
     bridge._on_card_action({"action": {"value": {"conv_id": "c1"}}})
-    mock_ws.send.assert_not_called()
+    mock_client.send.assert_not_called()
 
     # 缺 conv_id
     bridge._on_card_action({"action": {"value": {"score": "5"}}})
-    mock_ws.send.assert_not_called()
+    mock_client.send.assert_not_called()
 
     # action 结构异常
     bridge._on_card_action({"foo": "bar"})
-    mock_ws.send.assert_not_called()
+    mock_client.send.assert_not_called()
 
     # 空 payload
     bridge._on_card_action({})
-    mock_ws.send.assert_not_called()
+    mock_client.send.assert_not_called()

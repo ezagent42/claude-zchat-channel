@@ -24,6 +24,7 @@ from lark_oapi.api.im.v1 import (
     P2ImMessageReceiveV1,
 )
 
+from feishu_bridge.bridge_api_client import BridgeAPIClient
 from feishu_bridge.config import BridgeConfig, load_config
 from feishu_bridge.group_manager import GroupManager
 from feishu_bridge.message_parsers import parse_message
@@ -63,6 +64,10 @@ class FeishuBridge:
             admin_chat_id=config.groups.admin_chat_id,
         )
 
+        # 预注册 customer chats（可选，正式环境通过 bot_added 事件动态注册）
+        for chat_id in getattr(config.groups, 'customer_chats', []):
+            self.group_manager.register_customer_chat(chat_id)
+
         # 文件下载目录
         self._upload_dir = Path(config.upload_dir)
         self._upload_dir.mkdir(parents=True, exist_ok=True)
@@ -71,7 +76,22 @@ class FeishuBridge:
         # 签名：(conversation_id: str, operator_id: str, text: str) -> None
         self.on_auto_hijack: Callable[[str, str, str], Any] | None = None
 
-        # Bridge API WebSocket 连接（start 时建立）
+        # Bridge API 传输层
+        self._bridge_client = BridgeAPIClient(
+            config.channel_server_url,
+            register_data={
+                "type": "register",
+                "bridge_type": "feishu",
+                "instance_id": "feishu-bridge",
+                "capabilities": ["customer", "operator", "admin"],
+            },
+        )
+        self._bridge_client.on_message = self._on_bridge_event
+
+        # 已连接的 conversation（避免重复 customer_connect）
+        self._known_conversations: set[str] = set()
+
+        # Bridge API WebSocket 连接（兼容旧的 _on_card_action 引用）
         self._bridge_ws: Any | None = None
 
     # ------------------------------------------------------------------
@@ -114,6 +134,10 @@ class FeishuBridge:
             and self.group_manager.is_operator_in_customer_chat(sender_open_id, chat_id)
         ):
             self._trigger_auto_hijack(chat_id, sender_open_id, text)
+
+        # ── 转发到 channel-server Bridge API ──────────────────────
+        message_id = msg.message_id or ""
+        self._forward_to_bridge(role, chat_id, text, message_id, sender_open_id)
 
     def _trigger_auto_hijack(
         self, conversation_id: str, operator_id: str, text: str
@@ -180,6 +204,104 @@ class FeishuBridge:
             log.info("Group %s disbanded", chat_id)
 
     # ------------------------------------------------------------------
+    # Bridge API 协议适配（入站：飞书 → channel-server）
+    # ------------------------------------------------------------------
+
+    def _forward_to_bridge(
+        self, role: str, chat_id: str, text: str,
+        message_id: str, sender_id: str,
+    ) -> None:
+        """根据角色将飞书消息转发到 channel-server Bridge API。"""
+        if not self._bridge_client.connected:
+            return
+        if role == "customer":
+            # 首次消息 → customer_connect + squad card + customer_message
+            if chat_id not in self._known_conversations:
+                customer_data = {"id": sender_id, "name": sender_id}
+                self._bridge_client.send({
+                    "type": "customer_connect",
+                    "conversation_id": chat_id,
+                    "customer": customer_data,
+                    "metadata": {"source": "feishu"},
+                })
+                # 在 squad 群创建 conversation card（thread root）
+                self.visibility_router.on_conversation_created(
+                    chat_id, metadata={"customer": customer_data, "source": "feishu"},
+                )
+                self._known_conversations.add(chat_id)
+            self._bridge_client.send({
+                "type": "customer_message",
+                "conversation_id": chat_id,
+                "text": text,
+                "message_id": message_id,
+            })
+
+        elif role == "operator":
+            # / 开头 → operator_command，否则 → operator_message
+            conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
+            if not conv_id:
+                log.debug("operator message in squad %s but no active conversation", chat_id)
+                return
+            if text.startswith("/"):
+                self._bridge_client.send({
+                    "type": "operator_command",
+                    "conversation_id": conv_id,
+                    "command": text,
+                    "operator_id": sender_id,
+                })
+            else:
+                self._bridge_client.send({
+                    "type": "operator_message",
+                    "conversation_id": conv_id,
+                    "text": text,
+                    "operator_id": sender_id,
+                })
+
+        elif role == "admin":
+            self._bridge_client.send({
+                "type": "admin_command",
+                "command": text,
+            })
+
+    # ------------------------------------------------------------------
+    # Bridge API 协议适配（出站：channel-server → 飞书）
+    # ------------------------------------------------------------------
+
+    def _on_bridge_event(self, msg: dict) -> None:
+        """处理从 channel-server 收到的 Bridge API 事件。"""
+        msg_type = msg.get("type", "")
+        conv_id = msg.get("conversation_id", "")
+
+        if msg_type == "reply":
+            self.visibility_router.route(conv_id, msg)
+
+        elif msg_type == "edit":
+            cs_msg_id = msg.get("message_id", "")
+            text = msg.get("text", "")
+            self.visibility_router.on_edit(conv_id, cs_msg_id, text)
+
+        elif msg_type == "conversation.created":
+            metadata = msg.get("metadata", {})
+            self.visibility_router.on_conversation_created(conv_id, metadata)
+
+        elif msg_type == "mode.changed":
+            mode = msg.get("mode", "fast")
+            self.visibility_router.on_mode_changed(conv_id, mode)
+
+        elif msg_type == "conversation.closed":
+            resolution = msg.get("resolution")
+            self.visibility_router.on_conversation_closed(conv_id, resolution)
+
+        elif msg_type == "csat_request":
+            self.visibility_router.route(conv_id, msg)
+
+        elif msg_type in ("registered", "customer_connected"):
+            log.debug("ack: %s", msg_type)
+
+        else:
+            log.debug("unhandled bridge event: %s", msg_type)
+
+    # ------------------------------------------------------------------
     # 卡片回调 (card.action.trigger)
     # ------------------------------------------------------------------
 
@@ -206,23 +328,14 @@ class FeishuBridge:
         if score is None or conv_id is None:
             log.debug("card action ignored: missing score or conv_id in %s", payload)
             return
-        if self._bridge_ws is None:
-            log.warning("card action: no bridge_ws connection, dropping csat score=%d conv=%s", score, conv_id)
+        if not self._bridge_client.connected:
+            log.warning("card action: bridge not connected, dropping csat score=%d conv=%s", score, conv_id)
             return
-        msg = json.dumps({
+        self._bridge_client.send({
             "type": "customer_message",
             "conversation_id": conv_id,
             "csat_score": score,
         })
-        try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self._bridge_ws.send(msg))
-            else:
-                loop.run_until_complete(self._bridge_ws.send(msg))
-        except Exception:
-            log.exception("Failed to send csat score to bridge API: conv=%s score=%d", conv_id, score)
 
     # ------------------------------------------------------------------
     # 文件下载
@@ -282,7 +395,14 @@ class FeishuBridge:
         )
 
     def start(self) -> None:
-        """启动 WSS 长连接（使用 CardAwareClient 支持卡片回调）。"""
+        """启动 Bridge API 客户端 + 飞书 WSS 长连接。"""
+        # 1. 先连接 channel-server Bridge API（后台线程）
+        self._bridge_client.start()
+        import time
+        time.sleep(1)  # 等 WebSocket 连接建立
+        log.info("Bridge API client started → %s", self.config.channel_server_url)
+
+        # 2. 再启动飞书 WSS 长连接（阻塞）
         handler = self.build_event_handler()
         cli = CardAwareClient(
             self.config.feishu.app_id,

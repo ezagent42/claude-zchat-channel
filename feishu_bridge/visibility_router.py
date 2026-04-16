@@ -65,6 +65,13 @@ class VisibilityRouter:
     def get_feishu_msg_id(self, cs_msg_id: str) -> str | None:
         return self._msg_id_map.get(cs_msg_id)
 
+    def get_conversation_for_squad(self, squad_chat_id: str) -> str | None:
+        """反向查找：squad chat_id → 最近活跃的 conversation_id。"""
+        for conv_id, thread in self._threads.items():
+            if thread.squad_chat_id == squad_chat_id and thread.state == "active":
+                return conv_id
+        return None
+
     # ------------------------------------------------------------------
     # Lifecycle：conversation.created
     # ------------------------------------------------------------------
@@ -122,6 +129,9 @@ class VisibilityRouter:
             if thread is not None
             else self.group_manager.get_customer_chat(conversation_id)
         )
+        # Fallback: 飞书场景中 conversation_id 就是 customer chat_id
+        if customer_chat is None and conversation_id.startswith("oc_"):
+            customer_chat = conversation_id
 
         customer_facing_msg_id: str | None = None
 

@@ -1,0 +1,23 @@
+╭─── Claude Code v2.1.110 ───────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting started                                      │
+│               Welcome back jakeroni!               │ Run /init to create a CLAUDE.md file with instructions for C… │
+│                                                    │ ───────────────────────────────────────────────────────────── │
+│                       ▐▛███▜▌                      │ Recent activity                                               │
+│                      ▝▜█████▛▘                     │ No recent activity                                            │
+│                        ▘▘ ▝▝                       │                                                               │
+│   Opus 4.6 (1M context) with hi… · Claude Max ·    │                                                               │
+│   jakeroni                                         │                                                               │
+│    ~/…/prerelease-test/agents/yaosh-fast-agent     │                                                               │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  Listening for channel messages from: server:zchat-agent-mcp
+  Experimental · inbound messages will be pushed into this session, this carries prompt injection risks. Restart
+  Claude Code without --dangerously-load-development-channels to disable.
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  yaosh@localhost:/home/yaosh/.zchat/projects/prerelease-test/agents/yaosh-fast-agent
+  -- INSERT -- ⏵⏵ bypass permissions on (shift+tab to cycle)
+                tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+
