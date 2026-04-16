@@ -18,6 +18,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from feishu_bridge.feishu_renderer import build_conv_card, csat_card
+
 if TYPE_CHECKING:
     from feishu_bridge.group_manager import GroupManager
     from feishu_bridge.sender import FeishuSender
@@ -91,7 +93,7 @@ class VisibilityRouter:
             log.warning("on_conversation_created: no squad chat for %s", conversation_id)
             return None
         meta = dict(metadata or {})
-        card = self._build_conv_card(conversation_id, meta, mode="fast", state="active")
+        card = build_conv_card(conversation_id, meta, mode="fast", state="active")
         card_msg_id = self.sender.send_card(squad_chat, card)
         thread = ConvThread(
             conversation_id=conversation_id,
@@ -157,7 +159,7 @@ class VisibilityRouter:
 
         # CSAT 评分卡片（复用原有逻辑）
         if message.get("type") == "csat_request" and customer_chat:
-            self.sender.send_card(customer_chat, self._csat_card(conversation_id))
+            self.sender.send_card(customer_chat, csat_card(conversation_id))
 
         return customer_facing_msg_id
 
@@ -189,7 +191,7 @@ class VisibilityRouter:
         if not thread or not thread.card_msg_id:
             return False
         thread.mode = mode
-        card = self._build_conv_card(
+        card = build_conv_card(
             conversation_id, thread.metadata, mode=mode, state=thread.state
         )
         return bool(self.sender.update_card(thread.card_msg_id, card))
@@ -206,100 +208,8 @@ class VisibilityRouter:
         thread.state = "closed"
         if resolution:
             thread.metadata["resolution"] = resolution
-        card = self._build_conv_card(
+        card = build_conv_card(
             conversation_id, thread.metadata, mode=thread.mode, state="closed"
         )
         return bool(self.sender.update_card(thread.card_msg_id, card))
 
-    # ------------------------------------------------------------------
-    # Card 构建
-    # ------------------------------------------------------------------
-
-    def _build_conv_card(
-        self,
-        conversation_id: str,
-        metadata: dict,
-        mode: str = "fast",
-        state: str = "active",
-    ) -> dict:
-        """构建 conversation card：header 显示 conv_id + 状态，elements 包含元信息 + 操作按钮。"""
-        state_label = {"active": "进行中", "closed": "已关闭"}.get(state, state)
-        mode_label = {
-            "fast": "快速应答",
-            "copilot": "Copilot",
-            "takeover": "人工接管",
-        }.get(mode, mode)
-        customer = metadata.get("customer") or {}
-        customer_name = customer.get("name") or customer.get("id") or "-"
-
-        title = f"对话 {conversation_id} · {state_label}"
-
-        fields_md_lines = [
-            f"**模式**：{mode_label}",
-            f"**客户**：{customer_name}",
-        ]
-        resolution = metadata.get("resolution")
-        if resolution:
-            outcome = resolution.get("outcome", "-")
-            fields_md_lines.append(f"**结果**：{outcome}")
-            if resolution.get("csat_score") is not None:
-                fields_md_lines.append(f"**CSAT**：{resolution['csat_score']}")
-
-        elements: list[dict] = [
-            {
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": "\n".join(fields_md_lines),
-                },
-            }
-        ]
-
-        # 未关闭时才展示操作按钮（纯展示，交互处理在 cs 侧）
-        if state != "closed":
-            elements.append(
-                {
-                    "tag": "action",
-                    "actions": [
-                        {
-                            "tag": "button",
-                            "text": {"tag": "plain_text", "content": "接管"},
-                            "value": {"action": "hijack", "conv_id": conversation_id},
-                        },
-                        {
-                            "tag": "button",
-                            "text": {"tag": "plain_text", "content": "结案"},
-                            "value": {"action": "resolve", "conv_id": conversation_id},
-                        },
-                    ],
-                }
-            )
-
-        return {
-            "header": {
-                "title": {"tag": "plain_text", "content": title},
-                "template": "red" if state == "closed" else "blue",
-            },
-            "elements": elements,
-        }
-
-    def _csat_card(self, conversation_id: str) -> dict:
-        """生成 CSAT 评分卡片。"""
-        return {
-            "header": {
-                "title": {"content": "请为本次服务评分", "tag": "plain_text"}
-            },
-            "elements": [
-                {
-                    "tag": "action",
-                    "actions": [
-                        {
-                            "tag": "button",
-                            "text": {"content": f"{'⭐' * i}", "tag": "plain_text"},
-                            "value": {"score": str(i), "conv_id": conversation_id},
-                        }
-                        for i in range(1, 6)
-                    ],
-                }
-            ],
-        }
