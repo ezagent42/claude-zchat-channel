@@ -149,12 +149,12 @@ class FeishuBridge:
         if role == "operator" and is_thread_reply:
             conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
             if conv_id and self._bridge_client.connected:
+                # 发 operator_message — channel-server Gate 会根据 mode 判定 visibility
                 self._bridge_client.send({
-                    "type": "message",
+                    "type": "operator_message",
                     "conversation_id": conv_id,
-                    "sender_id": sender_open_id,
+                    "operator_id": sender_open_id,
                     "text": text,
-                    "visibility_hint": "side",
                 })
             return
 
@@ -472,10 +472,29 @@ class FeishuBridge:
     def _on_card_action_event(self, data) -> None:
         """处理通过 EventDispatcherHandler 收到的 card.action.trigger。"""
         try:
-            event = data.event if hasattr(data, "event") else data
-            action = event.get("action", {}) if isinstance(event, dict) else {}
-            if action:
-                self._on_card_action({"action": action})
+            # data 可能是 P2CardActionTrigger 对象或 dict
+            if hasattr(data, "event"):
+                event = data.event
+                # event 可能是对象或 dict
+                if hasattr(event, "action"):
+                    action_obj = event.action
+                    # action 可能是对象，提取 value 和 tag
+                    if hasattr(action_obj, "value"):
+                        value = action_obj.value
+                        tag = getattr(action_obj, "tag", "")
+                        # value 可能是 dict 或对象
+                        if not isinstance(value, dict):
+                            value = vars(value) if hasattr(value, "__dict__") else {}
+                        self._on_card_action({"action": {"value": value, "tag": tag}})
+                        return
+                elif isinstance(event, dict):
+                    action = event.get("action", {})
+                    if action:
+                        self._on_card_action({"action": action})
+                        return
+            # fallback: 尝试直接当 dict
+            if isinstance(data, dict):
+                self._on_card_action(data)
         except Exception:
             log.exception("_on_card_action_event failed")
 

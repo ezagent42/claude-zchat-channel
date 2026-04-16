@@ -332,13 +332,12 @@ class BridgeAPIServer:
                             logger.exception("on_customer_connect callback failed")
 
                 elif msg_type == "message":
-                    # v2 统一 message — 委托到 on_customer_message
-                    # Bridge 通过 sender_id 区分来源；channel-server 不区分角色
+                    # v2 统一 message — 委托到统一 handler
                     if self.on_customer_message:
                         try:
                             await self.on_customer_message(msg)
                         except Exception:
-                            logger.exception("on_customer_message callback failed")
+                            logger.exception("on_message callback failed")
 
                 elif msg_type == "command":
                     # v2 统一 command — 解析后委托到 on_operator_command
