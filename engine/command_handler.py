@@ -169,6 +169,7 @@ class CommandHandler:
         conv_id = msg.get("conversation_id", "")
         if not conv_id:
             return
+        print(f"[server] customer_connect: {conv_id}", file=sys.stderr)
         # 创建 conversation（幂等）
         metadata = dict(msg.get("metadata", {}))
         customer = msg.get("customer")
@@ -179,10 +180,14 @@ class CommandHandler:
         # IRC bot auto-JOIN
         if irc_transport is not None:
             channel = IRCTransport.conv_channel_name(conv_id)
+            print(f"[server] joining {channel}", file=sys.stderr)
             try:
                 irc_transport.join(channel)
+                print(f"[server] joined {channel}", file=sys.stderr)
             except Exception as e:
                 print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
+        else:
+            print("[server] WARNING: no irc_transport, skipping channel join", file=sys.stderr)
 
         # auto-dispatch default_agents
         for agent_nick in self._rc.default_agents:

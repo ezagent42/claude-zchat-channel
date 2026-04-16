@@ -242,9 +242,9 @@ class FeishuBridge:
             "text": text,
             "message_id": message_id,
         })
-        # 写入 squad thread 让 operator 看到客户消息
+        # 写入 squad thread 让 operator 看到客户消息（side = 仅 squad thread，不发 admin）
         self.visibility_router.route(chat_id, {
-            "visibility": "system",
+            "visibility": "side",
             "text": f"[客户] {text}",
         })
 
