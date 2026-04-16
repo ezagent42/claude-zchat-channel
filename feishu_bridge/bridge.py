@@ -146,12 +146,9 @@ class FeishuBridge:
             or getattr(msg, "root_id", None)
             or getattr(msg, "thread_id", None)
         )
-        if role == "operator":
-            import sys as _sys
-            print(f"[bridge] operator msg: is_thread={bool(is_thread_reply)} "
-                  f"parent={getattr(msg, 'parent_id', None)} "
-                  f"root={getattr(msg, 'root_id', None)} "
-                  f"thread={getattr(msg, 'thread_id', None)}", file=_sys.stderr)
+        import sys as _sys
+        print(f"[bridge] role={role} is_thread={bool(is_thread_reply)} "
+              f"chat_id={chat_id}", file=_sys.stderr)
         if role == "operator" and is_thread_reply:
             conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
             log.info("[thread] operator thread reply detected: chat=%s conv=%s connected=%s",
