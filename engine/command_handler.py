@@ -1,10 +1,11 @@
-"""CommandHandler — Operator / Admin 命令处理 (从 server.py 抽取)
+"""CommandHandler — Operator / Admin / Bridge 回调业务逻辑 (从 server.py 抽取)
 
-集中管理 /hijack /release /copilot /resolve /abandon (operator) 和
-/status /dispatch /review /assign /reassign /squad (admin) 命令的业务逻辑。
+集中管理:
+- operator 命令: /hijack /release /copilot /resolve /abandon
+- admin 命令: /status /dispatch /review /assign /reassign /squad
+- bridge 回调: operator_join, customer_connect, escalation
 
-server.py 中 _on_operator_command / _on_admin_command 闭包代理到此类，
-回调签名保持不变，保证 E2E 兼容。
+server.py 中闭包代理到此类，回调签名保持不变，保证 E2E 兼容。
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from zchat_protocol.commands import Command
 from zchat_protocol.event import Event, EventType
+from zchat_protocol.gate import gate_message
+from zchat_protocol.message_types import MessageVisibility
 from zchat_protocol.mode import ConversationMode
 from zchat_protocol.participant import Participant, ParticipantRole
 
@@ -68,6 +71,184 @@ class CommandHandler:
         self._bridge = bridge_server
         self._squad_registry = squad_registry
         self._rc = routing_config
+
+    # ------------------------------------------------------------------ #
+    # Bridge 回调 — operator_join / customer_connect / escalation
+    # ------------------------------------------------------------------ #
+
+    async def handle_operator_join(self, msg: dict) -> None:
+        """Operator 通过 Bridge 加入对话 → 注册参与者 + 触发模式切换。"""
+        conv_id = msg.get("conversation_id", "")
+        operator = msg.get("operator", {})
+        operator_id = operator.get("id", "unknown")
+
+        conv = self._conv_manager.get(conv_id)
+        if conv is None:
+            print(
+                f"[server] operator_join: conversation {conv_id!r} not found",
+                file=sys.stderr,
+            )
+            return
+
+        # 注册 operator 参与者
+        participant = Participant(id=operator_id, role=ParticipantRole.OPERATOR)
+        try:
+            self._conv_manager.add_participant(conv_id, participant)
+        except Exception as e:
+            print(f"[server] add_participant failed: {e}", file=sys.stderr)
+
+        # 模式切换：auto → copilot（仅当前为 auto 时）
+        if conv.mode == ConversationMode.AUTO.value:
+            try:
+                t = await self._mode_manager.atransition(
+                    conv,
+                    ConversationMode.COPILOT,
+                    trigger="operator_join",
+                    triggered_by=operator_id,
+                )
+                await self._bridge.send_event(
+                    "mode.changed",
+                    {"from": t.from_mode.value, "to": t.to_mode.value,
+                     "trigger": "operator_join", "triggered_by": operator_id},
+                    conv_id,
+                )
+            except Exception as e:
+                print(f"[server] mode transition failed: {e}", file=sys.stderr)
+
+    async def handle_customer_connect(
+        self,
+        msg: dict,
+        irc_transport: Any | None,
+        components: dict[str, Any],
+    ) -> None:
+        """Customer 接入 → 创建 conversation + IRC bot JOIN + auto-dispatch。
+
+        ``components`` 按引用传入，以便 plugin_manager 等可在运行时被替换
+        （测试场景会在 wire_bridge_callbacks 之后替换 mock）。
+        """
+        from transport.irc_transport import IRCTransport
+
+        conv_id = msg.get("conversation_id", "")
+        if not conv_id:
+            return
+        # 创建 conversation（幂等）
+        metadata = dict(msg.get("metadata", {}))
+        customer = msg.get("customer")
+        if customer is not None:
+            metadata["customer"] = customer
+        self._conv_manager.create(conv_id, metadata=metadata)
+
+        # IRC bot auto-JOIN
+        if irc_transport is not None:
+            channel = IRCTransport.conv_channel_name(conv_id)
+            try:
+                irc_transport.join(channel)
+            except Exception as e:
+                print(f"[server] auto-join {channel} failed: {e}", file=sys.stderr)
+
+        # auto-dispatch default_agents
+        for agent_nick in self._rc.default_agents:
+            try:
+                participant = Participant(id=agent_nick, role=ParticipantRole.AGENT)
+                self._conv_manager.add_participant(conv_id, participant)
+                await self._bridge.send_event(
+                    "agent.dispatched",
+                    {"agent_nick": agent_nick, "dispatched_by": "__auto"},
+                    conv_id,
+                )
+            except Exception as e:
+                print(f"[server] auto-dispatch {agent_nick} failed: {e}", file=sys.stderr)
+
+        # App plugin hook: sla_onboard 等 App 层 timer 在此处设置
+        plugin_manager = components["plugin_manager"]
+        await plugin_manager.fire(
+            "on_conversation_created",
+            conv_id=conv_id,
+            components=components,
+        )
+
+    async def handle_operator_message(self, msg: dict) -> None:
+        """Operator 通过 Bridge API 发消息 → Gate 判定 visibility → 存储 + 转发。"""
+        conv_id = msg.get("conversation_id", "")
+        conv = self._conv_manager.get(conv_id)
+        if conv is None:
+            print(f"[server] operator_message: conversation {conv_id!r} not found", file=sys.stderr)
+            return
+        operator_id = msg.get("operator_id", "unknown")
+        text = msg.get("text", "")
+        participant = Participant(id=operator_id, role=ParticipantRole.OPERATOR)
+        visibility = gate_message(conv, participant, MessageVisibility.PUBLIC).value
+        saved = self._message_store.save(
+            conversation_id=conv_id, source=operator_id, content=text, visibility=visibility,
+        )
+        await self._bridge.send_reply(
+            conversation_id=conv_id, text=text, visibility=visibility, message_id=saved.id,
+        )
+
+    async def handle_customer_message(self, msg: dict, msg_router: Any) -> None:
+        """Customer 消息: 转发到 IRC + CSAT 评分接收。"""
+        conv_id = msg.get("conversation_id", "")
+        csat_score = msg.get("csat_score")
+        if csat_score is not None:
+            try:
+                self._conv_manager.set_csat(conv_id, int(csat_score))
+            except Exception as e:
+                print(f"[server] set_csat failed: {e}", file=sys.stderr)
+            return
+        text = msg.get("text", "")
+        if text and conv_id:
+            await msg_router.route_customer_message(conv_id, text)
+
+    async def handle_sla_breach(self, event: "Event") -> None:
+        """SLA timer 超时 → 向 admin 发送告警。"""
+        timer_name = event.data.get("name", "")
+        if not timer_name.startswith("sla_"):
+            return
+        conv_id = event.conversation_id
+        duration = event.data.get("action_params", {}).get("duration_s", "?")
+        await self._bridge.send_event(
+            "sla.breach",
+            {"conversation_id": conv_id, "breach_type": timer_name, "timeout_seconds": duration},
+            conv_id,
+            target_capabilities={"operator", "admin"},
+        )
+        await self._bridge.send_reply(
+            conversation_id="__admin",
+            text=f"[SLA 告警] conv_id={conv_id} breach={timer_name} timeout={duration}s",
+            visibility="system",
+        )
+
+    async def handle_escalation(self, event: "Event") -> None:
+        """Escalation event → 按 escalation_chain 顺序 dispatch 到第一个可用 agent。"""
+        conv_id = event.conversation_id
+        if not conv_id or not self._rc.escalation_chain:
+            return
+        conv = self._conv_manager.get(conv_id)
+        if conv is None:
+            return
+        existing_ids = {p.id for p in (conv.participants or [])}
+        for target in self._rc.escalation_chain:
+            if target == "operator":
+                # 发告警通知 admin 介入
+                await self._bridge.send_reply(
+                    conversation_id=conv_id,
+                    text=f"[escalation] 需要人工介入: {conv_id}",
+                    visibility="system",
+                )
+                return
+            if target in existing_ids:
+                continue
+            try:
+                participant = Participant(id=target, role=ParticipantRole.AGENT)
+                self._conv_manager.add_participant(conv_id, participant)
+                await self._bridge.send_event(
+                    "agent.dispatched",
+                    {"agent_nick": target, "dispatched_by": "__escalation"},
+                    conv_id,
+                )
+                return
+            except Exception as e:
+                print(f"[server] escalation dispatch {target} failed: {e}", file=sys.stderr)
 
     # ------------------------------------------------------------------ #
     # Operator 命令

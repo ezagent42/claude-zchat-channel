@@ -118,6 +118,14 @@ class ConversationManager:
             if c.state == ConversationState.ACTIVE
         ]
 
+    def find_conversation_by_agent(self, agent_nick: str) -> str | None:
+        """查找 agent 所参与的 conversation id（用于 PRIVMSG 路由）。"""
+        for cid, conv in self._conversations.items():
+            for p in conv.participants:
+                if p.id == agent_nick and p.role == ParticipantRole.AGENT:
+                    return cid
+        return None
+
     # ---------- 状态转换 ----------
 
     def activate(self, conversation_id: str) -> None:
