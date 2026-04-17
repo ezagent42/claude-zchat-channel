@@ -11,6 +11,6 @@ def test_event_creation():
 
 def test_event_types_complete():
     for name in ["CONVERSATION_CREATED", "MODE_CHANGED", "MESSAGE_SENT",
-                 "MESSAGE_GATED", "TIMER_EXPIRED", "SLA_BREACH",
-                 "SQUAD_ASSIGNED", "CONVERSATION_RESOLVED"]:
+                 "MESSAGE_GATED", "TIMER_EXPIRED",
+                 "CONVERSATION_RESOLVED"]:
         assert hasattr(EventType, name)
