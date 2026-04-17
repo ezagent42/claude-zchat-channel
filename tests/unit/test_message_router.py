@@ -191,12 +191,12 @@ def test_route_agent_edit_sends_edit(
     bridge_server.send_edit.assert_awaited_once_with("c1", "msg-123", "corrected text")
 
 
-def test_route_agent_gate_applied_in_takeover(
+def test_route_agent_takeover_mode_still_public(
     conv_manager: MagicMock,
     bridge_server: AsyncMock,
     router: MessageRouter,
 ) -> None:
-    """Takeover 模式下 agent 消息应被 Gate 降级为 side visibility。"""
+    """Takeover 模式下 agent 消息不再由 channel-server 降级，统一以 public visibility 转发。"""
     conv = _make_conv("c1", mode="takeover")
     conv_manager.get.return_value = conv
 
@@ -205,7 +205,7 @@ def test_route_agent_gate_applied_in_takeover(
     bridge_server.send_reply.assert_awaited_once_with(
         conversation_id="c1",
         text="reply to customer",
-        visibility="side",
+        visibility="public",
         message_id=None,
         sender_id="agent-a",
     )

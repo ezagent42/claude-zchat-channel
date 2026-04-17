@@ -1,8 +1,8 @@
-"""MessageRouter — 消息路由逻辑提取 (spec §5 Gate + §6 Transport)
+"""MessageRouter — 消息路由逻辑提取 (spec §5 Transport)
 
 从 server.py 提取的两条核心路由路径：
 1. Customer → IRC: 客户消息 → 激活对话 → PRIVMSG 到已 dispatch 的 agent
-2. Agent → Bridge: IRC agent 回复 → 解析前缀 → Gate 判定 → Bridge API 转发
+2. Agent → Bridge: IRC agent 回复 → 解析前缀 → Bridge API 转发（统一 public）
 """
 
 from __future__ import annotations
@@ -11,8 +11,6 @@ import sys
 from typing import TYPE_CHECKING
 
 from zchat_protocol.conversation import ConversationState
-from zchat_protocol.gate import gate_message
-from zchat_protocol.message_types import MessageVisibility
 from zchat_protocol.participant import Participant, ParticipantRole
 
 from transport.irc_transport import IRCTransport, parse_agent_message
@@ -95,21 +93,11 @@ class MessageRouter:
     async def _handle_msg(
         self, conv_id: str, parsed: dict, nick: str
     ) -> None:
-        """处理普通消息 — Gate 根据 mode + role 判定 visibility。"""
-        conv = self._conv_manager.get(conv_id)
-        visibility = "public"
-        if conv is not None:
-            agent_participant = Participant(
-                id=nick, role=ParticipantRole.AGENT
-            )
-            gate_result = gate_message(
-                conv, agent_participant, MessageVisibility.PUBLIC
-            )
-            visibility = gate_result.value
+        """处理普通消息 — 统一以 public visibility 转发到 bridge（可见性判断由 bridge 负责）。"""
         await self._bridge_server.send_reply(
             conversation_id=conv_id,
             text=parsed["text"],
-            visibility=visibility,
+            visibility="public",
             message_id=parsed.get("message_id"),
             sender_id=nick,
         )

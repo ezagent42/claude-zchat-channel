@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from zchat_protocol.commands import Command
 from zchat_protocol.event import Event, EventType
-from zchat_protocol.gate import gate_message
-from zchat_protocol.message_types import MessageVisibility
 from zchat_protocol.mode import ConversationMode
 from zchat_protocol.participant import Participant, ParticipantRole
 from zchat_protocol.sys_messages import encode_sys_for_irc, make_sys_message
@@ -218,11 +216,7 @@ class CommandHandler:
         )
 
     async def handle_operator_message(self, msg: dict) -> None:
-        """Operator 通过 Bridge API 发消息 → Gate 判定 visibility → 存储 + 转发。
-
-        当 visibility=side（copilot 模式下 operator 建议）时，
-        额外通过 IRC @mention 注入给 conversation 中的 agent（PRD 旅程 3）。
-        """
+        """Operator 通过 Bridge API 发消息 → 统一 public 转发（可见性判断由 bridge 负责）。"""
         conv_id = msg.get("conversation_id", "")
         conv = self._conv_manager.get(conv_id)
         if conv is None:
@@ -230,28 +224,12 @@ class CommandHandler:
             return
         operator_id = msg.get("operator_id", "unknown")
         text = msg.get("text", "")
-        participant = Participant(id=operator_id, role=ParticipantRole.OPERATOR)
-        visibility = gate_message(conv, participant, MessageVisibility.PUBLIC).value
         saved = self._message_store.save(
-            conversation_id=conv_id, source=operator_id, content=text, visibility=visibility,
+            conversation_id=conv_id, source=operator_id, content=text, visibility="public",
         )
         await self._bridge.send_reply(
-            conversation_id=conv_id, text=text, visibility=visibility, message_id=saved.id,
+            conversation_id=conv_id, text=text, visibility="public", message_id=saved.id,
         )
-
-        # T5: side 消息注入给 agent — 走 IRC #conv-{id} @mention
-        if visibility == "side" and self._irc_transport is not None:
-            from transport.irc_transport import IRCTransport
-            channel = IRCTransport.conv_channel_name(conv_id)
-            for p in conv.participants:
-                if p.role == ParticipantRole.AGENT:
-                    try:
-                        self._irc_transport.privmsg(
-                            channel,
-                            f"@{p.id} __side:{operator_id}: {text}",
-                        )
-                    except Exception as e:
-                        print(f"[server] side inject to {p.id} failed: {e}", file=sys.stderr)
 
     async def handle_customer_message(self, msg: dict, msg_router: Any) -> None:
         """Customer 消息: 转发到 IRC + CSAT 评分接收。"""
