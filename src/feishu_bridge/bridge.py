@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
@@ -76,10 +76,6 @@ class FeishuBridge:
         # 文件下载目录
         self._upload_dir = Path(config.upload_dir)
         self._upload_dir.mkdir(parents=True, exist_ok=True)
-
-        # Auto-hijack 回调钩子（由 app 组装时注入）
-        # 签名：(conversation_id: str, operator_id: str, text: str) -> None
-        self.on_auto_hijack: Callable[[str, str, str], Any] | None = None
 
         # Bridge API 传输层
         self._bridge_client = BridgeAPIClient(
@@ -172,26 +168,6 @@ class FeishuBridge:
         # 转发到 channel-server Bridge API
         message_id = msg.message_id or ""
         self._forward_to_bridge(role, chat_id, text, message_id, sender_open_id)
-
-    def _trigger_auto_hijack(
-        self, conversation_id: str, operator_id: str, text: str
-    ) -> None:
-        """已注入回调时触发 auto-hijack。"""
-        if not self.on_auto_hijack:
-            log.debug(
-                "auto-hijack triggered but no callback registered: conv=%s op=%s",
-                conversation_id,
-                operator_id,
-            )
-            return
-        try:
-            self.on_auto_hijack(conversation_id, operator_id, text)
-        except Exception:
-            log.exception(
-                "on_auto_hijack callback raised: conv=%s op=%s",
-                conversation_id,
-                operator_id,
-            )
 
     def _on_bot_added(self, data: P2ImChatMemberBotAddedV1) -> None:
         """bot 被拉入新群 → 自动注册 customer（跳过已配置群）。"""
@@ -406,7 +382,7 @@ class FeishuBridge:
         if handler_name is not None:
             handler = getattr(self, handler_name)
             handler(conv_id, msg)
-        elif msg_type in ("registered", "customer_connected", "ack"):
+        elif msg_type in ("registered", "ack"):
             log.debug("ack: %s", msg_type)
         else:
             log.debug("unhandled bridge event: %s", msg_type)

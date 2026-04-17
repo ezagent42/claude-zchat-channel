@@ -5,7 +5,7 @@
 2. 发送 JSON 消息
 3. 接收 JSON 消息，通过 on_message 回调分发
 
-协议语义（customer_connect 等）和业务逻辑在 bridge.py 中处理。
+协议语义和业务逻辑在 bridge.py 中处理。
 """
 
 from __future__ import annotations
