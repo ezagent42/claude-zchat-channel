@@ -11,6 +11,12 @@ from .routing import load as load_routing
 from .router import Router
 from .ws_server import WSServer
 
+# 官方插件（V4-S2b）
+from plugins.mode.plugin import ModePlugin
+from plugins.sla.plugin import SlaPlugin
+from plugins.audit.plugin import AuditPlugin
+from plugins.lifecycle.plugin import LifecyclePlugin
+
 
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
@@ -35,7 +41,7 @@ async def _main() -> None:
     # Load routing
     routing = load_routing(routing_path)
 
-    # Plugin registry（V4-S2b 之后会注册真正 plugin；此处为空）
+    # Plugin registry
     registry = PluginRegistry()
 
     # WS server
@@ -52,6 +58,25 @@ async def _main() -> None:
 
     # Router
     router = Router(routing=routing, registry=registry, irc_conn=irc_conn, ws_server=ws_server)
+
+    # ── 注册官方插件（V4-S2b）──────────────────────────────────────────
+
+    async def emit_event(event: str, channel: str, data: dict) -> None:
+        """plugin emit event 的统一出口 → router.emit_event。"""
+        await router.emit_event(channel, event, data)
+
+    async def emit_command(cmd_name: str, channel: str, args: dict) -> None:
+        """plugin emit command → 重新进入 router 分派（internal source）。"""
+        from zchat_protocol import ws_messages as _ws
+        cmd_msg = _ws.build_command(channel, "internal", cmd_name, args)
+        await router.forward_inbound_ws(cmd_msg)
+
+    registry.register(ModePlugin(emit_event=emit_event))
+    registry.register(SlaPlugin(emit_event=emit_event, emit_command=emit_command, timeout_seconds=180))
+    registry.register(AuditPlugin())
+    registry.register(LifecyclePlugin(emit_event=emit_event))
+
+    # ──────────────────────────────────────────────────────────────────
 
     # Wire callbacks
     ws_server._on_inbound = router.forward_inbound_ws
