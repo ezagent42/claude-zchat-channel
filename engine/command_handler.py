@@ -403,13 +403,6 @@ class CommandHandler:
                 },
                 conv_id,
             )
-            # hijack 后发出 side visibility 系统通知（E2E gate enforcement 验证路径）
-            if cmd.name == "hijack":
-                await self._bridge.send_reply(
-                    conversation_id=conv_id,
-                    text=f"[system] takeover activated by {operator_id}",
-                    visibility="side",
-                )
         except Exception as e:
             print(f"[server] command {cmd.name} failed: {e}", file=sys.stderr)
 

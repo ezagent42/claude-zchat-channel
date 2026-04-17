@@ -108,10 +108,8 @@ def test_hijack_transitions_to_takeover(components, bridge, handler) -> None:
     assert event_call[0][0] == "mode.changed"
     assert event_call[0][1]["to"] == "takeover"
 
-    # hijack 后发出 side visibility 通知
-    bridge.send_reply.assert_called()
-    reply_kwargs = bridge.send_reply.call_args[1]
-    assert reply_kwargs["visibility"] == "side"
+    # hijack 不发额外文本通知（channel-server 不做可见性决策）
+    bridge.send_reply.assert_not_called()
 
 
 # ------------------------------------------------------------------ #
