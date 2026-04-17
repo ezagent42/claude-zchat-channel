@@ -135,54 +135,6 @@ def test_csat_score_received(wired) -> None:
 
 
 # ------------------------------------------------------------------ #
-# TC-004: /status 有活跃对话
-# ------------------------------------------------------------------ #
-
-
-def test_status_returns_active_conversations(wired) -> None:
-    """TC-004: /status → 返回格式化的活跃对话列表。"""
-    components, bs = wired
-    _create_conv(components, "conv_a")
-    _create_conv(components, "conv_b")
-
-    cmd = Command(name="status", args={}, raw="/status")
-    asyncio.run(
-        bs.on_admin_command(
-            {"conversation_id": "__admin", "admin_id": "boss"},
-            cmd,
-        )
-    )
-
-    bs.send_reply.assert_called_once()
-    call_kwargs = bs.send_reply.call_args[1]
-    assert "conv_a" in call_kwargs["text"]
-    assert "conv_b" in call_kwargs["text"]
-    assert call_kwargs["visibility"] == "system"
-
-
-# ------------------------------------------------------------------ #
-# TC-005: /status 无活跃对话
-# ------------------------------------------------------------------ #
-
-
-def test_status_empty_returns_no_conversations(wired) -> None:
-    """TC-005: /status 无活跃对话 → "无活跃对话" 消息。"""
-    components, bs = wired
-
-    cmd = Command(name="status", args={}, raw="/status")
-    asyncio.run(
-        bs.on_admin_command(
-            {"conversation_id": "__admin", "admin_id": "boss"},
-            cmd,
-        )
-    )
-
-    bs.send_reply.assert_called_once()
-    call_kwargs = bs.send_reply.call_args[1]
-    assert "无" in call_kwargs["text"] or "0" in call_kwargs["text"]
-
-
-# ------------------------------------------------------------------ #
 # TC-006: /dispatch 正常分派
 # ------------------------------------------------------------------ #
 

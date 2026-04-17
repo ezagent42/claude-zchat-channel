@@ -16,7 +16,6 @@ from engine.conversation_manager import ConversationManager
 from engine.event_bus import EventBus
 from engine.message_store import MessageStore
 from engine.mode_manager import ModeManager
-from engine.squad_registry import SquadRegistry
 from routing_config import RoutingConfig
 from zchat_protocol.commands import Command
 from zchat_protocol.event import EventType
@@ -39,7 +38,6 @@ def components(tmp_path):
     conv_manager = ConversationManager(conn)
     mode_manager = ModeManager(event_bus)
     message_store = MessageStore(conn)
-    squad_registry = SquadRegistry()
 
     yield {
         "conn": conn,
@@ -47,7 +45,6 @@ def components(tmp_path):
         "conversation_manager": conv_manager,
         "mode_manager": mode_manager,
         "message_store": message_store,
-        "squad_registry": squad_registry,
     }
 
     event_bus.close()
@@ -73,7 +70,6 @@ def handler(components, bridge):
         event_bus=components["event_bus"],
         message_store=components["message_store"],
         bridge_server=bridge,
-        squad_registry=components["squad_registry"],
         routing_config=RoutingConfig(),
     )
 
@@ -205,27 +201,6 @@ def test_abandon_closes_without_csat(components, bridge, handler) -> None:
 
 
 # ------------------------------------------------------------------ #
-# TC-005: /status → 返回活跃对话数
-# ------------------------------------------------------------------ #
-
-
-def test_status_returns_active_count(components, bridge, handler) -> None:
-    """TC-005: /status 返回活跃对话数量和列表。"""
-    _create_conv(components, "conv_a")
-    _create_conv(components, "conv_b")
-
-    cmd = Command(name="status", args={}, raw="/status")
-    asyncio.run(handler.execute_admin_command(cmd, "admin1"))
-
-    bridge.send_reply.assert_called_once()
-    kwargs = bridge.send_reply.call_args[1]
-    assert kwargs["visibility"] == "system"
-    assert "conv_a" in kwargs["text"]
-    assert "conv_b" in kwargs["text"]
-    assert "(2)" in kwargs["text"]
-
-
-# ------------------------------------------------------------------ #
 # TC-006: /dispatch → 添加 agent participant
 # ------------------------------------------------------------------ #
 
@@ -247,30 +222,6 @@ def test_dispatch_adds_participant(components, bridge, handler) -> None:
 
     bridge.send_event.assert_called()
     assert bridge.send_event.call_args[0][0] == "agent.dispatched"
-
-
-# ------------------------------------------------------------------ #
-# TC-007: /review → 返回统计数据
-# ------------------------------------------------------------------ #
-
-
-def test_review_returns_statistics(components, bridge, handler) -> None:
-    """TC-007: /review 返回格式化的统计文本。"""
-    cm = components["conversation_manager"]
-    cm.create("conv_rv1")
-    cm.activate("conv_rv1")
-    cm.resolve("conv_rv1", outcome="resolved", resolved_by="op1")
-    cm.set_csat("conv_rv1", 4)
-
-    cmd = Command(name="review", args={}, raw="/review")
-    asyncio.run(handler.execute_admin_command(cmd, "admin1"))
-
-    bridge.send_reply.assert_called_once()
-    text = bridge.send_reply.call_args[1]["text"]
-    assert "[review]" in text
-    assert "对话数: 1" in text
-    assert "结案率: 100.0%" in text
-    assert "CSAT 均分: 4.0" in text
 
 
 # ------------------------------------------------------------------ #

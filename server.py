@@ -20,7 +20,6 @@ from engine.message_router import MessageRouter
 from engine.message_store import MessageStore
 from engine.mode_manager import ModeManager
 from engine.participant_registry import ParticipantRegistry
-from engine.squad_registry import SquadRegistry
 from engine.timer_manager import TimerManager
 from plugins.manager import PluginManager
 from zchat_protocol.event import Event, EventType
@@ -49,7 +48,7 @@ def wire_bridge_callbacks(
     cmd = CommandHandler(
         conv_manager=conv_manager, mode_manager=components["mode_manager"],
         event_bus=components["event_bus"], message_store=components["message_store"],
-        bridge_server=bridge_server, squad_registry=components["squad_registry"],
+        bridge_server=bridge_server,
         routing_config=rc,
         irc_transport=components.get("irc_transport"),
     )
@@ -110,7 +109,6 @@ def build_components() -> dict[str, Any]:
         "mode_manager": ModeManager(eb),
         "timer_manager": TimerManager(eb),
         "participant_registry": ParticipantRegistry(),
-        "squad_registry": SquadRegistry(),
         "message_store": MessageStore(conn),
         "bridge_server": BridgeAPIServer(conversation_manager=cm, port=BRIDGE_PORT, host=BRIDGE_HOST),
         "irc_transport": IRCTransport(

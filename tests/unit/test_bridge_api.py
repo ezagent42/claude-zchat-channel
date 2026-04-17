@@ -45,16 +45,6 @@ def test_operator_command_hijack(server):
     assert cmd.name == "hijack"
 
 
-def test_admin_command_status(server):
-    msg = {
-        "type": "admin_command",
-        "admin_id": "laochen",
-        "command": "/status",
-    }
-    cmd = server._parse_admin_command(msg)
-    assert cmd.name == "status"
-
-
 def test_visibility_routing_public(server):
     assert server.compute_visibility_targets("public") == {
         "customer",

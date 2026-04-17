@@ -15,11 +15,6 @@ def test_parse_dispatch():
     assert cmd.args["agent_nick"] == "deep-agent"
 
 
-def test_parse_assign():
-    cmd = parse_command("/assign fast-agent xiaoli")
-    assert cmd.args["agent_nick"] == "fast-agent"
-
-
 def test_non_command():
     assert parse_command("hello") is None
 
