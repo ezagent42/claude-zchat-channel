@@ -37,10 +37,9 @@ test = [
 ]
 
 [project.scripts]
-zchat-channel = "server:entry_point"
-zchat-agent-mcp = "agent_mcp:entry_point"
 zchat-channel-server = "channel_server.__main__:main"
 zchat-feishu-bridge = "feishu_bridge.__main__:main"
+zchat-agent-mcp = "agent_mcp:entry_point"
 
 [dependency-groups]
 dev = [
