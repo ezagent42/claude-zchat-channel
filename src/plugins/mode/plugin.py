@@ -1,12 +1,11 @@
 """mode plugin — channel mode 状态管理。
 
-支持命令：/hijack  /release  /copilot
-emit event：mode_changed
+命令：/hijack  /release  /copilot
+事件：mode_changed
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Awaitable, Callable
 
 from channel_server.plugin import BasePlugin
@@ -15,8 +14,9 @@ from channel_server.plugin import BasePlugin
 class ModePlugin(BasePlugin):
     """管理每个 channel 的当前模式（"copilot" / "takeover"）。
 
-    Args:
-        emit_event: async (event_name, channel, data) → None
+    /hijack  → copilot → takeover
+    /release → takeover → copilot
+    /copilot → any → copilot
     """
 
     name = "mode"
@@ -33,18 +33,13 @@ class ModePlugin(BasePlugin):
 
     async def on_command(self, cmd_name: str, msg: dict) -> None:
         channel = msg.get("channel", "")
+        source = msg.get("source", "unknown")
         old = self._modes.get(channel, "copilot")
         new = "takeover" if cmd_name == "hijack" else "copilot"
         self._modes[channel] = new
         await self._emit_event(
-            "mode_changed",
-            channel,
-            {
-                "from": old,
-                "to": new,
-                "triggered_by": msg.get("source", "unknown"),
-                "cmd": cmd_name,
-            },
+            "mode_changed", channel,
+            {"from": old, "to": new, "triggered_by": source, "cmd": cmd_name},
         )
 
     def query(self, key: str, args: dict | None = None) -> Any:

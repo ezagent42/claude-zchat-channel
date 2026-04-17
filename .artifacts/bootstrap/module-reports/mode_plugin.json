@@ -1,0 +1,25 @@
+{
+  "module": "mode_plugin",
+  "path": "src/plugins/mode/plugin.py",
+  "lines": 67,
+  "description": "Channel mode 状态管理 + resolve 插件。支持 /hijack /release /copilot /resolve 命令，管理每个 channel 的当前模式（copilot/takeover），emit mode_changed 和 channel_resolved 事件。",
+  "classes": [
+    {
+      "name": "ModePlugin",
+      "line": 14,
+      "description": "管理每个 channel 的当前模式。/hijack → takeover，/release|/copilot → copilot，/resolve → emit channel_resolved + 切回 copilot。",
+      "methods": [
+        {"name": "__init__", "line": 25, "signature": "(self, emit_event: Callable[[str, str, dict], Awaitable[None]]) -> None"},
+        {"name": "handles_commands", "line": 32, "signature": "(self) -> list[str]", "description": "返回 ['hijack', 'release', 'copilot', 'resolve']"},
+        {"name": "on_command", "line": 35, "signature": "async (self, cmd_name: str, msg: dict) -> None", "description": "处理模式切换命令（hijack/release/copilot/resolve），emit mode_changed 或 channel_resolved 事件"},
+        {"name": "query", "line": 63, "signature": "(self, key: str, args: dict | None = None) -> Any", "description": "query('get', {'channel': ch}) → 返回当前 mode"}
+      ]
+    }
+  ],
+  "functions": [],
+  "commands_handled": ["hijack", "release", "copilot", "resolve"],
+  "events_emitted": ["mode_changed", "channel_resolved"],
+  "imports": ["typing", "channel_server.plugin.BasePlugin"],
+  "test_file": "tests/unit_v4/test_mode_plugin.py",
+  "test_results": {"passed": 10, "failed": 0, "total": 10}
+}

@@ -1,0 +1,30 @@
+{
+  "module": "agent_mcp",
+  "path": "agent_mcp.py",
+  "lines": 528,
+  "description": "轻量 MCP stdio 代理。每个 Claude Code agent 运行一个实例。提供 MCP tools (reply/join_channel/join_conversation/send_side_message/run_zchat_cli) + IRC @mention 注入。V4 简化：移除 fcntl lock。",
+  "classes": [],
+  "functions": [
+    {"name": "_sanitize_for_irc", "line": 42, "signature": "(text: str) -> str", "description": "替换换行符为空格，IRC 单行协议"},
+    {"name": "chunk_message", "line": 47, "signature": "(text: str, max_bytes: int = 390) -> list[str]", "description": "按 UTF-8 字节数拆分消息，符合 IRC RFC 2812 限制"},
+    {"name": "detect_mention", "line": 71, "signature": "(body: str, agent_name: str) -> bool", "description": "检测消息是否包含 @mention"},
+    {"name": "clean_mention", "line": 76, "signature": "(body: str, agent_name: str) -> str", "description": "移除 @mention 并去除首尾空白"},
+    {"name": "conv_channel_name", "line": 81, "signature": "(conversation_id: str) -> str", "description": "将 conversation_id 映射为 IRC channel 名称"},
+    {"name": "inject_message", "line": 101, "signature": "async (write_stream, msg: dict, context: str) -> None", "description": "将 IRC 侧消息以 MCP notification 注入 Claude Code"},
+    {"name": "poll_irc_queue", "line": 125, "signature": "async (queue: asyncio.Queue, write_stream) -> None", "description": "将 IRC 队列中的消息持续注入到 MCP 客户端"},
+    {"name": "load_instructions", "line": 140, "signature": "(agent_name: str) -> str", "description": "加载 instructions.md 模板并替换 agent_name"},
+    {"name": "create_server", "line": 146, "signature": "() -> Server", "description": "创建 MCP Server 实例"},
+    {"name": "register_tools", "line": 151, "signature": "(server: Server, state: dict) -> None", "description": "注册 MCP tools：reply, join_channel, join_conversation, send_side_message, run_zchat_cli"},
+    {"name": "_handle_reply", "line": 281, "signature": "async (connection, arguments: dict) -> list[TextContent]", "description": "处理 reply tool：普通消息/编辑/side channel"},
+    {"name": "_handle_join_channel", "line": 303, "signature": "async (connection, arguments: dict) -> list[TextContent]", "description": "加入 IRC channel"},
+    {"name": "_handle_join_conversation", "line": 309, "signature": "async (connection, arguments: dict) -> list[TextContent]", "description": "加入 conversation channel (#conv-<id>)"},
+    {"name": "_handle_send_side_message", "line": 321, "signature": "async (connection, arguments: dict) -> list[TextContent]", "description": "发送 side-channel 消息"},
+    {"name": "_handle_run_zchat_cli", "line": 334, "signature": "async (arguments: dict) -> list[TextContent]", "description": "执行 zchat CLI 命令，返回 stdout/stderr"},
+    {"name": "_start_irc", "line": 368, "signature": "(server, port, nick, channels, tls, auth_token, queue, loop, on_pubmsg_fn, on_privmsg_fn) -> tuple", "description": "在独立线程启动 IRC reactor，返回 (reactor, connection)"},
+    {"name": "main", "line": 446, "signature": "async () -> None", "description": "启动 agent MCP server：MCP stdio + IRC @mention 注入"},
+    {"name": "entry_point", "line": 523, "signature": "() -> None", "description": "CLI 入口点"}
+  ],
+  "imports": ["asyncio", "os", "shlex", "subprocess", "sys", "time", "uuid", "datetime", "pathlib", "string.Template", "anyio", "irc.client", "mcp.server.stdio", "mcp.server.lowlevel", "mcp.types", "zchat_protocol.irc_encoding"],
+  "test_file": "tests/unit_v4/test_agent_mcp.py",
+  "test_results": {"passed": 9, "failed": 0, "total": 9}
+}

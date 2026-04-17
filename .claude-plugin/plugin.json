@@ -1,6 +1,6 @@
 {
   "name": "zchat",
-  "description": "IRC channel for Claude Code — reply, join, dm, broadcast via slash commands",
-  "version": "0.1.0",
-  "keywords": ["irc", "channel", "zchat"]
+  "description": "IRC message bus for Claude Code agents — reply and run_zchat_cli via MCP",
+  "version": "1.0.0",
+  "keywords": ["irc", "channel", "zchat", "mcp"]
 }

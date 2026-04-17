@@ -1,0 +1,47 @@
+{
+  "test_run_timestamp": "2026-04-17",
+  "command": "uv run pytest tests/unit_v4/ src/feishu_bridge/tests/ -v",
+  "summary": {
+    "total": 114,
+    "passed": 114,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 3.84
+  },
+  "test_suites": {
+    "unit_v4": {
+      "total": 58,
+      "passed": 58,
+      "failed": 0,
+      "files": [
+        {"file": "tests/unit_v4/test_agent_mcp.py", "passed": 9, "failed": 0},
+        {"file": "tests/unit_v4/test_mode_plugin.py", "passed": 10, "failed": 0},
+        {"file": "tests/unit_v4/test_plugin_registry.py", "passed": 12, "failed": 0},
+        {"file": "tests/unit_v4/test_router.py", "passed": 14, "failed": 0},
+        {"file": "tests/unit_v4/test_routing.py", "passed": 7, "failed": 0},
+        {"file": "tests/unit_v4/test_sla_plugin.py", "passed": 6, "failed": 0}
+      ]
+    },
+    "feishu_bridge_unit": {
+      "total": 56,
+      "passed": 56,
+      "failed": 0,
+      "files": [
+        {"file": "src/feishu_bridge/tests/test_card_action.py", "passed": 9, "failed": 0},
+        {"file": "src/feishu_bridge/tests/test_client_extended.py", "passed": 12, "failed": 0},
+        {"file": "src/feishu_bridge/tests/test_group_manager.py", "passed": 13, "failed": 0},
+        {"file": "src/feishu_bridge/tests/test_outbound_router.py", "passed": 9, "failed": 0},
+        {"file": "src/feishu_bridge/tests/test_parsers.py", "passed": 8, "failed": 0},
+        {"file": "src/feishu_bridge/tests/test_sender.py", "passed": 3, "failed": 0},
+        {"file": "src/feishu_bridge/tests/test_visibility_router.py", "passed": 2, "failed": 0}
+      ]
+    },
+    "pre_release": {
+      "note": "Pre-release tests require full stack (IRC + channel-server + feishu_bridge + agents + feishu credentials). Not run in bootstrap.",
+      "total": 14,
+      "status": "not_run",
+      "reason": "requires full stack + feishu credentials"
+    }
+  }
+}

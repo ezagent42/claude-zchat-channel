@@ -1,0 +1,33 @@
+{
+  "module": "routing",
+  "path": "src/channel_server/routing.py",
+  "lines": 63,
+  "description": "routing.toml 加载 + 查询 API。V4 简化：移除 resolve_agent、identify_nick、operators、default_agents。ChannelRoute 使用 external_chat_id 取代 feishu_chat_id。仅保留 channel_agents() 和 external_chat_id() 两个查询方法。",
+  "classes": [
+    {
+      "name": "ChannelRoute",
+      "line": 19,
+      "description": "channel 路由数据类。字段：channel_id, external_chat_id (可选), agents (role → nick 映射)。",
+      "fields": [
+        {"name": "channel_id", "type": "str"},
+        {"name": "external_chat_id", "type": "str | None", "default": "None"},
+        {"name": "agents", "type": "dict[str, str]", "default": "{}"}
+      ]
+    },
+    {
+      "name": "RoutingTable",
+      "line": 27,
+      "description": "路由表。channels: dict[str, ChannelRoute]。",
+      "methods": [
+        {"name": "channel_agents", "line": 30, "signature": "(self, channel_id: str) -> list[str]", "description": "返回某 channel 的所有 agent nick 列表"},
+        {"name": "external_chat_id", "line": 35, "signature": "(self, channel_id: str) -> str | None", "description": "返回 channel 对应的 external_chat_id"}
+      ]
+    }
+  ],
+  "functions": [
+    {"name": "load", "line": 41, "signature": "(path: str | Path) -> RoutingTable", "description": "从 routing.toml 加载。文件不存在返回空表。"}
+  ],
+  "imports": ["logging", "dataclasses", "pathlib", "tomllib/tomli"],
+  "test_file": "tests/unit_v4/test_routing.py",
+  "test_results": {"passed": 7, "failed": 0, "total": 7}
+}

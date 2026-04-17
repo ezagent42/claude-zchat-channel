@@ -6,62 +6,44 @@ Messages arrive as `<channel source="zchat-channel" chat_id="..." user="..." ts=
 - `chat_id` starting with `#` is a channel message (e.g. `#general`)
 - `chat_id` without `#` is a private message from that user
 
-## Owner Detection
+## Available Tools
 
-Your owner is determined by your agent name prefix. For example, if you are `alice-agent0`, your owner is `alice`. Owner messages have highest priority.
+| Tool | Description |
+|------|-------------|
+| `reply` | Send a message to a channel or user. Supports edit, side, and plugin commands. |
+| `run_zchat_cli` | Execute zchat CLI commands (agent/channel/project management). |
 
-## Message Handling Strategy
+### reply
 
-When you receive an IRC message (channel notification), handle it based on your current state:
+```
+reply(chat_id="#conv-001", text="hello")              # public message
+reply(chat_id="#conv-001", text="updated", edit_of="uuid")  # edit previous message
+reply(chat_id="#conv-001", text="note", side=true)    # side message (operator only)
+reply(chat_id="#conv-001", text="/hijack")             # trigger plugin command
+```
 
-### If idle (no task in progress)
+Plugin commands (via text):
+- `/hijack` — switch to takeover mode (operator drives)
+- `/release` — switch back to copilot mode (agent drives)
+- `/copilot` — same as /release
+- `/resolve` — mark conversation as resolved
 
-Reply directly using the `reply` tool with the same `chat_id`. No need to spawn a subagent.
+### run_zchat_cli
 
-### If busy (task in progress)
-
-Use the Agent tool to spawn a subagent to handle the reply. Do NOT interrupt your current work. The subagent should:
-
-1. Read `./soul.md` for role and communication style guidance (if the file exists)
-2. Read recent session context: `tail -100 ~/.claude/projects/<project-hash>/<session-id>.jsonl` via Bash tool
-3. Use the `reply` tool (MCP tool `mcp__zchat-channel__reply`) to respond
-
-In your dispatch prompt to the subagent, include:
-- What you are currently working on (brief summary)
-- The incoming message content and sender
-- The `chat_id` to reply to
-- Instruction to read `./soul.md` and session JSONL tail for additional context
-
-### System messages
-
-Messages with `__zchat_sys:` prefix are system control messages. Handle these directly (not via subagent) — they may require your state (e.g., stop requests, status queries).
-
-### Message priority
-
-| Source | Priority | Handling |
-|--------|----------|----------|
-| Owner DM | High | Immediate — direct reply if idle, subagent if busy |
-| Other user DM | Normal | Direct reply if idle, subagent if busy |
-| Channel @mention | Normal | Reply in channel context (same rules) |
-| System message | Critical | Always handle directly, never delegate |
-
-### Deep processing
-
-By default, keep replies quick and conversational. Whether a message requires deep processing (pausing current task, extended analysis) is determined by `./soul.md`. If no soul.md exists, always use quick response mode.
+```
+run_zchat_cli(args=["agent", "list"])
+run_zchat_cli(args=["agent", "create", "helper", "--type", "fast-agent"])
+run_zchat_cli(args=["channel", "list"])
+run_zchat_cli(args=["doctor"])
+```
 
 ## SOUL File
 
-At session start, read `./soul.md` if it exists. This file defines your role, communication style, and domain behavior. It may override the default message handling strategy above (e.g., "pause current task for code review requests").
+At session start, read `./soul.md` if it exists. This file defines your role, communication style, and domain behavior.
 
-Re-read `./soul.md` when encountering unfamiliar situations or role-specific decisions.
+## Message Handling
 
-## Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `/zchat:reply -c #general -t "hello"` | Reply to a channel or user |
-| `/zchat:join -c dev` | Join an IRC channel |
-| `/zchat:dm -u alice -t "hey"` | Send a private message |
-| `/zchat:broadcast -t "deploying"` | Send to all joined channels |
-
-When these commands are invoked, follow the command instructions to call the appropriate MCP tool. You can also call `reply` and `join_channel` tools directly when responding to channel messages.
+When you receive an IRC message (channel notification):
+- If idle: reply directly using the `reply` tool
+- If busy: spawn a subagent to handle the reply
+- System messages (`__zchat_sys:` prefix): handle directly, never delegate

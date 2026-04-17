@@ -1,0 +1,26 @@
+{
+  "module": "router",
+  "path": "src/channel_server/router.py",
+  "lines": 161,
+  "description": "中枢路由：IRC ↔ WS 双向翻译 + 命令分派。forward_inbound_ws 处理 bridge→IRC，forward_inbound_irc 处理 IRC→bridges+plugins。V4 简化：移除 _handle_explicit_command。",
+  "classes": [
+    {
+      "name": "Router",
+      "line": 16,
+      "description": "核心路由类。WS 入站消息按 type 分派（message/event），message 按 content '/' 前缀检测 plugin 命令，否则路由到 IRC。IRC 入站解析 irc_encoding 后广播到 WS bridges。",
+      "methods": [
+        {"name": "__init__", "line": 25, "signature": "(self, routing: RoutingTable, registry: PluginRegistry, irc_conn: Any, ws_server: Any) -> None"},
+        {"name": "forward_inbound_ws", "line": 39, "signature": "(self, msg: dict) -> None", "description": "处理从 bridge 来的 WS 消息，按 type 分派（message 或 event）"},
+        {"name": "_handle_message", "line": 50, "signature": "(self, msg: dict) -> None", "description": "处理 content 消息：'/' 前缀命令分派或路由到 IRC"},
+        {"name": "_route_to_irc", "line": 78, "signature": "(self, channel: str, content: str, msg: dict) -> None", "description": "根据 mode 决定 @ prefix，发 IRC PRIVMSG"},
+        {"name": "_query_mode", "line": 114, "signature": "(self, channel: str) -> str", "description": "通过 mode plugin 查当前 mode"},
+        {"name": "forward_inbound_irc", "line": 124, "signature": "(self, irc_channel: str, nick: str, body: str) -> None", "description": "IRC pubmsg → WS broadcast + plugin 订阅 + 命令分派"},
+        {"name": "emit_event", "line": 157, "signature": "(self, channel: str, event: str, data: dict | None = None) -> None", "description": "core/plugin 发 event 的统一出口"}
+      ]
+    }
+  ],
+  "functions": [],
+  "imports": ["logging", "uuid", "zchat_protocol.irc_encoding", "zchat_protocol.ws_messages", ".plugin.PluginRegistry", ".routing.RoutingTable"],
+  "test_file": "tests/unit_v4/test_router.py",
+  "test_results": {"passed": 14, "failed": 0, "total": 14}
+}

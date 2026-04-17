@@ -235,7 +235,7 @@ async def test_irc_inbound_with_msg_prefix_extracts_message_id():
 
 @pytest.mark.asyncio
 async def test_message_also_broadcast_to_plugins():
-    """bridge → router → plugins 也收到消息（audit 场景）。"""
+    """bridge → router → plugins 也收到消息。"""
     routing = RoutingTable()  # 空路由
     registry = PluginRegistry()
 
@@ -335,3 +335,29 @@ async def test_already_encoded_content_not_double_encoded():
     _, content = irc_conn.sent[0]
     # content 应该包含 __msg: 但只出现一次（不被双重编码）
     assert content.count(irc_encoding.MSG_PREFIX) == 1
+
+
+@pytest.mark.asyncio
+async def test_irc_inbound_command_dispatches_to_plugin():
+    """IRC 侧发 /hijack → plugin on_command 被调用。"""
+    registry = PluginRegistry()
+    cmd_plugin = CommandPlugin("mode", ["hijack", "release"])
+    registry.register(cmd_plugin)
+
+    router, irc_conn, ws_server = make_router(registry=registry)
+    await router.forward_inbound_irc("#general", "yaosh", "/hijack")
+
+    assert len(cmd_plugin.received) == 1
+    assert cmd_plugin.received[0][0] == "hijack"
+    # 命令被 plugin 消费，不广播给 bridge
+    assert len(ws_server.broadcasts) == 0
+
+
+@pytest.mark.asyncio
+async def test_irc_inbound_unknown_command_broadcasts_normally():
+    """IRC 侧发 /unknown → 无 plugin 处理 → 当普通消息广播。"""
+    router, _, ws_server = make_router()
+    await router.forward_inbound_irc("#general", "yaosh", "/unknown stuff")
+
+    assert len(ws_server.broadcasts) == 1
+    assert ws_server.broadcasts[0]["content"] == "/unknown stuff"

@@ -1,0 +1,57 @@
+{
+  "module": "tests",
+  "description": "两层测试体系：unit_v4（58 tests）+ feishu_bridge unit（56 tests）+ pre_release（14 tests, 需要全栈+飞书）。E2E 测试已删除。",
+  "test_layers": {
+    "unit_v4": {
+      "path": "tests/unit_v4/",
+      "total_tests": 58,
+      "status": "all_pass",
+      "files": {
+        "test_agent_mcp.py": {"tests": 9, "covers": "agent_mcp.py — 前缀使用 protocol、run_zchat_cli 行为、tool 注册"},
+        "test_mode_plugin.py": {"tests": 10, "covers": "ModePlugin — hijack/release/copilot/resolve 命令、mode_changed/channel_resolved 事件"},
+        "test_plugin_registry.py": {"tests": 12, "covers": "PluginRegistry — 注册/冲突/广播/容错/query"},
+        "test_router.py": {"tests": 14, "covers": "Router — WS→IRC 路由、IRC→WS 广播、命令分派、mode 行为、多 agent、双重编码防止、IRC 侧命令分派"},
+        "test_routing.py": {"tests": 7, "covers": "RoutingTable — TOML 加载/解析/查询/容错（external_chat_id 取代 feishu_chat_id）"},
+        "test_sla_plugin.py": {"tests": 6, "covers": "SlaPlugin — timer 启动/取消/到期/多 channel 独立"}
+      }
+    },
+    "feishu_bridge_unit": {
+      "path": "src/feishu_bridge/tests/",
+      "total_tests": 56,
+      "status": "all_pass",
+      "files": {
+        "test_card_action.py": {"tests": 9, "covers": "CardAwareClient CARD 帧分发、_on_card_action CSAT/hijack/resolve 逻辑"},
+        "test_client_extended.py": {"tests": 12, "covers": "FeishuTestClient 7 个扩展方法（assert_edited/card_appears/card_updated/thread_reply/thread_appears/operator/click_card）"},
+        "test_group_manager.py": {"tests": 13, "covers": "GroupManager 角色识别/动态注册/持久化/成员变动/群解散/auto-hijack 检测 + channel_chat_map V4 映射"},
+        "test_outbound_router.py": {"tests": 9, "covers": "OutboundRouter V4 路由 — conv_created/msg_kind/side_kind/mode_changed/conv_closed/msg_id_mapping/edit"},
+        "test_parsers.py": {"tests": 8, "covers": "message_parsers 8 种消息类型解析"},
+        "test_sender.py": {"tests": 3, "covers": "FeishuSender API 调用路径（send_text/send_card/update_message）"},
+        "test_visibility_router.py": {"tests": 2, "covers": "OutboundRouter V4 路由逻辑（msg→双写、side→仅squad）"}
+      }
+    },
+    "e2e": {
+      "path": "tests/e2e/",
+      "status": "deleted",
+      "note": "E2E 测试目录已删除。之前包含 17 个测试（server_startup/bridge_registration/customer_connect/mode_switching 等），现已由 pre_release 测试覆盖。"
+    },
+    "pre_release": {
+      "path": "tests/pre_release/",
+      "total_tests": 14,
+      "status": "not_run",
+      "requires": "full stack (ergo + channel-server + agents + feishu_bridge + feishu credentials)",
+      "files": {
+        "test_feishu_e2e.py": {"tests": 14, "covers": "飞书全自动 E2E — 6步状态机/占位编辑/timer升级/CSAT评分/gate隔离/admin命令/SLA告警/授权模型"}
+      }
+    }
+  },
+  "coverage_gaps": [
+    "src/channel_server/ws_server.py — 无独立单元测试（通过 MockWSServer 间接覆盖）",
+    "src/channel_server/irc_connection.py — 无独立单元测试",
+    "src/channel_server/__main__.py — 进程入口，无单元测试",
+    "src/feishu_bridge/bridge.py — 无独立单元测试（部分逻辑通过 test_card_action.py 覆盖）",
+    "src/feishu_bridge/bridge_api_client.py — 无独立单元测试",
+    "src/feishu_bridge/ws_client.py — 仅 test_card_action.py 部分覆盖",
+    "src/feishu_bridge/config.py — 无独立单元测试",
+    "src/feishu_bridge/feishu_renderer.py — 仅通过 test_outbound_router.py 间接覆盖"
+  ]
+}

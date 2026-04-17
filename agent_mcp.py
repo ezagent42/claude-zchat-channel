@@ -2,8 +2,7 @@
 """zchat agent MCP server — 轻量 MCP stdio 代理.
 
 每个 Claude Code agent 运行一个 agent_mcp 实例。
-职责：MCP tools (reply/join/send_side_message) + IRC @mention 注入。
-不持有 engine 组件（ConversationManager 等），所有状态在 channel-server 独立进程中。
+职责：MCP tools (reply/run_zchat_cli) + IRC @mention 注入。
 """
 from __future__ import annotations
 
@@ -30,14 +29,11 @@ from mcp.types import JSONRPCMessage, JSONRPCNotification, TextContent, Tool
 from zchat_protocol.irc_encoding import encode_edit, encode_msg, encode_side
 
 # ------------------------------------------------------------------ #
-# 消息工具（内联，避免依赖已删除的 message.py / transport/）
+# 消息工具
 # ------------------------------------------------------------------ #
 
 # IRC RFC 2812: 512 bytes max。保留 IRC 头部后，payload 上限约 390 bytes
 _MAX_MESSAGE_BYTES = 390
-
-# conversation channel 名称前缀
-_CONV_CHANNEL_PREFIX = "#conv-"
 
 
 def _sanitize_for_irc(text: str) -> str:
@@ -78,10 +74,6 @@ def clean_mention(body: str, agent_name: str) -> str:
     """移除 @mention 并去除首尾空白。"""
     return body.replace(f"@{agent_name}", "").strip()
 
-
-def conv_channel_name(conversation_id: str) -> str:
-    """将 conversation_id 映射为 IRC channel 名称。"""
-    return f"{_CONV_CHANNEL_PREFIX}{conversation_id}"
 
 # ------------------------------------------------------------------ #
 # 环境变量
@@ -164,81 +156,75 @@ def register_tools(server: Server, state: dict) -> None:
             Tool(
                 name="reply",
                 description=(
-                    "Reply to a user or channel. Returns message_id (UUID) for later "
-                    "edit_of reference. Use edit_of to edit a previous message. "
-                    "Use side=true for side-channel messages (squad only)."
+                    "Send a message to a channel or user via IRC.\n\n"
+                    "Parameters:\n"
+                    "- chat_id (required): Target channel (#channel) or username for DM\n"
+                    "- text (required): Message content\n"
+                    "- edit_of (optional): message_id of a previous message to replace\n"
+                    "- side (optional): If true, message is only visible to operators\n\n"
+                    "Returns JSON with message_id and sent_to.\n\n"
+                    "Usage patterns:\n"
+                    "- Public message: reply(chat_id='#conv-001', text='hello')\n"
+                    "- Edit/replace: reply(chat_id='#conv-001', text='corrected', edit_of='<message_id>')\n"
+                    "- Side message: reply(chat_id='#conv-001', text='internal note', side=true)\n"
+                    "- Plugin command: reply(chat_id='#conv-001', text='/hijack')\n\n"
+                    "Available plugin commands (via text):\n"
+                    "- /hijack → switch channel to takeover mode (operator drives)\n"
+                    "- /release → switch channel back to copilot mode (agent drives)\n"
+                    "- /copilot → same as /release\n"
+                    "- /resolve → mark conversation as resolved"
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "chat_id": {
                             "type": "string",
-                            "description": "Target: username or #channel",
+                            "description": "Target: #channel (e.g. '#conv-001', '#general') or username for DM",
                         },
                         "text": {
                             "type": "string",
-                            "description": "Message content",
+                            "description": "Message content, or /command to trigger a plugin",
                         },
                         "edit_of": {
                             "type": "string",
-                            "description": "message_id of the message to edit/replace",
+                            "description": "message_id of a previous message to edit/replace",
                         },
                         "side": {
                             "type": "boolean",
-                            "description": "Send as side-channel message (squad only)",
+                            "description": "If true, only visible to operators (not customers)",
                         },
                     },
                     "required": ["chat_id", "text"],
                 },
             ),
             Tool(
-                name="join_channel",
-                description="Join an IRC channel to receive @mentions.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "channel_name": {
-                            "type": "string",
-                            "description": "Channel name without # prefix",
-                        },
-                    },
-                    "required": ["channel_name"],
-                },
-            ),
-            Tool(
-                name="join_conversation",
-                description=(
-                    "Join an existing conversation channel (#conv-<id>)."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "conversation_id": {"type": "string"},
-                    },
-                    "required": ["conversation_id"],
-                },
-            ),
-            Tool(
-                name="send_side_message",
-                description=(
-                    "Send a side-channel (operator+admin only) message to a conversation. "
-                    "Uses __side: IRC prefix so channel-server routes with visibility=side."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "conversation_id": {"type": "string"},
-                        "text": {"type": "string"},
-                    },
-                    "required": ["conversation_id", "text"],
-                },
-            ),
-            Tool(
                 name="run_zchat_cli",
                 description=(
-                    "Execute a zchat CLI command and return stdout/stderr. "
-                    "Used by admin-agent to translate IM group commands "
-                    "(e.g. /dispatch, /status, /review) into CLI operations."
+                    "Execute a zchat CLI command and return stdout/stderr.\n\n"
+                    "Parameters:\n"
+                    "- args (required): List of CLI arguments (excluding 'zchat' itself)\n"
+                    "- timeout (optional): Max seconds to wait, default 30\n\n"
+                    "Available commands:\n"
+                    "  Agent management:\n"
+                    "  - ['agent', 'create', '<name>'] → create agent (add '--type', '<template>' for specific type)\n"
+                    "  - ['agent', 'stop', '<name>'] → stop agent\n"
+                    "  - ['agent', 'restart', '<name>'] → restart agent\n"
+                    "  - ['agent', 'list'] → list all agents with status\n"
+                    "  - ['agent', 'status', '<name>'] → show agent details\n"
+                    "  - ['agent', 'send', '<name>', '<message>'] → send message to agent\n"
+                    "  - ['agent', 'join', '<name>', '<channel>'] → assign agent to channel\n\n"
+                    "  Channel management:\n"
+                    "  - ['channel', 'create', '<name>'] → register channel in routing.toml\n"
+                    "  - ['channel', 'list'] → list all registered channels\n\n"
+                    "  Project management:\n"
+                    "  - ['project', 'list'] → list projects\n"
+                    "  - ['project', 'show'] → show current project\n\n"
+                    "  IRC:\n"
+                    "  - ['irc', 'daemon', 'start'] → start ergo IRC server\n"
+                    "  - ['irc', 'daemon', 'stop'] → stop ergo IRC server\n\n"
+                    "  System:\n"
+                    "  - ['doctor'] → check environment and dependencies\n"
+                    "  - ['shutdown'] → stop all agents and services"
                 ),
                 inputSchema={
                     "type": "object",
@@ -246,7 +232,7 @@ def register_tools(server: Server, state: dict) -> None:
                         "args": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "CLI arguments excluding 'zchat' itself, e.g. ['agent','join','fast-agent','ch-1']",
+                            "description": "CLI arguments excluding 'zchat' itself",
                         },
                         "timeout": {
                             "type": "number",
@@ -263,12 +249,6 @@ def register_tools(server: Server, state: dict) -> None:
     async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
         if name == "reply":
             return await _handle_reply(_get_irc(), arguments)
-        if name == "join_channel":
-            return await _handle_join_channel(_get_irc(), arguments)
-        if name == "join_conversation":
-            return await _handle_join_conversation(_get_irc(), arguments)
-        if name == "send_side_message":
-            return await _handle_send_side_message(_get_irc(), arguments)
         if name == "run_zchat_cli":
             return await _handle_run_zchat_cli(arguments)
         raise ValueError(f"Unknown tool: {name}")
@@ -299,37 +279,6 @@ async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
     for chunk in chunk_message(prefixed):
         connection.privmsg(chat_id, chunk)
     return [TextContent(type="text", text=f'{{"message_id": "{message_id}", "sent_to": "{chat_id}"}}')]
-
-
-async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]:
-    channel = arguments["channel_name"]
-    connection.join(f"#{channel}")
-    return [TextContent(type="text", text=f"Joined #{channel}")]
-
-
-async def _handle_join_conversation(
-    connection, arguments: dict
-) -> list[TextContent]:
-    conv_id = arguments["conversation_id"]
-    channel = conv_channel_name(conv_id)
-    try:
-        connection.join(channel)
-    except Exception as e:
-        return [TextContent(type="text", text=f"join failed: {e}")]
-    return [TextContent(type="text", text=f"joined {channel}")]
-
-
-async def _handle_send_side_message(
-    connection, arguments: dict
-) -> list[TextContent]:
-    conv_id = arguments["conversation_id"]
-    text = arguments["text"]
-    channel = conv_channel_name(conv_id)
-    # __side: 前缀让 channel-server 路由为 visibility=side
-    prefixed = encode_side(text)
-    for chunk in chunk_message(prefixed):
-        connection.privmsg(channel, chunk)
-    return [TextContent(type="text", text=f"side message sent to {conv_id}")]
 
 
 async def _handle_run_zchat_cli(arguments: dict) -> list[TextContent]:
@@ -379,7 +328,6 @@ def _start_irc(
     on_privmsg_fn: Any,
 ) -> tuple[Any, Any]:
     """在独立线程启动 IRC reactor，返回 (reactor, connection)。"""
-    import fcntl
     import functools
     import ssl
     import threading
@@ -447,23 +395,10 @@ def _start_irc(
 
 async def main() -> None:
     """启动 agent MCP server：MCP stdio + IRC @mention 注入。"""
-    import fcntl
-
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
     channels = [c.strip() for c in IRC_CHANNELS.split(",") if c.strip()]
-
-    # 文件锁避免 Claude Code 启动多个 MCP 实例时 IRC nick collision
-    # 只有拿到锁的实例连 IRC，其他实例只提供 MCP tools
-    lock_path = os.path.join(os.environ.get("WORKSPACE", "/tmp"), ".irc.lock")
-    lock_fd = open(lock_path, "w")
-    try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        irc_primary = True
-    except (IOError, OSError):
-        irc_primary = False
-        print("[agent-mcp] IRC lock held by another instance, skipping IRC", file=sys.stderr)
 
     server = create_server()
     state: dict = {}
@@ -506,15 +441,12 @@ async def main() -> None:
         print(f"[agent-mcp] [private:{nick} conv={conv_id}] {actual_body}", file=sys.stderr)
         loop.call_soon_threadsafe(queue.put_nowait, (msg, context))
 
-    irc_reactor = None
-    irc_connection = None
-    if irc_primary:
-        irc_reactor, irc_connection = _start_irc(
-            IRC_SERVER, IRC_PORT, AGENT_NAME, channels,
-            IRC_TLS, IRC_AUTH_TOKEN,
-            queue, loop, _on_pubmsg, _on_privmsg,
-        )
-        state["irc_connection"] = irc_connection
+    irc_reactor, irc_connection = _start_irc(
+        IRC_SERVER, IRC_PORT, AGENT_NAME, channels,
+        IRC_TLS, IRC_AUTH_TOKEN,
+        queue, loop, _on_pubmsg, _on_privmsg,
+    )
+    state["irc_connection"] = irc_connection
 
     init_opts = InitializationOptions(
         server_name=f"zchat-agent-{AGENT_NAME}",
@@ -530,14 +462,12 @@ async def main() -> None:
         try:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(server.run, read_stream, write_stream, init_opts)
-                if irc_primary:
-                    tg.start_soon(poll_irc_queue, queue, write_stream)
+                tg.start_soon(poll_irc_queue, queue, write_stream)
         finally:
-            if irc_connection is not None:
-                try:
-                    irc_connection.disconnect("Agent shutting down")
-                except Exception:
-                    pass
+            try:
+                irc_connection.disconnect("Agent shutting down")
+            except Exception:
+                pass
 
 
 def entry_point() -> None:

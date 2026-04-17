@@ -1,7 +1,6 @@
 # Pre-release 测试路由配置
 # 用于 full_stack fixture
 
-[routing]
+[channels.general]
+agents = { fast = "yaosh-fast-agent", deep = "yaosh-deep-agent" }
 default_agents = ["yaosh-fast-agent"]
-escalation_chain = ["yaosh-deep-agent", "operator"]
-available_agents = ["yaosh-fast-agent", "yaosh-deep-agent"]

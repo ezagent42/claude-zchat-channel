@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,8 @@ from lark_oapi.api.im.v1 import (
 )
 
 from zchat_protocol import irc_encoding, ws_messages
+
+from channel_server.routing import load as load_routing
 
 from feishu_bridge.bridge_api_client import BridgeAPIClient
 from feishu_bridge.config import BridgeConfig, load_config
@@ -45,7 +48,7 @@ log = logging.getLogger("feishu-bridge")
 class FeishuBridge:
     """飞书 Bridge 主编排类。"""
 
-    def __init__(self, config: BridgeConfig) -> None:
+    def __init__(self, config: BridgeConfig, routing_path: str | None = None) -> None:
         self.config = config
         self._client = (
             lark.Client.builder()
@@ -57,10 +60,15 @@ class FeishuBridge:
             app_id=config.feishu.app_id,
             app_secret=config.feishu.app_secret,
         )
+
+        # V4: 从 routing.toml 加载 channel_id → feishu_chat_id 映射
+        channel_chat_map = self._load_channel_chat_map(routing_path)
+
         self.group_manager = GroupManager(
             admin_chat_id=config.groups.admin_chat_id,
             squad_chats=config.groups.squad_chats,
             customer_chats_path=config.customer_chats_path,
+            channel_chat_map=channel_chat_map,
         )
         # V4：出站路由器（按 irc_encoding kind 路由，不读 visibility 字段）
         self.outbound = OutboundRouter(
@@ -101,6 +109,23 @@ class FeishuBridge:
 
         # Bridge API WebSocket 连接（兼容旧的 _on_card_action 引用）
         self._bridge_ws: Any | None = None
+
+    # ------------------------------------------------------------------
+    # V4: routing.toml → channel_chat_map
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _load_channel_chat_map(routing_path: str | None) -> dict[str, str]:
+        """从 routing.toml 提取 channel_id → feishu_chat_id 映射。"""
+        path = routing_path or os.environ.get("CS_ROUTING_CONFIG", "routing.toml")
+        routing = load_routing(path)
+        result: dict[str, str] = {}
+        for ch_id, route in routing.channels.items():
+            if route.external_chat_id:
+                result[ch_id] = route.external_chat_id
+        if result:
+            log.info("Loaded %d channel→feishu mappings from %s", len(result), path)
+        return result
 
     # ------------------------------------------------------------------
     # 事件处理器（飞书入站）

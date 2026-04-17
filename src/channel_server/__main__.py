@@ -11,11 +11,10 @@ from .routing import load as load_routing
 from .router import Router
 from .ws_server import WSServer
 
-# 官方插件（V4-S2b）
+# 官方插件
 from plugins.mode.plugin import ModePlugin
 from plugins.sla.plugin import SlaPlugin
-from plugins.audit.plugin import AuditPlugin
-from plugins.lifecycle.plugin import LifecyclePlugin
+from plugins.resolve.plugin import ResolvePlugin
 
 
 def _env(name: str, default: str = "") -> str:
@@ -66,15 +65,14 @@ async def _main() -> None:
         await router.emit_event(channel, event, data)
 
     async def emit_command(cmd_name: str, channel: str, args: dict) -> None:
-        """plugin emit command → 重新进入 router 分派（internal source）。"""
+        """plugin emit command → 作为 "/" 消息重新进入 router 分派。"""
         from zchat_protocol import ws_messages as _ws
-        cmd_msg = _ws.build_command(channel, "internal", cmd_name, args)
+        cmd_msg = _ws.build_message(channel, source="internal", content=f"/{cmd_name}")
         await router.forward_inbound_ws(cmd_msg)
 
     registry.register(ModePlugin(emit_event=emit_event))
     registry.register(SlaPlugin(emit_event=emit_event, emit_command=emit_command, timeout_seconds=180))
-    registry.register(AuditPlugin())
-    registry.register(LifecyclePlugin(emit_event=emit_event))
+    registry.register(ResolvePlugin(emit_event=emit_event))
 
     # ──────────────────────────────────────────────────────────────────
 

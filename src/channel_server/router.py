@@ -42,8 +42,6 @@ class Router:
 
         if msg_type == ws_messages.WSType.MESSAGE:
             await self._handle_message(msg)
-        elif msg_type == ws_messages.WSType.COMMAND:
-            await self._handle_explicit_command(msg)
         elif msg_type == ws_messages.WSType.EVENT:
             # 让 plugin 订阅
             await self._registry.broadcast_event(msg)
@@ -54,7 +52,7 @@ class Router:
 
         1. 如果 content 以 "/" 开头且 plugin 接管 → 派给 plugin，**不**转 IRC
         2. 否则：查 mode 决定是否 @ prefix → IRC PRIVMSG
-        3. 同时让所有 plugin 订阅（audit/sla 可能需要）
+        3. 同时让所有 plugin 订阅
         """
         content = msg.get("content", "")
         channel = msg.get("channel", "")
@@ -76,16 +74,6 @@ class Router:
         await self._route_to_irc(channel, content, msg)
         # 同时广播给 plugins
         await self._registry.broadcast_message(msg)
-
-    async def _handle_explicit_command(self, msg: dict) -> None:
-        """type=command 的显式命令（预留接口，当前由 message + "/" 覆盖）。"""
-        cmd_name = msg.get("command", "")
-        handler = self._registry.get_handler(cmd_name)
-        if handler is not None:
-            try:
-                await handler.on_command(cmd_name, msg)
-            except Exception:
-                log.exception("[router] plugin %s on_command error", handler.name)
 
     async def _route_to_irc(self, channel: str, content: str, msg: dict) -> None:
         """根据 mode 决定 @ prefix，发 IRC PRIVMSG。"""
@@ -134,22 +122,36 @@ class Router:
     # -------- inbound from IRC (agent → bridges) --------
 
     async def forward_inbound_irc(self, irc_channel: str, nick: str, body: str) -> None:
-        """IRC pubmsg → WS message → 广播 bridges。"""
+        """IRC pubmsg → WS message → 广播 bridges + 命令分派。"""
         channel = irc_channel.lstrip("#")
 
         # 解析前缀（可能 agent 发了 __msg:/__edit:/__side: 等）
         parsed = irc_encoding.parse(body)
-        # 对外广播时 content 保留原 IRC 编码（bridge 自己 parse）
+        text = parsed.get("text", body)
+
+        # "/" 命令分派（agent 也能触发 plugin 命令）
+        if text.startswith("/"):
+            cmd_name = text[1:].split(maxsplit=1)[0]
+            handler = self._registry.get_handler(cmd_name)
+            if handler is not None:
+                cmd_msg = ws_messages.build_message(
+                    channel=channel, source=nick, content=text,
+                )
+                try:
+                    await handler.on_command(cmd_name, cmd_msg)
+                except Exception:
+                    log.exception("[router] plugin %s on_command error (from IRC)", handler.name)
+                await self._registry.broadcast_message(cmd_msg)
+                return
+
+        # 普通消息：对外广播（content 保留原 IRC 编码，bridge 自己 parse）
         ws_msg = ws_messages.build_message(
             channel=channel,
             source=nick,
             content=body,
             message_id=parsed.get("message_id"),
         )
-
-        # 广播给 bridges
         await self._ws.broadcast(ws_msg)
-        # 给 plugins 订阅
         await self._registry.broadcast_message(ws_msg)
 
     async def emit_event(self, channel: str, event: str, data: dict | None = None) -> None:

@@ -1,0 +1,49 @@
+{
+  "module": "plugin",
+  "path": "src/channel_server/plugin.py",
+  "description": "Plugin 框架。Plugin 通过 handles_commands() 自声明接管哪些命令，通过 on_ws_message/on_ws_event 订阅事件。PluginRegistry 管理插件集合 + 命令→插件查询表。",
+  "classes": [
+    {
+      "name": "Plugin",
+      "line": 13,
+      "description": "Plugin 接口（runtime_checkable Protocol）。定义 name, handles_commands, on_ws_message, on_ws_event, on_command, query。",
+      "methods": [
+        {"name": "handles_commands", "line": 18, "signature": "(self) -> list[str]"},
+        {"name": "on_ws_message", "line": 22, "signature": "(self, msg: dict) -> None"},
+        {"name": "on_ws_event", "line": 26, "signature": "(self, event: dict) -> None"},
+        {"name": "on_command", "line": 30, "signature": "(self, cmd_name: str, msg: dict) -> None"},
+        {"name": "query", "line": 34, "signature": "(self, key: str, args: dict | None = None) -> Any"}
+      ]
+    },
+    {
+      "name": "BasePlugin",
+      "line": 39,
+      "description": "Plugin 基类 — 提供所有方法的空默认实现，plugin 作者继承此类。",
+      "methods": [
+        {"name": "handles_commands", "line": 44, "signature": "(self) -> list[str]"},
+        {"name": "on_ws_message", "line": 47, "signature": "(self, msg: dict) -> None"},
+        {"name": "on_ws_event", "line": 50, "signature": "(self, event: dict) -> None"},
+        {"name": "on_command", "line": 53, "signature": "(self, cmd_name: str, msg: dict) -> None"},
+        {"name": "query", "line": 56, "signature": "(self, key: str, args: dict | None = None) -> Any"}
+      ]
+    },
+    {
+      "name": "PluginRegistry",
+      "line": 60,
+      "description": "维护 plugin 集合 + command→plugin 分派表 + event 订阅列表。启动时冲突检测。",
+      "methods": [
+        {"name": "__init__", "line": 63, "signature": "(self) -> None"},
+        {"name": "register", "line": 67, "signature": "(self, plugin: Plugin) -> None", "description": "注册 plugin，handles_commands 冲突时抛 ValueError"},
+        {"name": "get_handler", "line": 81, "signature": "(self, cmd_name: str) -> Plugin | None"},
+        {"name": "get_plugin", "line": 84, "signature": "(self, name: str) -> Plugin | None"},
+        {"name": "all_plugins", "line": 87, "signature": "(self) -> list[Plugin]"},
+        {"name": "broadcast_message", "line": 90, "signature": "(self, msg: dict) -> None", "description": "给所有 plugin 转发 message"},
+        {"name": "broadcast_event", "line": 99, "signature": "(self, event: dict) -> None", "description": "给所有 plugin 转发 event"}
+      ]
+    }
+  ],
+  "functions": [],
+  "imports": ["typing.Any", "typing.Protocol", "typing.runtime_checkable"],
+  "test_file": "tests/unit_v4/test_plugin_registry.py",
+  "test_results": {"passed": 12, "failed": 0, "total": 12}
+}

@@ -1,0 +1,28 @@
+{
+  "module": "sla_plugin",
+  "path": "src/plugins/sla/plugin.py",
+  "description": "SLA 守护插件。订阅 mode_changed 事件：to=takeover 时启动超时 timer，timer 到期后 emit sla_breach 事件 + emit release 命令自动回到 copilot。",
+  "classes": [
+    {
+      "name": "SlaPlugin",
+      "line": 21,
+      "description": "SLA 守护：takeover 超时后自动回到 copilot。",
+      "methods": [
+        {"name": "__init__", "line": 33, "signature": "(self, emit_event, emit_command, timeout_seconds: float = 180.0) -> None"},
+        {"name": "handles_commands", "line": 43, "signature": "(self) -> list[str]", "description": "返回空列表（不接管命令）"},
+        {"name": "on_ws_event", "line": 46, "signature": "async (self, event: dict) -> None", "description": "订阅 mode_changed：takeover→启动 timer，其他→取消 timer"},
+        {"name": "_start_timer", "line": 59, "signature": "async (self, channel: str) -> None", "description": "为 channel 启动（或重置）超时 timer"},
+        {"name": "_cancel_timer", "line": 65, "signature": "(self, channel: str) -> None", "description": "取消该 channel 的 timer"},
+        {"name": "_timer_task", "line": 71, "signature": "async (self, channel: str) -> None", "description": "sleep 到期后 emit sla_breach + release command"}
+      ]
+    }
+  ],
+  "functions": [],
+  "commands_handled": [],
+  "events_subscribed": ["mode_changed"],
+  "events_emitted": ["sla_breach"],
+  "commands_emitted": ["release"],
+  "imports": ["asyncio", "logging", "channel_server.plugin.BasePlugin"],
+  "test_file": "tests/unit_v4/test_sla_plugin.py",
+  "test_results": {"passed": 6, "failed": 0, "total": 6}
+}

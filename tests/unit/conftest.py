@@ -1,6 +1,6 @@
-"""unit_v4 测试配置。
+"""unit 测试配置。
 
-确保 src/ 优先于根目录，使 `import plugins` 指向 src/plugins/ 而非旧 plugins/。
+确保 src/ 优先于根目录，使 `import plugins` 指向 src/plugins/。
 """
 
 from __future__ import annotations

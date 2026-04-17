@@ -127,3 +127,50 @@ def test_operator_in_customer_chat():
 
         # 未注册群：不触发
         assert gm.is_operator_in_customer_chat("ou_op1", "oc_unknown") is False
+
+
+# ---------------------------------------------------------------------- #
+# V4: channel_chat_map 映射测试
+# ---------------------------------------------------------------------- #
+
+
+def test_get_customer_chat_from_channel_map():
+    """V4: channel_id → external_chat_id 映射查询。"""
+    gm = GroupManager(
+        admin_chat_id="oc_admin",
+        squad_chats=[],
+        channel_chat_map={"ch-群A": "oc_客户群A", "ch-群B": "oc_客户群B"},
+    )
+    assert gm.get_customer_chat("ch-群A") == "oc_客户群A"
+    assert gm.get_customer_chat("ch-群B") == "oc_客户群B"
+    assert gm.get_customer_chat("ch-unknown") is None
+
+
+def test_get_customer_chat_fallback_to_dynamic():
+    """V4: channel_chat_map 未命中时降级到动态注册的 chat_id。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        gm = GroupManager(
+            admin_chat_id="oc_admin",
+            squad_chats=[],
+            customer_chats_path=os.path.join(tmp, "c.json"),
+            channel_chat_map={"ch-群A": "oc_客户群A"},
+        )
+        gm.register_customer_chat("oc_direct")
+        # 映射命中
+        assert gm.get_customer_chat("ch-群A") == "oc_客户群A"
+        # 降级到动态注册
+        assert gm.get_customer_chat("oc_direct") == "oc_direct"
+        # 都没有
+        assert gm.get_customer_chat("unknown") is None
+
+
+def test_set_and_remove_channel_mapping():
+    """V4: 动态添加/删除映射。"""
+    gm = GroupManager(admin_chat_id="oc_admin", squad_chats=[])
+    assert gm.get_customer_chat("ch-new") is None
+
+    gm.set_channel_mapping("ch-new", "oc_new_chat")
+    assert gm.get_customer_chat("ch-new") == "oc_new_chat"
+
+    gm.remove_channel_mapping("ch-new")
+    assert gm.get_customer_chat("ch-new") is None
