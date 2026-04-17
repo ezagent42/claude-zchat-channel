@@ -6,6 +6,11 @@
 - im.chat.member.user.added_v1 → 成员权限授予
 - im.chat.member.user.deleted_v1 → 成员权限撤销
 - im.chat.disbanded_v1 → 群解散归档
+
+V4 协议变化：
+- 入站消息用 ws_messages.build_message()，不再发 v1 type
+- 出站消息不读 visibility 字段；改用 irc_encoding.parse(content).kind 路由
+- 不做命令分拣；所有内容原样发 WS，channel-server 自行查 PluginRegistry
 """
 
 from __future__ import annotations
@@ -24,13 +29,14 @@ from lark_oapi.api.im.v1 import (
     P2ImMessageReceiveV1,
 )
 
+from zchat_protocol import irc_encoding, ws_messages
+
 from feishu_bridge.bridge_api_client import BridgeAPIClient
 from feishu_bridge.config import BridgeConfig, load_config
-from feishu_bridge.gate import compute_visibility, infer_sender_role
 from feishu_bridge.group_manager import GroupManager
 from feishu_bridge.message_parsers import parse_message
+from feishu_bridge.outbound import OutboundRouter
 from feishu_bridge.sender import FeishuSender
-from feishu_bridge.visibility_router import VisibilityRouter
 from feishu_bridge.ws_client import CardAwareClient
 
 log = logging.getLogger("feishu-bridge")
@@ -56,7 +62,8 @@ class FeishuBridge:
             squad_chats=config.groups.squad_chats,
             customer_chats_path=config.customer_chats_path,
         )
-        self.visibility_router = VisibilityRouter(
+        # V4：出站路由器（按 irc_encoding kind 路由，不读 visibility 字段）
+        self.outbound = OutboundRouter(
             sender=self.sender,
             group_manager=self.group_manager,
             admin_chat_id=config.groups.admin_chat_id,
@@ -77,20 +84,18 @@ class FeishuBridge:
         # Bridge API 传输层
         self._bridge_client = BridgeAPIClient(
             config.channel_server_url,
-            register_data={
-                "type": "register",
-                "bridge_type": "feishu",
-                "instance_id": "feishu-bridge",
-                "capabilities": ["customer", "operator", "admin"],
-            },
+            register_data=ws_messages.build_register(
+                bridge_type="feishu",
+                instance_id="feishu-bridge",
+                capabilities=["customer", "operator", "admin"],
+            ),
         )
         self._bridge_client.on_message = self._on_bridge_event
 
         # 已连接的 conversation（避免重复 connect）
         self._known_conversations: set[str] = set()
 
-        # agent nick 识别模式（用于 infer_sender_role）
-        # 可通过 config 扩展；默认识别包含 "-agent" 的 nick
+        # agent nick 识别模式（用于出站路由的 gate 逻辑）
         self._agent_nick_pattern: str = getattr(
             getattr(config, "agents", None), "nick_pattern", "-agent"
         )
@@ -102,7 +107,7 @@ class FeishuBridge:
         self._bridge_ws: Any | None = None
 
     # ------------------------------------------------------------------
-    # 事件处理器
+    # 事件处理器（飞书入站）
     # ------------------------------------------------------------------
 
     def _on_message(self, data: P2ImMessageReceiveV1) -> None:
@@ -143,39 +148,28 @@ class FeishuBridge:
         )
         log.info("[%s] %s: %s", role, sender_open_id or "?", text[:100])
 
-        # Squad thread 回复 → 作为 operator side 消息转发到 channel-server
-        # lark-oapi message 对象的 thread 字段：parent_id 或 root_id
+        # Squad thread 回复 → 作为 operator 消息转发到 channel-server
         is_thread_reply = (
             getattr(msg, "parent_id", None)
             or getattr(msg, "root_id", None)
             or getattr(msg, "thread_id", None)
         )
-        import sys as _sys
-        print(f"[bridge] role={role} is_thread={bool(is_thread_reply)} "
-              f"chat_id={chat_id}", file=_sys.stderr)
         if role == "operator" and is_thread_reply:
-            conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
-            log.info("[thread] operator thread reply detected: chat=%s conv=%s connected=%s",
+            conv_id = self.outbound.get_conversation_for_squad(chat_id)
+            log.info("[thread] operator thread reply: chat=%s conv=%s connected=%s",
                      chat_id, conv_id, self._bridge_client.connected)
             if conv_id and self._bridge_client.connected:
-                # 发 operator_message — channel-server Gate 会根据 mode 判定 visibility
-                self._bridge_client.send({
-                    "type": "operator_message",
-                    "conversation_id": conv_id,
-                    "operator_id": sender_open_id,
-                    "text": text,
-                })
+                # V4：operator thread 回复原样发 WS
+                self._bridge_client.send(
+                    ws_messages.build_message(
+                        channel=conv_id,
+                        source=sender_open_id or "operator",
+                        content=text,
+                    )
+                )
             return
 
-        # Auto-hijack 暂时关闭 — 通过手动 /hijack 命令切换身份
-        # if (
-        #     role == "customer"
-        #     and sender_open_id
-        #     and self.group_manager.is_operator_in_customer_chat(sender_open_id, chat_id)
-        # ):
-        #     self._trigger_auto_hijack(chat_id, sender_open_id, text)
-
-        # ── 转发到 channel-server Bridge API ──────────────────────
+        # 转发到 channel-server Bridge API
         message_id = msg.message_id or ""
         self._forward_to_bridge(role, chat_id, text, message_id, sender_open_id)
 
@@ -244,65 +238,73 @@ class FeishuBridge:
             log.info("Group %s disbanded", chat_id)
 
     # ------------------------------------------------------------------
-    # Bridge API 协议适配（入站：飞书 → channel-server）
+    # 入站：飞书 → channel-server（V4 ws_messages 格式）
     # ------------------------------------------------------------------
 
     def _forward_customer(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
     ) -> None:
-        """Customer 消息转发：首次消息 → connect + squad card + message。"""
+        """Customer 消息转发：首次消息 → connect 事件 + squad card + message。"""
         if chat_id not in self._known_conversations:
-            self._bridge_client.send({
-                "type": "connect",
-                "conversation_id": chat_id,
-                "sender_id": sender_id,
-                "metadata": {"source": "feishu", "name": sender_id},
-            })
+            # connect 事件：通知 channel-server 新 conversation
+            self._bridge_client.send(
+                ws_messages.build_event(
+                    channel=chat_id,
+                    event="connect",
+                    data={
+                        "sender_id": sender_id,
+                        "metadata": {"source": "feishu", "name": sender_id},
+                    },
+                )
+            )
             # 在 squad 群创建 conversation card（thread root）
-            self.visibility_router.on_conversation_created(
-                chat_id, metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
+            self.outbound.on_conversation_created(
+                chat_id,
+                metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
             )
             self._known_conversations.add(chat_id)
-        self._bridge_client.send({
-            "type": "message",
-            "conversation_id": chat_id,
-            "sender_id": sender_id,
-            "text": text,
-            "message_id": message_id,
-        })
+        # V4：统一用 build_message
+        self._bridge_client.send(
+            ws_messages.build_message(
+                channel=chat_id,
+                source=sender_id or "customer",
+                content=text,
+                message_id=message_id or None,
+            )
+        )
 
     def _forward_operator(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
     ) -> None:
-        """Operator 消息转发：/ 开头 → command，否则 → message。"""
-        conv_id = self.visibility_router.get_conversation_for_squad(chat_id)
+        """Operator 消息转发：原样发 WS（不分拣命令）。
+
+        V4：channel-server PluginRegistry 统一处理 / 前缀。
+        """
+        conv_id = self.outbound.get_conversation_for_squad(chat_id)
         if not conv_id:
             log.debug("operator message in squad %s but no active conversation", chat_id)
             return
-        if text.startswith("/"):
-            self._bridge_client.send({
-                "type": "command",
-                "conversation_id": conv_id,
-                "sender_id": sender_id,
-                "command": text,
-            })
-        else:
-            self._bridge_client.send({
-                "type": "message",
-                "conversation_id": conv_id,
-                "sender_id": sender_id,
-                "text": text,
-            })
+        self._bridge_client.send(
+            ws_messages.build_message(
+                channel=conv_id,
+                source=sender_id or "operator",
+                content=text,
+                message_id=message_id or None,
+            )
+        )
 
     def _forward_admin(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
     ) -> None:
-        """Admin 命令转发。"""
-        self._bridge_client.send({
-            "type": "command",
-            "sender_id": sender_id,
-            "command": text,
-        })
+        """Admin 命令转发：原样发 WS message。"""
+        self._bridge_client.send(
+            ws_messages.build_message(
+                channel=chat_id,
+                source=sender_id or "admin",
+                content=text,
+                message_id=message_id or None,
+            )
+        )
 
     _ROLE_FORWARDERS: dict[str, str] = {
         "customer": "_forward_customer",
@@ -323,69 +325,71 @@ class FeishuBridge:
             handler(chat_id, text, message_id, sender_id)
 
     # ------------------------------------------------------------------
-    # Bridge API 协议适配（出站：channel-server → 飞书）
+    # 出站：channel-server → 飞书（V4 按 irc_encoding.parse kind 路由）
     # ------------------------------------------------------------------
 
-    def _handle_reply_event(self, conv_id: str, msg: dict) -> None:
-        """处理 reply / message 事件 → 本地 gate → VisibilityRouter 按 visibility 路由。
+    def _handle_message_event(self, conv_id: str, msg: dict) -> None:
+        """处理 message 事件 → 解析 content 的 kind → OutboundRouter 路由。
 
-        channel-server 现在固定发出 visibility="public"，由 bridge 在此处本地判决：
-        1. 获取当前 conversation mode（从 thread 状态，默认 "fast"）
-        2. 推断 sender_role（通过 sender_id 格式）
-        3. compute_visibility(mode, sender_role, default=msg.visibility) 覆盖 msg
-        4. 路由到 VisibilityRouter
+        V4 不读 msg["visibility"]。
+        irc_encoding.parse(content) 决定种类：
+          kind=msg/plain → 客户群 + squad thread
+          kind=side      → 仅 squad thread
+          kind=edit      → 更新已发消息
+          kind=sys       → 忽略（机对机控制不进飞书）
         """
-        # 1. 获取 mode
-        thread = self.visibility_router.get_thread(conv_id)
-        mode = thread.mode if thread is not None else "fast"
+        content = msg.get("content", "")
+        parsed = irc_encoding.parse(content)
+        kind = parsed.get("kind", "plain")
 
-        # 2. 推断 sender_role
-        sender_id = msg.get("sender_id", "")
-        sender_role = infer_sender_role(sender_id, self._agent_nick_pattern)
+        if kind == "sys":
+            log.debug("[outbound] sys message ignored: conv=%s", conv_id)
+            return
 
-        # 3. 本地 gate：可能将 public → side
-        raw_visibility = msg.get("visibility", "public")
-        gated_visibility = compute_visibility(mode, sender_role, default=raw_visibility)
+        if kind == "edit":
+            cs_msg_id = parsed.get("message_id", "")
+            text = parsed.get("text", "")
+            self.outbound.on_edit(conv_id, cs_msg_id, text)
+            return
 
-        if gated_visibility != raw_visibility:
-            log.debug(
-                "[gate] conv=%s mode=%s sender=%s(%s): %s → %s",
-                conv_id, mode, sender_id, sender_role, raw_visibility, gated_visibility,
-            )
-            msg = dict(msg)  # 不修改原始 dict
-            msg["visibility"] = gated_visibility
-
-        # 4. 路由
-        self.visibility_router.route(conv_id, msg)
+        # kind ∈ {msg, side, plain}
+        text = parsed.get("text", content)
+        cs_msg_id = msg.get("message_id") or parsed.get("message_id")
+        self.outbound.route(conv_id, kind=kind, text=text, cs_msg_id=cs_msg_id)
 
     def _handle_edit_event(self, conv_id: str, msg: dict) -> None:
-        """处理 edit 事件。"""
+        """处理显式 edit 事件（兼容 channel-server 发 type=edit 的场景）。"""
         cs_msg_id = msg.get("message_id", "")
-        text = msg.get("text", "")
-        self.visibility_router.on_edit(conv_id, cs_msg_id, text)
+        content = msg.get("content", "")
+        if content:
+            parsed = irc_encoding.parse(content)
+            text = parsed.get("text", content)
+        else:
+            text = msg.get("text", "")
+        self.outbound.on_edit(conv_id, cs_msg_id, text)
 
     def _handle_conv_created(self, conv_id: str, msg: dict) -> None:
         """处理 conversation.created 事件。"""
         metadata = msg.get("metadata", {})
-        self.visibility_router.on_conversation_created(conv_id, metadata)
+        self.outbound.on_conversation_created(conv_id, metadata)
 
     def _handle_mode_changed(self, conv_id: str, msg: dict) -> None:
         """处理 mode.changed 事件。"""
         mode = msg.get("mode", "fast")
-        self.visibility_router.on_mode_changed(conv_id, mode)
+        self.outbound.on_mode_changed(conv_id, mode)
 
     def _handle_conv_closed(self, conv_id: str, msg: dict) -> None:
         """处理 conversation.closed 事件。"""
         resolution = msg.get("resolution")
-        self.visibility_router.on_conversation_closed(conv_id, resolution)
+        self.outbound.on_conversation_closed(conv_id, resolution)
 
     def _handle_csat_request(self, conv_id: str, msg: dict) -> None:
         """处理 csat_request 事件。"""
-        self.visibility_router.route(conv_id, msg)
+        self.outbound.on_csat_request(conv_id)
 
     _EVENT_HANDLERS: dict[str, str] = {
-        "reply": "_handle_reply_event",      # v1 backward compat
-        "message": "_handle_reply_event",    # v2: same handler
+        "message": "_handle_message_event",
+        "reply": "_handle_message_event",       # 向后兼容
         "edit": "_handle_edit_event",
         "conversation.created": "_handle_conv_created",
         "mode.changed": "_handle_mode_changed",
@@ -396,13 +400,13 @@ class FeishuBridge:
     def _on_bridge_event(self, msg: dict) -> None:
         """处理从 channel-server 收到的 Bridge API 事件。"""
         msg_type = msg.get("type", "")
-        conv_id = msg.get("conversation_id", "")
+        conv_id = msg.get("conversation_id", "") or msg.get("channel", "")
 
         handler_name = self._EVENT_HANDLERS.get(msg_type)
         if handler_name is not None:
             handler = getattr(self, handler_name)
             handler(conv_id, msg)
-        elif msg_type in ("registered", "customer_connected"):
+        elif msg_type in ("registered", "customer_connected", "ack"):
             log.debug("ack: %s", msg_type)
         else:
             log.debug("unhandled bridge event: %s", msg_type)
@@ -413,11 +417,7 @@ class FeishuBridge:
 
     @staticmethod
     def _parse_card_action(payload: dict) -> tuple[int, str] | tuple[None, None]:
-        """从卡片回调 payload 解析 score 和 conv_id。
-
-        Returns:
-            (score, conv_id) 或 (None, None) 如果字段缺失。
-        """
+        """从卡片回调 payload 解析 score 和 conv_id。"""
         try:
             value = payload["action"]["value"]
             score_str = value.get("score")
@@ -429,7 +429,7 @@ class FeishuBridge:
             return None, None
 
     def _on_card_action(self, payload: dict) -> None:
-        """卡片点击回调 → 分发：hijack/resolve 转为命令，CSAT 转为评分。"""
+        """卡片点击回调 → hijack/resolve 转为命令消息，CSAT 转为评分消息。"""
         try:
             value = payload["action"]["value"]
         except (KeyError, TypeError):
@@ -440,13 +440,14 @@ class FeishuBridge:
         conv_id = value.get("conv_id")
 
         if action_type and conv_id:
-            # hijack/resolve → 转发为 command (v2)
-            self._bridge_client.send({
-                "type": "command",
-                "conversation_id": conv_id,
-                "sender_id": "card_action",
-                "command": f"/{action_type}",
-            })
+            # V4：hijack/resolve → 发 WS message（"/"前缀，channel-server 路由）
+            self._bridge_client.send(
+                ws_messages.build_message(
+                    channel=conv_id,
+                    source="card_action",
+                    content=f"/{action_type}",
+                )
+            )
             return
 
         # CSAT score handling
@@ -455,11 +456,13 @@ class FeishuBridge:
             if not self._bridge_client.connected:
                 log.warning("card action: bridge not connected")
                 return
-            self._bridge_client.send({
-                "type": "customer_message",
-                "conversation_id": conv_id,
-                "csat_score": int(score),
-            })
+            self._bridge_client.send(
+                ws_messages.build_message(
+                    channel=conv_id,
+                    source="customer",
+                    content=f"__csat_score:{int(score)}",
+                )
+            )
 
     # ------------------------------------------------------------------
     # 文件下载
@@ -509,17 +512,13 @@ class FeishuBridge:
     def _on_card_action_event(self, data) -> None:
         """处理通过 EventDispatcherHandler 收到的 card.action.trigger。"""
         try:
-            # data 可能是 P2CardActionTrigger 对象或 dict
             if hasattr(data, "event"):
                 event = data.event
-                # event 可能是对象或 dict
                 if hasattr(event, "action"):
                     action_obj = event.action
-                    # action 可能是对象，提取 value 和 tag
                     if hasattr(action_obj, "value"):
                         value = action_obj.value
                         tag = getattr(action_obj, "tag", "")
-                        # value 可能是 dict 或对象
                         if not isinstance(value, dict):
                             value = vars(value) if hasattr(value, "__dict__") else {}
                         self._on_card_action({"action": {"value": value, "tag": tag}})
@@ -529,7 +528,6 @@ class FeishuBridge:
                     if action:
                         self._on_card_action({"action": action})
                         return
-            # fallback: 尝试直接当 dict
             if isinstance(data, dict):
                 self._on_card_action(data)
         except Exception:
@@ -551,13 +549,11 @@ class FeishuBridge:
 
     def start(self) -> None:
         """启动 Bridge API 客户端 + 飞书 WSS 长连接。"""
-        # 1. 先连接 channel-server Bridge API（后台线程）
         self._bridge_client.start()
         import time
-        time.sleep(1)  # 等 WebSocket 连接建立
+        time.sleep(1)
         log.info("Bridge API client started → %s", self.config.channel_server_url)
 
-        # 2. 再启动飞书 WSS 长连接（阻塞）
         handler = self.build_event_handler()
         cli = CardAwareClient(
             self.config.feishu.app_id,

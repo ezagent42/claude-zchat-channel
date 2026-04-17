@@ -1,20 +1,22 @@
-"""Task 4.6.5 单元测试：visibility_router 的 card+thread 模型。
+"""OutboundRouter V4 单元测试。
 
-覆盖测试计划 TC-1 ~ TC-7：
+V4 协议：按 irc_encoding kind 路由，不读 visibility 字段。
+覆盖 TC-1 ~ TC-8：
 - TC-1 test_conv_created_sends_card
 - TC-2 test_card_is_thread_root
-- TC-3 test_public_reply_dual_write
-- TC-4 test_side_thread_only
+- TC-3 test_msg_kind_dual_write（原 public_reply_dual_write）
+- TC-4 test_side_kind_thread_only（原 side_thread_only）
 - TC-5 test_mode_changed_updates_card
 - TC-6 test_conv_closed_updates_card
 - TC-7 test_msg_id_mapping_for_edit
+- TC-8 test_plain_kind_dual_write
 """
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from feishu_bridge.visibility_router import ConvThread, VisibilityRouter
+from feishu_bridge.outbound import ConvThread, OutboundRouter
 
 
 def _build_router(
@@ -23,7 +25,7 @@ def _build_router(
     customer_chat: str | None = "oc_cust",
     admin_chat_id: str | None = None,
     card_msg_id: str = "om_card_root",
-) -> tuple[VisibilityRouter, MagicMock]:
+) -> tuple[OutboundRouter, MagicMock]:
     sender = MagicMock()
     gm = MagicMock()
     gm.get_squad_chat.return_value = squad_chat
@@ -33,7 +35,7 @@ def _build_router(
     sender.reply_in_thread.return_value = "om_thread_default"
     sender.update_card.return_value = True
     sender.update_message.return_value = True
-    router = VisibilityRouter(
+    router = OutboundRouter(
         sender=sender, group_manager=gm, admin_chat_id=admin_chat_id
     )
     return router, sender
@@ -76,12 +78,12 @@ def test_card_is_thread_root() -> None:
 
 
 # ---------------------------------------------------------------------- #
-# TC-3: public → send_text(customer) + reply_in_thread(squad)
+# TC-3: kind=msg → send_text(customer) + reply_in_thread(squad)
 # ---------------------------------------------------------------------- #
 
 
-def test_public_reply_dual_write() -> None:
-    """TC-3: visibility=public → customer 群 send_text + squad thread reply_in_thread。"""
+def test_msg_kind_dual_write() -> None:
+    """TC-3: kind=msg → customer 群 send_text + squad thread reply_in_thread。"""
     router, sender = _build_router(card_msg_id="om_root_3")
     router.on_conversation_created("conv_3", metadata={})
 
@@ -90,7 +92,9 @@ def test_public_reply_dual_write() -> None:
 
     customer_msg_id = router.route(
         "conv_3",
-        {"text": "hello", "visibility": "public", "message_id": "cs_msg_1"},
+        kind="msg",
+        text="hello",
+        cs_msg_id="cs_msg_1",
     )
 
     assert customer_msg_id == "om_cust_msg_1"
@@ -103,21 +107,19 @@ def test_public_reply_dual_write() -> None:
 
 
 # ---------------------------------------------------------------------- #
-# TC-4: side → 仅 reply_in_thread(squad)，不发 customer 群
+# TC-4: kind=side → 仅 reply_in_thread(squad)，不发 customer 群
 # ---------------------------------------------------------------------- #
 
 
-def test_side_thread_only() -> None:
-    """TC-4: visibility=side → 仅 reply_in_thread，不 send_text(customer)。"""
+def test_side_kind_thread_only() -> None:
+    """TC-4: kind=side → 仅 reply_in_thread，不 send_text(customer)。"""
     router, sender = _build_router(card_msg_id="om_root_4")
     router.on_conversation_created("conv_4", metadata={})
 
     sender.send_text.reset_mock()
     sender.reply_in_thread.reset_mock()
 
-    router.route(
-        "conv_4", {"text": "side note", "visibility": "side"}
-    )
+    router.route("conv_4", kind="side", text="side note")
 
     sender.send_text.assert_not_called()
     assert sender.reply_in_thread.call_count == 1
@@ -181,20 +183,17 @@ def test_conv_closed_updates_card() -> None:
 
 
 # ---------------------------------------------------------------------- #
-# TC-7: msg_id 映射 — public reply 存映射，edit 查映射
+# TC-7: msg_id 映射 — msg reply 存映射，edit 查映射
 # ---------------------------------------------------------------------- #
 
 
 def test_msg_id_mapping_for_edit() -> None:
-    """TC-7: public reply 时存 {cs_msg_id: feishu_msg_id}，edit 查映射调 update_message。"""
+    """TC-7: kind=msg 时存 {cs_msg_id: feishu_msg_id}，edit 查映射调 update_message。"""
     router, sender = _build_router(card_msg_id="om_root_7")
     router.on_conversation_created("conv_7", metadata={})
 
     sender.send_text.return_value = "om_cust_7"
-    router.route(
-        "conv_7",
-        {"text": "original", "visibility": "public", "message_id": "cs_msg_7"},
-    )
+    router.route("conv_7", kind="msg", text="original", cs_msg_id="cs_msg_7")
     assert router.get_feishu_msg_id("cs_msg_7") == "om_cust_7"
 
     sender.update_message.reset_mock()
@@ -206,6 +205,26 @@ def test_msg_id_mapping_for_edit() -> None:
     # edit 也在 thread 中留痕
     sender.reply_in_thread.assert_called_once()
     assert "edited" in sender.reply_in_thread.call_args[0][1].lower()
+
+
+# ---------------------------------------------------------------------- #
+# TC-8: kind=plain 等同 msg（双写）
+# ---------------------------------------------------------------------- #
+
+
+def test_plain_kind_dual_write() -> None:
+    """TC-8: kind=plain → 同 msg，双写 customer + squad thread。"""
+    router, sender = _build_router(card_msg_id="om_root_8")
+    router.on_conversation_created("conv_8", metadata={})
+
+    sender.send_text.return_value = "om_cust_8"
+    sender.reply_in_thread.reset_mock()
+
+    mid = router.route("conv_8", kind="plain", text="plain msg")
+
+    assert mid == "om_cust_8"
+    sender.send_text.assert_called_once_with("oc_cust", "plain msg")
+    sender.reply_in_thread.assert_called_once()
 
 
 def test_edit_without_mapping_still_leaves_thread_trace() -> None:

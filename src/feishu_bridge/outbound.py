@@ -1,15 +1,14 @@
-"""Visibility → 飞书群路由（card + thread 模型）。
+"""OutboundRouter — channel-server → 飞书出站路由（V4 协议）。
+
+V4 变化：
+- 不读 visibility 字段，改由 irc_encoding.parse(content).kind 在 bridge.py 中解析后传入
+- route(conv_id, kind, text, cs_msg_id) 中：
+    kind=msg/plain → 客户群 send_text + squad reply_in_thread
+    kind=side      → 仅 squad reply_in_thread
+    （kind=edit/sys 由 bridge.py 在调用前过滤）
 
 每个 conversation 在 squad 群内以 interactive card 作为 thread root，
-后续 public/side/system 消息以 thread 回复的形式追加。
-
-- conversation.created → 在 squad 群发 card（thread root）
-- public reply → 双写：send_text(customer_chat) + reply_in_thread(squad)
-- side → 仅 reply_in_thread(squad)
-- system → reply_in_thread(squad) + 可选 send_text(admin)
-- mode.changed → update_card(card_msg_id, 新状态)
-- conversation.closed → update_card(card_msg_id, state=closed, resolution)
-- edit（客户可见消息） → 通过 msg_id_map 查到 feishu_msg_id → update_message
+后续 msg/side 消息以 thread 回复的形式追加。
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ if TYPE_CHECKING:
     from feishu_bridge.group_manager import GroupManager
     from feishu_bridge.sender import FeishuSender
 
-log = logging.getLogger("feishu-bridge.visibility_router")
+log = logging.getLogger("feishu-bridge.outbound")
 
 
 @dataclass
@@ -40,8 +39,8 @@ class ConvThread:
     metadata: dict = field(default_factory=dict)
 
 
-class VisibilityRouter:
-    """根据 visibility 将消息路由到对应飞书群（card+thread 模型）。"""
+class OutboundRouter:
+    """将出站消息（channel-server → 飞书）按 kind 路由到对应飞书群。"""
 
     def __init__(
         self,
@@ -106,25 +105,26 @@ class VisibilityRouter:
         return card_msg_id
 
     # ------------------------------------------------------------------
-    # 消息路由
+    # 消息路由（V4：按 kind 路由，不读 visibility 字段）
     # ------------------------------------------------------------------
 
-    def route(self, conversation_id: str, message: dict) -> str | None:
-        """根据 visibility 路由消息。
+    def route(
+        self,
+        conversation_id: str,
+        *,
+        kind: str,
+        text: str,
+        cs_msg_id: str | None = None,
+    ) -> str | None:
+        """按 kind 路由出站消息到飞书群。
 
-        public → send_text(customer) + reply_in_thread(squad)
-        side   → reply_in_thread(squad)
-        system → reply_in_thread(squad) [+ send_text(admin)]
+        kind=msg/plain → send_text(customer) + reply_in_thread(squad)
+        kind=side      → reply_in_thread(squad) 仅
 
-        如果 message 带 message_id（cs 侧 id），将面向客户的 feishu_msg_id 存入 msg_id_map
-        供后续 edit 事件查找。
+        如果带 cs_msg_id，将面向客户的 feishu_msg_id 存入 msg_id_map 供 edit 查找。
 
-        Returns: 面向客户的 feishu_msg_id（public 时），否则 None。
+        Returns: 面向客户的 feishu_msg_id（msg/plain 时），否则 None。
         """
-        visibility = message.get("visibility", "public")
-        text = message.get("text", "")
-        cs_msg_id = message.get("message_id")
-
         thread = self._threads.get(conversation_id)
         customer_chat = (
             thread.customer_chat_id
@@ -137,7 +137,7 @@ class VisibilityRouter:
 
         customer_facing_msg_id: str | None = None
 
-        if visibility == "public":
+        if kind in ("msg", "plain"):
             if customer_chat:
                 mid = self.sender.send_text(customer_chat, text)
                 if mid:
@@ -147,21 +147,27 @@ class VisibilityRouter:
             if thread and thread.card_msg_id:
                 self.sender.reply_in_thread(thread.card_msg_id, f"[→客户] {text}")
 
-        elif visibility == "side":
+        elif kind == "side":
             if thread and thread.card_msg_id:
                 self.sender.reply_in_thread(thread.card_msg_id, f"[侧栏] {text}")
 
-        elif visibility == "system":
-            if thread and thread.card_msg_id:
-                self.sender.reply_in_thread(thread.card_msg_id, f"[系统] {text}")
-            if self.admin_chat_id:
-                self.sender.send_text(self.admin_chat_id, f"[系统] {text}")
-
-        # CSAT 评分卡片（复用原有逻辑）
-        if message.get("type") == "csat_request" and customer_chat:
-            self.sender.send_card(customer_chat, csat_card(conversation_id))
+        else:
+            log.debug("[outbound] unhandled kind=%s conv=%s", kind, conversation_id)
 
         return customer_facing_msg_id
+
+    def on_csat_request(self, conversation_id: str) -> None:
+        """向客户发送 CSAT 评分卡片。"""
+        thread = self._threads.get(conversation_id)
+        customer_chat = (
+            thread.customer_chat_id
+            if thread is not None
+            else self.group_manager.get_customer_chat(conversation_id)
+        )
+        if customer_chat is None and conversation_id.startswith("oc_"):
+            customer_chat = conversation_id
+        if customer_chat:
+            self.sender.send_card(customer_chat, csat_card(conversation_id))
 
     # ------------------------------------------------------------------
     # 编辑（客户可见消息）
@@ -212,4 +218,3 @@ class VisibilityRouter:
             conversation_id, thread.metadata, mode=thread.mode, state="closed"
         )
         return bool(self.sender.update_card(thread.card_msg_id, card))
-

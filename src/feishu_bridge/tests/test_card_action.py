@@ -176,7 +176,7 @@ def test_card_action_extracts_score() -> None:
 
 @pytest.mark.asyncio
 async def test_card_action_sends_csat_to_bridge() -> None:
-    """TC-5: 解析后通过 Bridge API 发送 customer_message + csat_score。"""
+    """TC-5: 解析后通过 Bridge API 发送 V4 message（__csat_score: 编码）。"""
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
@@ -189,9 +189,10 @@ async def test_card_action_sends_csat_to_bridge() -> None:
 
     mock_client.send.assert_called_once()
     sent = mock_client.send.call_args[0][0]
-    assert sent["type"] == "customer_message"
-    assert sent["conversation_id"] == "conv_42"
-    assert sent["csat_score"] == 3
+    # V4：统一 type=message，channel=conv_id，content 含 __csat_score 编码
+    assert sent["type"] == "message"
+    assert sent["channel"] == "conv_42"
+    assert "__csat_score:3" in sent["content"]
 
 
 # ------------------------------------------------------------------ #
@@ -231,7 +232,7 @@ def test_card_action_missing_fields_noop() -> None:
 
 
 def test_card_action_hijack_sends_operator_command() -> None:
-    """TC-7: hijack 按钮 → 发送 command /hijack (v2 格式)。"""
+    """TC-7: hijack 按钮 → 发送 V4 message，content=/hijack，channel=conv_id。"""
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
@@ -244,10 +245,11 @@ def test_card_action_hijack_sends_operator_command() -> None:
 
     mock_client.send.assert_called_once()
     sent = mock_client.send.call_args[0][0]
-    assert sent["type"] == "command"
-    assert sent["conversation_id"] == "oc_3e33"
-    assert sent["command"] == "/hijack"
-    assert sent["sender_id"] == "card_action"
+    # V4：不再发 type=command；统一 type=message，content="/hijack"
+    assert sent["type"] == "message"
+    assert sent["channel"] == "oc_3e33"
+    assert sent["content"] == "/hijack"
+    assert sent["source"] == "card_action"
 
 
 # ------------------------------------------------------------------ #
@@ -256,7 +258,7 @@ def test_card_action_hijack_sends_operator_command() -> None:
 
 
 def test_card_action_resolve_sends_operator_command() -> None:
-    """TC-8: resolve 按钮 → 发送 command /resolve (v2 格式)。"""
+    """TC-8: resolve 按钮 → 发送 V4 message，content=/resolve，channel=conv_id。"""
     from feishu_bridge.bridge import FeishuBridge
 
     bridge = FeishuBridge.__new__(FeishuBridge)
@@ -269,10 +271,11 @@ def test_card_action_resolve_sends_operator_command() -> None:
 
     mock_client.send.assert_called_once()
     sent = mock_client.send.call_args[0][0]
-    assert sent["type"] == "command"
-    assert sent["conversation_id"] == "oc_abc"
-    assert sent["command"] == "/resolve"
-    assert sent["sender_id"] == "card_action"
+    # V4：统一 type=message，content="/resolve"
+    assert sent["type"] == "message"
+    assert sent["channel"] == "oc_abc"
+    assert sent["content"] == "/resolve"
+    assert sent["source"] == "card_action"
 
 
 # ------------------------------------------------------------------ #
