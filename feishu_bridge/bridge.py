@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
@@ -32,9 +32,6 @@ from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.sender import FeishuSender
 from feishu_bridge.visibility_router import VisibilityRouter
 from feishu_bridge.ws_client import CardAwareClient
-
-if TYPE_CHECKING:
-    pass
 
 log = logging.getLogger("feishu-bridge")
 

@@ -39,9 +39,6 @@ _DEFAULT_VISIBILITY_ROUTING: dict[str, frozenset[str]] = {
     "system": frozenset({"operator", "admin"}),
 }
 
-# 保持向后兼容：模块级引用（已有代码可能 import 此常量）
-_VISIBILITY_ROUTING = _DEFAULT_VISIBILITY_ROUTING
-
 
 @dataclass
 class BridgeConnection:

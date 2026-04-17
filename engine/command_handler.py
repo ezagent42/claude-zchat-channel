@@ -2,7 +2,7 @@
 
 集中管理:
 - operator 命令: /hijack /release /copilot /resolve /abandon
-- admin 命令: /status /dispatch /review /assign /reassign /squad
+- admin 命令: /dispatch
 - bridge 回调: operator_join, customer_connect, escalation
 
 server.py 中闭包代理到此类，回调签名保持不变，保证 E2E 兼容。
