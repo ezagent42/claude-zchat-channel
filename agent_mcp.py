@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
+import subprocess
 import sys
 import time
 import uuid
@@ -18,14 +20,68 @@ from string import Template
 from typing import Any
 
 import anyio
+import irc.client
 import mcp.server.stdio
 from mcp.server.lowlevel import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 from mcp.shared.message import SessionMessage
 from mcp.types import JSONRPCMessage, JSONRPCNotification, TextContent, Tool
 
-from message import chunk_message, clean_mention, detect_mention
-from transport.irc_transport import IRCTransport
+from zchat_protocol.irc_encoding import encode_edit, encode_msg, encode_side
+
+# ------------------------------------------------------------------ #
+# 消息工具（内联，避免依赖已删除的 message.py / transport/）
+# ------------------------------------------------------------------ #
+
+# IRC RFC 2812: 512 bytes max。保留 IRC 头部后，payload 上限约 390 bytes
+_MAX_MESSAGE_BYTES = 390
+
+# conversation channel 名称前缀
+_CONV_CHANNEL_PREFIX = "#conv-"
+
+
+def _sanitize_for_irc(text: str) -> str:
+    """IRC 单行协议：替换换行符为空格。"""
+    return text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+
+def chunk_message(text: str, max_bytes: int = _MAX_MESSAGE_BYTES) -> list[str]:
+    """按 UTF-8 字节数拆分消息，符合 IRC RFC 2812 限制。"""
+    text = _sanitize_for_irc(text)
+    if len(text.encode("utf-8")) <= max_bytes:
+        return [text]
+    chunks: list[str] = []
+    remaining = text
+    while remaining:
+        if len(remaining.encode("utf-8")) <= max_bytes:
+            chunks.append(remaining)
+            break
+        estimate = max_bytes // 3
+        while len(remaining[:estimate].encode("utf-8")) < max_bytes and estimate < len(remaining):
+            estimate += 1
+        while len(remaining[:estimate].encode("utf-8")) > max_bytes:
+            estimate -= 1
+        cut = remaining[:estimate].rfind(" ")
+        if cut == -1 or cut < estimate // 2:
+            cut = estimate
+        chunks.append(remaining[:cut])
+        remaining = remaining[cut:].lstrip()
+    return chunks
+
+
+def detect_mention(body: str, agent_name: str) -> bool:
+    """检测消息是否包含 @mention。"""
+    return f"@{agent_name}" in body
+
+
+def clean_mention(body: str, agent_name: str) -> str:
+    """移除 @mention 并去除首尾空白。"""
+    return body.replace(f"@{agent_name}", "").strip()
+
+
+def conv_channel_name(conversation_id: str) -> str:
+    """将 conversation_id 映射为 IRC channel 名称。"""
+    return f"{_CONV_CHANNEL_PREFIX}{conversation_id}"
 
 # ------------------------------------------------------------------ #
 # 环境变量
@@ -177,6 +233,30 @@ def register_tools(server: Server, state: dict) -> None:
                     "required": ["conversation_id", "text"],
                 },
             ),
+            Tool(
+                name="run_zchat_cli",
+                description=(
+                    "Execute a zchat CLI command and return stdout/stderr. "
+                    "Used by admin-agent to translate IM group commands "
+                    "(e.g. /dispatch, /status, /review) into CLI operations."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "args": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "CLI arguments excluding 'zchat' itself, e.g. ['agent','join','fast-agent','ch-1']",
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "Max seconds to wait (default 30)",
+                            "default": 30,
+                        },
+                    },
+                    "required": ["args"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -189,6 +269,8 @@ def register_tools(server: Server, state: dict) -> None:
             return await _handle_join_conversation(_get_irc(), arguments)
         if name == "send_side_message":
             return await _handle_send_side_message(_get_irc(), arguments)
+        if name == "run_zchat_cli":
+            return await _handle_run_zchat_cli(arguments)
         raise ValueError(f"Unknown tool: {name}")
 
 
@@ -206,13 +288,13 @@ async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
 
     if edit_of:
         # 编辑替换：__edit:<original_msg_id>:<new_text>
-        prefixed = f"__edit:{edit_of}:{text}"
+        prefixed = encode_edit(edit_of, text)
     elif side:
         # side channel：__side:<text>
-        prefixed = f"__side:{text}"
+        prefixed = encode_side(text)
     else:
         # 普通消息：__msg:<msg_id>:<text>
-        prefixed = f"__msg:{message_id}:{text}"
+        prefixed = encode_msg(message_id, text)
 
     for chunk in chunk_message(prefixed):
         connection.privmsg(chat_id, chunk)
@@ -229,7 +311,7 @@ async def _handle_join_conversation(
     connection, arguments: dict
 ) -> list[TextContent]:
     conv_id = arguments["conversation_id"]
-    channel = IRCTransport.conv_channel_name(conv_id)
+    channel = conv_channel_name(conv_id)
     try:
         connection.join(channel)
     except Exception as e:
@@ -242,12 +324,41 @@ async def _handle_send_side_message(
 ) -> list[TextContent]:
     conv_id = arguments["conversation_id"]
     text = arguments["text"]
-    channel = IRCTransport.conv_channel_name(conv_id)
+    channel = conv_channel_name(conv_id)
     # __side: 前缀让 channel-server 路由为 visibility=side
-    prefixed = f"__side:{text}"
+    prefixed = encode_side(text)
     for chunk in chunk_message(prefixed):
         connection.privmsg(channel, chunk)
     return [TextContent(type="text", text=f"side message sent to {conv_id}")]
+
+
+async def _handle_run_zchat_cli(arguments: dict) -> list[TextContent]:
+    """执行 zchat CLI 命令，返回 stdout/stderr。admin-agent 用于翻译 IM 命令。"""
+    args = arguments.get("args")
+    timeout = arguments.get("timeout", 30)
+    if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+        return [TextContent(type="text", text="error: args must be list of strings")]
+
+    cmd = ["zchat"] + args
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        output = result.stdout if result.returncode == 0 else (result.stderr or result.stdout or "(no output)")
+        status = "ok" if result.returncode == 0 else f"exit_code={result.returncode}"
+        return [TextContent(
+            type="text",
+            text=f"[{status}] {' '.join(shlex.quote(x) for x in cmd)}\n{output}",
+        )]
+    except subprocess.TimeoutExpired:
+        return [TextContent(type="text", text=f"error: command timed out after {timeout}s")]
+    except FileNotFoundError:
+        return [TextContent(type="text", text="error: 'zchat' executable not found in PATH")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"error: {e}")]
 
 
 # ------------------------------------------------------------------ #
@@ -255,8 +366,89 @@ async def _handle_send_side_message(
 # ------------------------------------------------------------------ #
 
 
+def _start_irc(
+    server: str,
+    port: int,
+    nick: str,
+    channels: list[str],
+    tls: bool,
+    auth_token: str,
+    queue: "asyncio.Queue",
+    loop: asyncio.AbstractEventLoop,
+    on_pubmsg_fn: Any,
+    on_privmsg_fn: Any,
+) -> tuple[Any, Any]:
+    """在独立线程启动 IRC reactor，返回 (reactor, connection)。"""
+    import fcntl
+    import functools
+    import ssl
+    import threading
+
+    import irc.connection
+
+    reactor = irc.client.Reactor()
+
+    connect_kwargs: dict = {}
+    if tls:
+        ctx = ssl.create_default_context()
+        wrapper = functools.partial(ctx.wrap_socket, server_hostname=server)
+        connect_kwargs["connect_factory"] = irc.connection.Factory(wrapper=wrapper)
+    if auth_token:
+        connect_kwargs["sasl_login"] = nick
+        connect_kwargs["password"] = auth_token
+
+    connection = reactor.server().connect(server, port, nick, **connect_kwargs)
+
+    def _pubmsg_handler(conn, event):
+        if event.source.nick == nick:
+            return
+        try:
+            on_pubmsg_fn(conn, event)
+        except Exception as e:
+            print(f"[agent-mcp] pubmsg handler error: {e}", file=sys.stderr)
+
+    def _privmsg_handler(conn, event):
+        sender = event.source.nick
+        if sender == nick:
+            return
+        body = event.arguments[0]
+        try:
+            on_privmsg_fn(sender, body)
+        except Exception as e:
+            print(f"[agent-mcp] privmsg handler error: {e}", file=sys.stderr)
+
+    def _on_welcome(conn, event):
+        if conn.real_nickname != nick:
+            print(
+                f"[agent-mcp] WARNING: nick mismatch! expected={nick} actual={conn.real_nickname}",
+                file=sys.stderr,
+            )
+        for ch in channels:
+            ch_clean = ch.strip().lstrip("#")
+            if ch_clean:
+                conn.join(f"#{ch_clean}")
+                print(f"[agent-mcp] Joined #{ch_clean}", file=sys.stderr)
+        print(f"[agent-mcp] {nick} ready on IRC ({server}:{port})", file=sys.stderr)
+
+    connection.add_global_handler("welcome", _on_welcome)
+    connection.add_global_handler("pubmsg", _pubmsg_handler)
+    connection.add_global_handler("privmsg", _privmsg_handler)
+
+    def irc_thread():
+        try:
+            reactor.process_forever()
+        except Exception as e:
+            print(f"[agent-mcp] IRC reactor error: {e}", file=sys.stderr)
+
+    t = threading.Thread(target=irc_thread, daemon=True)
+    t.start()
+    return reactor, connection
+
+
 async def main() -> None:
     """启动 agent MCP server：MCP stdio + IRC @mention 注入。"""
+    import fcntl
+
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
@@ -264,7 +456,6 @@ async def main() -> None:
 
     # 文件锁避免 Claude Code 启动多个 MCP 实例时 IRC nick collision
     # 只有拿到锁的实例连 IRC，其他实例只提供 MCP tools
-    import fcntl
     lock_path = os.path.join(os.environ.get("WORKSPACE", "/tmp"), ".irc.lock")
     lock_fd = open(lock_path, "w")
     try:
@@ -272,16 +463,7 @@ async def main() -> None:
         irc_primary = True
     except (IOError, OSError):
         irc_primary = False
-        print(f"[agent-mcp] IRC lock held by another instance, skipping IRC", file=sys.stderr)
-
-    irc_transport = IRCTransport(
-        server=IRC_SERVER,
-        port=IRC_PORT,
-        nick=AGENT_NAME,
-        channels=channels,
-        tls=IRC_TLS,
-        auth_token=IRC_AUTH_TOKEN,
-    ) if irc_primary else None
+        print("[agent-mcp] IRC lock held by another instance, skipping IRC", file=sys.stderr)
 
     server = create_server()
     state: dict = {}
@@ -306,16 +488,13 @@ async def main() -> None:
 
     def _on_privmsg(nick: str, body: str):
         # PRIVMSG 格式: "[conv_id] sender: text"
-        # 提取 conv_id 作为 chat_id（agent reply 发回给 sender nick，
-        # 消息内容带 conv_id 前缀让 server 知道属于哪个 conversation）
+        # 提取 conv_id 作为 chat_id
         actual_body = body
         conv_id = ""
         if body.startswith("[") and "] " in body:
             bracket_end = body.index("] ")
             conv_id = body[1:bracket_end]
             actual_body = body[bracket_end + 2:]
-        # context = sender nick; agent reply 发回给 sender（cs-bot）
-        # conv_id 嵌在 inject 的 meta.chat_id 里让 Claude 用于 reply 的 chat_id
         context = nick
         msg = {
             "id": os.urandom(4).hex(),
@@ -326,6 +505,16 @@ async def main() -> None:
         }
         print(f"[agent-mcp] [private:{nick} conv={conv_id}] {actual_body}", file=sys.stderr)
         loop.call_soon_threadsafe(queue.put_nowait, (msg, context))
+
+    irc_reactor = None
+    irc_connection = None
+    if irc_primary:
+        irc_reactor, irc_connection = _start_irc(
+            IRC_SERVER, IRC_PORT, AGENT_NAME, channels,
+            IRC_TLS, IRC_AUTH_TOKEN,
+            queue, loop, _on_pubmsg, _on_privmsg,
+        )
+        state["irc_connection"] = irc_connection
 
     init_opts = InitializationOptions(
         server_name=f"zchat-agent-{AGENT_NAME}",
@@ -338,22 +527,17 @@ async def main() -> None:
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await anyio.sleep(2)
-        if irc_transport is not None:
-            connection = irc_transport.start(
-                queue,
-                loop,
-                on_pubmsg=_on_pubmsg,
-                on_privmsg_text=_on_privmsg,
-            )
-            state["irc_connection"] = connection
         try:
             async with anyio.create_task_group() as tg:
                 tg.start_soon(server.run, read_stream, write_stream, init_opts)
-                if irc_transport is not None:
+                if irc_primary:
                     tg.start_soon(poll_irc_queue, queue, write_stream)
         finally:
-            if irc_transport is not None:
-                irc_transport.disconnect("Agent shutting down")
+            if irc_connection is not None:
+                try:
+                    irc_connection.disconnect("Agent shutting down")
+                except Exception:
+                    pass
 
 
 def entry_point() -> None:
