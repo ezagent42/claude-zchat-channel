@@ -26,6 +26,7 @@ from lark_oapi.api.im.v1 import (
 
 from feishu_bridge.bridge_api_client import BridgeAPIClient
 from feishu_bridge.config import BridgeConfig, load_config
+from feishu_bridge.gate import compute_visibility, infer_sender_role
 from feishu_bridge.group_manager import GroupManager
 from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.sender import FeishuSender
@@ -90,6 +91,12 @@ class FeishuBridge:
 
         # 已连接的 conversation（避免重复 connect）
         self._known_conversations: set[str] = set()
+
+        # agent nick 识别模式（用于 infer_sender_role）
+        # 可通过 config 扩展；默认识别包含 "-agent" 的 nick
+        self._agent_nick_pattern: str = getattr(
+            getattr(config, "agents", None), "nick_pattern", "-agent"
+        )
 
         # 消息去重（防止飞书延迟重投导致重复处理）
         self._processed_msg_ids: set[str] = set()
@@ -323,7 +330,35 @@ class FeishuBridge:
     # ------------------------------------------------------------------
 
     def _handle_reply_event(self, conv_id: str, msg: dict) -> None:
-        """处理 reply / message 事件 → VisibilityRouter 按 visibility 路由。"""
+        """处理 reply / message 事件 → 本地 gate → VisibilityRouter 按 visibility 路由。
+
+        channel-server 现在固定发出 visibility="public"，由 bridge 在此处本地判决：
+        1. 获取当前 conversation mode（从 thread 状态，默认 "fast"）
+        2. 推断 sender_role（通过 sender_id 格式）
+        3. compute_visibility(mode, sender_role, default=msg.visibility) 覆盖 msg
+        4. 路由到 VisibilityRouter
+        """
+        # 1. 获取 mode
+        thread = self.visibility_router.get_thread(conv_id)
+        mode = thread.mode if thread is not None else "fast"
+
+        # 2. 推断 sender_role
+        sender_id = msg.get("sender_id", "")
+        sender_role = infer_sender_role(sender_id, self._agent_nick_pattern)
+
+        # 3. 本地 gate：可能将 public → side
+        raw_visibility = msg.get("visibility", "public")
+        gated_visibility = compute_visibility(mode, sender_role, default=raw_visibility)
+
+        if gated_visibility != raw_visibility:
+            log.debug(
+                "[gate] conv=%s mode=%s sender=%s(%s): %s → %s",
+                conv_id, mode, sender_id, sender_role, raw_visibility, gated_visibility,
+            )
+            msg = dict(msg)  # 不修改原始 dict
+            msg["visibility"] = gated_visibility
+
+        # 4. 路由
         self.visibility_router.route(conv_id, msg)
 
     def _handle_edit_event(self, conv_id: str, msg: dict) -> None:

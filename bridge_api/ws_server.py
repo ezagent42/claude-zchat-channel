@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 # visibility → 目标角色集合（spec §5 路由表，v1 默认值）
+#
+# 注意（P1-S3）：channel-server 当前固定发出 visibility="public"（infra 不做业务决策），
+# 因此这个路由表实际将所有消息广播到 {customer, operator, admin} 全员。
+# feishu_bridge 在收到消息后，在内部通过 gate.compute_visibility() 本地决策真正的
+# 可见性，并据此决定是否发到客户飞书群。
+#
+# TODO（后续 step）：将此路由表配置化，支持每个 bridge 实例声明自己关心的角色集合，
+# 从而在 server 侧按 bridge capability 过滤；彻底移除 bridge 内部的角色模拟。
 _DEFAULT_VISIBILITY_ROUTING: dict[str, frozenset[str]] = {
     "public": frozenset({"customer", "operator", "admin"}),
     "side": frozenset({"operator", "admin"}),
