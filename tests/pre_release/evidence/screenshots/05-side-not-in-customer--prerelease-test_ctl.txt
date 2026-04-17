@@ -1,2 +1,0 @@
-[proxy nat] -> http://172.30.240.1:7897
-yaosh@localhost:~/projects/zchat$
