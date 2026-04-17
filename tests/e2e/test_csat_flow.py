@@ -5,7 +5,7 @@
 
 验证策略：
 - 创建对话 → 发送 csat_score → 确认 server 正常处理（不 crash）
-- /status admin_command 验证 server 仍然响应
+- 通过 customer_connect 的 ack 验证 server 仍然响应
 
 TC-7: test_csat_e2e_card_to_score
 TC-8: test_csat_e2e_invalid_score_ignored
@@ -54,21 +54,20 @@ async def _send_csat(ws, conv_id: str, score: int | str) -> None:
 
 
 async def _assert_server_responsive(ws) -> None:
-    """辅助：发送 /status 验证 server 仍然响应。"""
+    """辅助：通过 customer_connect + ack 验证 server 仍然响应。"""
+    probe_conv = f"csat-probe-{os.getpid()}-{asyncio.get_event_loop().time():.0f}"
     await ws.send(
         json.dumps(
             {
-                "type": "admin_command",
-                "conversation_id": "__admin",
-                "admin_id": "csat_verifier",
-                "command": "/status",
+                "type": "customer_connect",
+                "conversation_id": probe_conv,
+                "customer": {"id": "probe", "name": "Probe"},
             }
         )
     )
-    raw = await asyncio.wait_for(ws.recv(), timeout=5)
-    msg = json.loads(raw)
-    assert msg["type"] in ("reply", "message"), f"expected reply, got: {msg}"
-    assert msg["visibility"] == "system"
+    ack = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
+    assert ack["type"] == "customer_connected"
+    assert ack["conversation_id"] == probe_conv
 
 
 # ------------------------------------------------------------------ #

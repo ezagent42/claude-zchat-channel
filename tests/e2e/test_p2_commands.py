@@ -1,4 +1,4 @@
-"""E2E: P2 命令 /abandon + /assign + /squad → WebSocket 端到端验证 (Task 4.6.6)。"""
+"""E2E: infra 命令 /abandon → WebSocket 端到端验证。"""
 
 from __future__ import annotations
 
@@ -68,53 +68,3 @@ async def test_abandon_e2e_flow(bridge_ws, channel_server):
     )
 
 
-async def test_assign_then_squad_e2e(bridge_ws, channel_server):
-    """TC-E02: admin /assign → /squad → 收到含分队信息的 system reply。"""
-    # 1. /assign agent0 op1
-    await bridge_ws.send(
-        json.dumps(
-            {
-                "type": "admin_command",
-                "conversation_id": "__admin",
-                "admin_id": "boss",
-                "command": "/assign agent0 op1",
-            }
-        )
-    )
-
-    # 收集 assign 产生的 event + reply
-    for _ in range(3):
-        try:
-            raw = await asyncio.wait_for(bridge_ws.recv(), timeout=3)
-            _ = json.loads(raw)
-        except asyncio.TimeoutError:
-            break
-
-    # 2. /squad
-    await bridge_ws.send(
-        json.dumps(
-            {
-                "type": "admin_command",
-                "conversation_id": "__admin",
-                "admin_id": "boss",
-                "command": "/squad",
-            }
-        )
-    )
-
-    # 3. 收到 system reply（含 op1 + agent0）
-    squad_reply = None
-    for _ in range(3):
-        try:
-            raw = await asyncio.wait_for(bridge_ws.recv(), timeout=5)
-            m = json.loads(raw)
-            if m.get("type") in ("reply", "message") and "[squad]" in m.get("text", ""):
-                squad_reply = m
-                break
-        except asyncio.TimeoutError:
-            break
-
-    assert squad_reply is not None, "expected [squad] reply"
-    assert squad_reply["visibility"] == "system"
-    assert "op1" in squad_reply["text"]
-    assert "agent0" in squad_reply["text"]

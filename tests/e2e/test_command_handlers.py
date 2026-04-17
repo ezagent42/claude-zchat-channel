@@ -1,4 +1,4 @@
-"""E2E: /resolve /status /dispatch 命令 → WebSocket 端到端验证。
+"""E2E: /resolve + /dispatch 命令 → WebSocket 端到端验证。
 
 测试完整路径：
   Bridge WS → BridgeAPIServer → on_operator_command / on_admin_command →
@@ -65,34 +65,6 @@ async def test_resolve_emits_event_and_csat(bridge_ws, channel_server):
     replies = [m for m in msgs if m.get("type") in ("reply", "message")]
     assert any("评分" in r.get("text", "") or "csat" in r.get("text", "").lower() for r in replies), (
         f"expected CSAT invitation reply, got replies: {replies}"
-    )
-
-
-async def test_status_returns_formatted_reply(bridge_ws, channel_server):
-    """TC-E12: /status → 收到 system visibility reply（格式化状态文本）。
-
-    注意：customer_connect 创建 CREATED 状态的对话，list_active() 只返回 ACTIVE，
-    所以 /status 可能返回空列表。验证重点：命令正确执行 + 返回正确格式的 reply。
-    """
-    # 1. /status（即使无活跃对话，命令应正确返回）
-    await bridge_ws.send(
-        json.dumps(
-            {
-                "type": "admin_command",
-                "conversation_id": "__admin",
-                "admin_id": "boss",
-                "command": "/status",
-            }
-        )
-    )
-
-    # 2. 收到 system reply
-    raw = await asyncio.wait_for(bridge_ws.recv(), timeout=5)
-    msg = json.loads(raw)
-    assert msg["type"] in ("reply", "message"), f"expected reply, got: {msg}"
-    assert msg["visibility"] == "system", f"expected system visibility, got: {msg}"
-    assert "[status]" in msg.get("text", ""), (
-        f"expected [status] prefix in reply text, got: {msg}"
     )
 
 
