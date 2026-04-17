@@ -1,0 +1,48 @@
+# routing.example.toml — zchat channel-server 路由配置示例
+#
+# 将此文件复制为 routing.toml（与 server.py 同目录），
+# 或通过环境变量 CS_ROUTING_CONFIG 指定路径，例如：
+#   CS_ROUTING_CONFIG=/etc/zchat/routing.toml
+#
+# 所有字段均为可选。缺少文件或缺少字段时，channel-server
+# 使用空默认值（default_agents=[], escalation_chain=[], available_agents=[]）。
+
+[routing]
+
+# default_agents — 新 conversation 到达时自动 dispatch 的 agent 列表
+#
+# 当 customer 发起一个新 conversation（customer_connect 事件）时，
+# channel-server 依次向列表中的 agent 发送通知，第一个接受的 agent
+# 成为该 conversation 的主责任 agent。
+#
+# - 每个值为 agent IRC nick（格式：{username}-{agent_name}，如 alice-agent0）
+# - 列表为空时：不自动 dispatch，需由 operator 手动使用 /dispatch 命令
+# - 列表中可包含多个 agent，用于负载分配或 fallback
+#
+# 示例：
+default_agents = ["alice-agent0"]
+
+# escalation_chain — 升级链（按优先级从高到低排列）
+#
+# 当当前 agent 无法处理 conversation（超时、主动升级等）时，
+# channel-server 按列表顺序依次尝试 dispatch。
+#
+# - 列表为空时：不触发自动升级，SLA 超时后仅记录事件
+# - 可包含 agent nick 或特殊值 "operator"（指向人工运营席位）
+# - 建议最后一项为 "operator" 以确保兜底处理
+#
+# 示例（先尝试高级 agent，最终升级到人工）：
+escalation_chain = ["alice-senior", "operator"]
+
+# available_agents — /dispatch 命令白名单
+#
+# operator 在 bridge API 执行 /dispatch 时，channel-server 检查目标 agent
+# 是否在此白名单中。
+#
+# - 列表为空（默认）：不限制，operator 可 dispatch 到任意 agent
+# - 非空时：只允许 dispatch 到列表中的 agent；其余 agent 返回权限拒绝
+#
+# 建议生产环境填写明确白名单，防止误操作 dispatch 到测试 agent。
+#
+# 示例（限制到两个已知 agent）：
+available_agents = ["alice-agent0", "alice-senior"]

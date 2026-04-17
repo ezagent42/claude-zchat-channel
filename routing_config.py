@@ -23,11 +23,31 @@ except ModuleNotFoundError:
 
 @dataclass(frozen=True)
 class RoutingConfig:
-    """routing.toml 的 [routing] 段。"""
+    """routing.toml 的 [routing] 段，代表全局路由策略（immutable）。
+
+    所有字段默认为空列表，对应"不限制 / 不自动触发"语义，
+    详见 routing.example.toml 的注释和 README Routing Configuration 章节。
+    """
 
     default_agents: list[str] = field(default_factory=list)
+    """新 conversation 到达时自动 dispatch 的 agent IRC nick 列表。
+
+    空列表 → 不自动 dispatch，需 operator 手动使用 /dispatch 命令。
+    """
+
     escalation_chain: list[str] = field(default_factory=list)
+    """升级链 — SLA 超时或主动升级时按列表顺序依次尝试 dispatch。
+
+    空列表 → 不自动升级，超时仅写事件日志。
+    特殊值 "operator" 表示升级到人工运营席位。
+    """
+
     available_agents: list[str] = field(default_factory=list)
+    """/dispatch 命令白名单（按 agent IRC nick）。
+
+    空列表 → 不限制，operator 可 dispatch 到任意 agent。
+    非空时只允许 dispatch 到列表中的 agent，其余返回权限拒绝。
+    """
 
     def is_dispatch_allowed(self, agent_nick: str) -> bool:
         """白名单为空 → 不限制；非空 → agent_nick 必须在列表中。"""
