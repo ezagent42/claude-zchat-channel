@@ -126,3 +126,129 @@ async def test_multiple_channels_independent_timers(emit_event, emit_command):
 
     plugin._cancel_timer("#ch1")
     plugin._cancel_timer("#ch2")
+
+
+# ──────────────────────── Timer 2: 求助等待 ────────────────────────
+
+@pytest.mark.asyncio
+async def test_side_operator_mention_starts_help_timer(emit_event, emit_command):
+    plugin = SlaPlugin(
+        emit_event=emit_event,
+        emit_command=emit_command,
+        timeout_seconds=9999,
+        help_timeout_seconds=9999,
+    )
+    # agent 发 side 消息 @operator
+    msg = {
+        "type": "message",
+        "channel": "#conv-1",
+        "source": "alice-fast-001",
+        "content": "__side:@operator 需要您确认",
+    }
+    await plugin.on_ws_message(msg)
+
+    assert "#conv-1" in plugin._help_timers
+    assert not plugin._help_timers["#conv-1"].done()
+    plugin._cancel_help_timer("#conv-1")
+
+
+@pytest.mark.asyncio
+async def test_side_admin_mention_also_triggers(emit_event, emit_command):
+    plugin = SlaPlugin(
+        emit_event=emit_event, emit_command=emit_command,
+        timeout_seconds=9999, help_timeout_seconds=9999,
+    )
+    msg = {
+        "type": "message",
+        "channel": "#c",
+        "source": "alice-fast",
+        "content": "__side:@admin 请注意这里",
+    }
+    await plugin.on_ws_message(msg)
+    assert "#c" in plugin._help_timers
+    plugin._cancel_help_timer("#c")
+
+
+@pytest.mark.asyncio
+async def test_non_side_msg_ignored_for_help(emit_event, emit_command):
+    plugin = SlaPlugin(
+        emit_event=emit_event, emit_command=emit_command,
+        timeout_seconds=9999, help_timeout_seconds=9999,
+    )
+    msg = {
+        "channel": "#c",
+        "source": "alice-fast",
+        "content": "@operator help",  # 无 __side: 前缀
+    }
+    await plugin.on_ws_message(msg)
+    assert "#c" not in plugin._help_timers
+
+
+@pytest.mark.asyncio
+async def test_operator_side_cancels_help_timer(emit_event, emit_command):
+    plugin = SlaPlugin(
+        emit_event=emit_event, emit_command=emit_command,
+        timeout_seconds=9999, help_timeout_seconds=9999,
+    )
+    # agent 求助
+    await plugin.on_ws_message({
+        "channel": "#c",
+        "source": "alice-fast",
+        "content": "__side:@operator 请确认",
+    })
+    assert "#c" in plugin._help_timers
+
+    # operator 回应（source 包含 operator）
+    await plugin.on_ws_message({
+        "channel": "#c",
+        "source": "operator_小李",
+        "content": "__side:好的我来处理",
+    })
+    # yield 给 event loop
+    import asyncio as _aio
+    await _aio.sleep(0)
+    assert "#c" not in plugin._help_timers
+
+
+@pytest.mark.asyncio
+async def test_help_timer_expiry_emits_help_timeout(emit_event, emit_command):
+    plugin = SlaPlugin(
+        emit_event=emit_event, emit_command=emit_command,
+        timeout_seconds=9999, help_timeout_seconds=0.05,
+    )
+    await plugin.on_ws_message({
+        "channel": "#c",
+        "source": "alice-fast",
+        "content": "__side:@operator 求助",
+    })
+    await asyncio.sleep(0.2)
+
+    help_calls = [
+        c for c in emit_event.call_args_list
+        if c[0][0] == "help_timeout"
+    ]
+    assert len(help_calls) == 1
+    _, channel, data = help_calls[0][0]
+    assert channel == "#c"
+    assert data["reason"] == "operator_no_response"
+
+
+@pytest.mark.asyncio
+async def test_release_to_copilot_cancels_help_timer(emit_event, emit_command):
+    """mode 切回 copilot 时，help timer 也应取消（防止泄漏）。"""
+    plugin = SlaPlugin(
+        emit_event=emit_event, emit_command=emit_command,
+        timeout_seconds=9999, help_timeout_seconds=9999,
+    )
+    await plugin.on_ws_message({
+        "channel": "#c",
+        "source": "alice-fast",
+        "content": "__side:@operator help",
+    })
+    assert "#c" in plugin._help_timers
+
+    # mode_changed to copilot
+    await plugin.on_ws_event(make_mode_changed_event("#c", "copilot"))
+    import asyncio as _aio
+    await _aio.sleep(0)
+    assert "#c" not in plugin._help_timers
