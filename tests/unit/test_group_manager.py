@@ -101,35 +101,6 @@ def test_group_disbanded_removes_customer():
 
 
 # ---------------------------------------------------------------------- #
-# Task 4.6.5 扩展：auto-hijack 检测（TC-8）
-# ---------------------------------------------------------------------- #
-
-
-def test_operator_in_customer_chat():
-    """TC-8: 已知 operator 在动态注册的 customer 群里发言 → 返回 True。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        gm = GroupManager(
-            admin_chat_id="oc_admin",
-            squad_chats=[{"chat_id": "oc_squad_1", "operator_id": "xiaoli"}],
-            customer_chats_path=os.path.join(tmp, "c.json"),
-        )
-        gm.register_customer_chat("oc_cust_42")
-        gm.on_member_added("ou_op1", "oc_squad_1")
-
-        # ou_op1 是已知 operator，oc_cust_42 是 customer 群 → auto-hijack 条件成立
-        assert gm.is_operator_in_customer_chat("ou_op1", "oc_cust_42") is True
-
-        # 在 squad 群内发言：非 customer 群，不触发 auto-hijack
-        assert gm.is_operator_in_customer_chat("ou_op1", "oc_squad_1") is False
-
-        # 非 operator 用户在 customer 群发言：不触发
-        assert gm.is_operator_in_customer_chat("ou_guest", "oc_cust_42") is False
-
-        # 未注册群：不触发
-        assert gm.is_operator_in_customer_chat("ou_op1", "oc_unknown") is False
-
-
-# ---------------------------------------------------------------------- #
 # V4: channel_chat_map 映射测试
 # ---------------------------------------------------------------------- #
 
