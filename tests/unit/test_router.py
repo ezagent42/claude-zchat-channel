@@ -71,9 +71,13 @@ class CommandPlugin(BasePlugin):
 def make_routing_with_agents(
     channel_id: str = "general",
     agents: dict[str, str] | None = None,
+    entry_agent: str | None = None,
 ) -> RoutingTable:
     agents = agents or {"fast": "yaosh-fast-001", "deep": "yaosh-deep-001"}
-    route = ChannelRoute(channel_id=channel_id, agents=agents)
+    # 默认 entry_agent = agents 中第一个 value
+    if entry_agent is None and agents:
+        entry_agent = next(iter(agents.values()))
+    route = ChannelRoute(channel_id=channel_id, agents=agents, entry_agent=entry_agent)
     return RoutingTable(channels={channel_id: route})
 
 
@@ -288,14 +292,14 @@ async def test_emit_event_broadcasts_to_ws_and_plugins():
 
 
 @pytest.mark.asyncio
-async def test_copilot_mode_with_multiple_agents():
-    """copilot mode + 多 agent → 每个 agent 各收到一条 @-prefixed 消息。"""
+async def test_copilot_mode_only_ats_entry_agent():
+    """copilot mode + 多 agent → 只 @ entry_agent，不群 @。"""
     routing = make_routing_with_agents(
         "general",
         {"fast": "yaosh-fast-001", "deep": "yaosh-deep-001"},
+        entry_agent="yaosh-fast-001",
     )
     registry = PluginRegistry()
-    # 默认 copilot mode，不注册 mode plugin
 
     router, irc_conn, _ = make_router(routing=routing, registry=registry)
 
@@ -307,13 +311,60 @@ async def test_copilot_mode_with_multiple_agents():
     }
     await router.forward_inbound_ws(msg)
 
-    # 两个 agent 各收到一条
-    assert len(irc_conn.sent) == 2
-    targets = {t for t, _ in irc_conn.sent}
-    assert targets == {"#general"}
-    # 每条都有 @ prefix
-    for _, content in irc_conn.sent:
-        assert content.startswith("@yaosh-")
+    # 只发一条，目标是 entry_agent
+    assert len(irc_conn.sent) == 1
+    target, content = irc_conn.sent[0]
+    assert target == "#general"
+    assert content.startswith("@yaosh-fast-001 ")
+
+
+@pytest.mark.asyncio
+async def test_emit_event_sends_irc_sys_msg():
+    """emit_event 除 WS 广播外，也发 IRC __zchat_sys: 到 channel。"""
+    router, irc_conn, ws_server = make_router()
+    await router.emit_event("general", "mode_changed", {"from": "copilot", "to": "takeover"})
+
+    # WS broadcast 有
+    assert len(ws_server.broadcasts) == 1
+    assert ws_server.broadcasts[0]["event"] == "mode_changed"
+
+    # IRC sys 消息有，发到 #general
+    assert len(irc_conn.sent) == 1
+    target, content = irc_conn.sent[0]
+    assert target == "#general"
+    assert content.startswith("__zchat_sys:")
+    # sys payload 能被 parse
+    parsed = irc_encoding.parse(content)
+    assert parsed["kind"] == "sys"
+    assert parsed["payload"]["type"] == "mode_changed"
+
+
+@pytest.mark.asyncio
+async def test_emit_event_no_channel_skips_irc():
+    """channel 为空时 emit_event 不发 IRC。"""
+    router, irc_conn, ws_server = make_router()
+    await router.emit_event("", "global_event", {"key": "val"})
+
+    assert len(ws_server.broadcasts) == 1
+    assert len(irc_conn.sent) == 0
+
+
+@pytest.mark.asyncio
+async def test_copilot_mode_without_entry_agent_drops_message():
+    """copilot mode 但 channel 无 entry_agent → 不发 IRC（log warning）。"""
+    route = ChannelRoute(channel_id="orphan", agents={"fast": "yaosh-fast-001"}, entry_agent=None)
+    routing = RoutingTable(channels={"orphan": route})
+    registry = PluginRegistry()
+    router, irc_conn, _ = make_router(routing=routing, registry=registry)
+
+    msg = {
+        "type": ws_messages.WSType.MESSAGE,
+        "channel": "orphan",
+        "content": "hi",
+    }
+    await router.forward_inbound_ws(msg)
+
+    assert len(irc_conn.sent) == 0
 
 
 @pytest.mark.asyncio

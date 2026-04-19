@@ -98,18 +98,31 @@ class Router:
 
         # Mode 决定是否 @ prefix
         if mode in ("auto", "copilot"):
-            agent_nicks = self._routing.channel_agents(channel)
-            for nick in agent_nicks:
+            entry = self._routing.entry_agent(channel)
+            if entry:
                 try:
-                    self._irc.privmsg(irc_channel, f"@{nick} {encoded}")
+                    self._irc.privmsg(irc_channel, f"@{entry} {encoded}")
                 except Exception:
                     log.exception("[router] irc privmsg failed")
+            else:
+                log.warning(
+                    "[router] channel %r has no entry_agent; message not delivered to any agent",
+                    channel,
+                )
         else:
-            # takeover: 不 @
+            # takeover: 不 @，消息直接到 IRC channel（agent 不会收到）
             try:
                 self._irc.privmsg(irc_channel, encoded)
             except Exception:
                 log.exception("[router] irc privmsg failed")
+
+    def update_routing(self, new_routing: "RoutingTable") -> None:
+        """热更新路由表（被 routing watcher 调用）。"""
+        self._routing = new_routing
+
+    @property
+    def routing(self) -> "RoutingTable":
+        return self._routing
 
     def _query_mode(self, channel: str) -> str:
         """通过 mode plugin 查当前 mode。无 plugin 或无记录返回默认。"""
@@ -155,7 +168,27 @@ class Router:
         await self._registry.broadcast_message(ws_msg)
 
     async def emit_event(self, channel: str, event: str, data: dict | None = None) -> None:
-        """core/plugin 发 event 的统一出口。"""
+        """core/plugin 发 event 的统一出口。
+
+        三路广播：
+          1. WS → 所有 bridge 收到 event
+          2. plugin broadcast → 其他 plugin 订阅
+          3. IRC __zchat_sys: → channel 内的 agent 感知（如 mode_changed）
+        """
         msg = ws_messages.build_event(channel, event, data or {})
         await self._ws.broadcast(msg)
         await self._registry.broadcast_event(msg)
+
+        # IRC sys 消息通知 channel 内的 agent
+        if channel:
+            try:
+                payload = irc_encoding.make_sys_payload(
+                    nick="cs-bot",
+                    sys_type=event,
+                    body=data or {},
+                )
+                irc_channel = channel if channel.startswith("#") else f"#{channel}"
+                self._irc.privmsg(irc_channel, irc_encoding.encode_sys(payload))
+            except Exception:
+                log.exception("[router] irc sys broadcast failed for event=%s channel=%s",
+                              event, channel)
