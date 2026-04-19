@@ -4,10 +4,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from .irc_connection import IRCConnection
 from .plugin import PluginRegistry
 from .routing import load as load_routing
+from .routing_watcher import watch_routing
 from .router import Router
 from .ws_server import WSServer
 
@@ -15,6 +17,9 @@ from .ws_server import WSServer
 from plugins.mode.plugin import ModePlugin
 from plugins.sla.plugin import SlaPlugin
 from plugins.resolve.plugin import ResolvePlugin
+from plugins.audit.plugin import AuditPlugin
+from plugins.activation.plugin import ActivationPlugin
+from plugins.csat.plugin import CsatPlugin
 
 
 def _env(name: str, default: str = "") -> str:
@@ -74,6 +79,16 @@ async def _main() -> None:
     registry.register(SlaPlugin(emit_event=emit_event, emit_command=emit_command, timeout_seconds=180))
     registry.register(ResolvePlugin(emit_event=emit_event))
 
+    # audit + activation 持久化路径（优先 env var，其次 routing.toml 同目录）
+    data_dir = Path(_env("CS_DATA_DIR") or Path(routing_path).parent)
+    audit_plugin = AuditPlugin(persist_path=data_dir / "audit.json")
+    registry.register(audit_plugin)
+    registry.register(ActivationPlugin(
+        state_file=data_dir / "activation-state.json",
+        emit_event=emit_event,
+    ))
+    registry.register(CsatPlugin(emit_event=emit_event, audit_plugin=audit_plugin))
+
     # ──────────────────────────────────────────────────────────────────
 
     # Wire callbacks
@@ -100,8 +115,16 @@ async def _main() -> None:
         except Exception:
             pass
 
-    # Keep alive
-    await asyncio.Event().wait()
+    # 启动 routing.toml watcher（热更新路由表）
+    watcher_task = asyncio.create_task(
+        watch_routing(routing_path, router, irc_conn, interval=2.0)
+    )
+
+    try:
+        # Keep alive
+        await asyncio.Event().wait()
+    finally:
+        watcher_task.cancel()
 
 
 def main() -> None:
