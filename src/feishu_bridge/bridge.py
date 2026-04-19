@@ -15,6 +15,8 @@ V4 协议变化：
 
 from __future__ import annotations
 
+import asyncio
+import collections
 import json
 import logging
 import os
@@ -32,13 +34,12 @@ from lark_oapi.api.im.v1 import (
 
 from zchat_protocol import irc_encoding, ws_messages
 
-from channel_server.routing import load as load_routing
-
 from feishu_bridge.bridge_api_client import BridgeAPIClient
 from feishu_bridge.config import BridgeConfig, load_config
 from feishu_bridge.group_manager import GroupManager
 from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.outbound import OutboundRouter
+from feishu_bridge.routing_reader import read_bridge_mappings, reverse_mapping
 from feishu_bridge.sender import FeishuSender
 from feishu_bridge.ws_client import CardAwareClient
 
@@ -61,8 +62,14 @@ class FeishuBridge:
             app_secret=config.feishu.app_secret,
         )
 
-        # V4: 从 routing.toml 加载 channel_id → feishu_chat_id 映射
-        channel_chat_map = self._load_channel_chat_map(routing_path)
+        # 从 routing.toml 加载 external_chat_id → channel_id 映射（bridge 自己用）
+        self._routing_path = routing_path or config.routing_path or os.environ.get(
+            "CS_ROUTING_CONFIG", "routing.toml"
+        )
+        self._bot_id = config.feishu.app_id
+        self._external_to_channel = read_bridge_mappings(self._routing_path, self._bot_id)
+        # 反向映射：channel_id → external_chat_id（channel_chat_map 给 GroupManager 用）
+        channel_chat_map = reverse_mapping(self._external_to_channel)
 
         self.group_manager = GroupManager(
             admin_chat_id=config.groups.admin_chat_id,
@@ -99,13 +106,10 @@ class FeishuBridge:
         # 已连接的 conversation（避免重复 connect）
         self._known_conversations: set[str] = set()
 
-        # agent nick 识别模式（用于出站路由的 gate 逻辑）
-        self._agent_nick_pattern: str = getattr(
-            getattr(config, "agents", None), "nick_pattern", "-agent"
-        )
-
         # 消息去重（防止飞书延迟重投导致重复处理）
+        # 用 deque + set 组合：deque 保持插入顺序并限制容量，set 提供 O(1) 查找
         self._processed_msg_ids: set[str] = set()
+        self._processed_msg_order: "collections.deque[str]" = collections.deque(maxlen=10000)
 
         # Bridge API WebSocket 连接（兼容旧的 _on_card_action 引用）
         self._bridge_ws: Any | None = None
@@ -114,18 +118,84 @@ class FeishuBridge:
     # V4: routing.toml → channel_chat_map
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _load_channel_chat_map(routing_path: str | None) -> dict[str, str]:
-        """从 routing.toml 提取 channel_id → feishu_chat_id 映射。"""
-        path = routing_path or os.environ.get("CS_ROUTING_CONFIG", "routing.toml")
-        routing = load_routing(path)
-        result: dict[str, str] = {}
-        for ch_id, route in routing.channels.items():
-            if route.external_chat_id:
-                result[ch_id] = route.external_chat_id
-        if result:
-            log.info("Loaded %d channel→feishu mappings from %s", len(result), path)
-        return result
+    def _reload_mappings(self) -> None:
+        """重新从 routing.toml 读映射（在 lazy create 后或定期调）。"""
+        new_map = read_bridge_mappings(self._routing_path, self._bot_id)
+        self._external_to_channel = new_map
+        self.group_manager._channel_chat_map = reverse_mapping(new_map)
+
+    async def _run_cli(self, *args: str, timeout: float = 30.0) -> tuple[int, str, str]:
+        """执行 zchat CLI 命令。返回 (returncode, stdout, stderr)。"""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "zchat", *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            return proc.returncode or 0, stdout.decode(errors="replace"), stderr.decode(errors="replace")
+        except asyncio.TimeoutError:
+            return -1, "", f"zchat {' '.join(args)} timed out after {timeout}s"
+        except FileNotFoundError:
+            return -1, "", "'zchat' executable not found in PATH"
+        except Exception as e:
+            return -1, "", f"subprocess error: {e}"
+
+    async def _lazy_create_channel_and_agent(self, chat_id: str) -> None:
+        """bot_added 事件懒创建 channel + agent。
+
+        生成 channel_id = <prefix><chat_id 后缀>，调 CLI:
+          zchat channel create <channel_id> --external-chat <chat_id> --bot-id <app_id>
+          zchat agent create <name> --type <template> --channel <channel_id>
+        """
+        lc = self.config.lazy_create
+        if not lc.enabled:
+            return
+        # 生成 channel_id（chat_id 通常是 oc_xxx，取 [3:11] 8 字符作为后缀）
+        suffix = chat_id[3:11] if len(chat_id) >= 11 else chat_id
+        channel_id = f"{lc.channel_prefix}{suffix}"
+
+        # 如已在映射里则跳过
+        if chat_id in self._external_to_channel:
+            log.info("[lazy] chat_id=%s already mapped to %s, skip", chat_id, channel_id)
+            return
+
+        agent_name = f"{channel_id}-agent"
+
+        log.info("[lazy] creating channel=%s agent=%s for chat_id=%s", channel_id, agent_name, chat_id)
+        rc, out, err = await self._run_cli(
+            "channel", "create", channel_id,
+            "--external-chat", chat_id,
+            "--bot-id", self._bot_id,
+        )
+        if rc != 0:
+            log.error("[lazy] channel create failed: rc=%s out=%s err=%s", rc, out, err)
+            return
+
+        rc, out, err = await self._run_cli(
+            "agent", "create", agent_name,
+            "--type", lc.entry_agent_template,
+            "--channel", channel_id,
+        )
+        if rc != 0:
+            log.error("[lazy] agent create failed: rc=%s out=%s err=%s", rc, out, err)
+            # channel 已创建，保留
+
+        # 刷新本地映射
+        self._reload_mappings()
+
+    async def _remove_channel_by_chat(self, chat_id: str) -> None:
+        """chat_disbanded 事件清理对应 channel。"""
+        channel_id = self._external_to_channel.get(chat_id)
+        if not channel_id:
+            return
+        log.info("[disband] removing channel=%s for chat_id=%s", channel_id, chat_id)
+        rc, out, err = await self._run_cli(
+            "channel", "remove", channel_id, "--stop-agents",
+        )
+        if rc != 0:
+            log.error("[disband] channel remove failed: rc=%s out=%s err=%s", rc, out, err)
+        self._reload_mappings()
 
     # ------------------------------------------------------------------
     # 事件处理器（飞书入站）
@@ -140,11 +210,17 @@ class FeishuBridge:
         msg = event.message
 
         # 消息去重：飞书可能延迟重投同一事件
+        # 用 deque + set 双数据结构维护有界 LRU
         msg_id = msg.message_id or ""
         if msg_id and msg_id in self._processed_msg_ids:
             log.debug("Duplicate message %s, skipping", msg_id)
             return
         if msg_id:
+            # 如果 deque 已满，最老的 id 会被自动丢出，同步从 set 删除
+            if len(self._processed_msg_order) >= self._processed_msg_order.maxlen:
+                oldest = self._processed_msg_order[0]
+                self._processed_msg_ids.discard(oldest)
+            self._processed_msg_order.append(msg_id)
             self._processed_msg_ids.add(msg_id)
 
         chat_id = msg.chat_id or ""
@@ -195,14 +271,28 @@ class FeishuBridge:
         self._forward_to_bridge(role, chat_id, text, message_id, sender_open_id)
 
     def _on_bot_added(self, data: P2ImChatMemberBotAddedV1) -> None:
-        """bot 被拉入新群 → 自动注册 customer（跳过已配置群）。"""
+        """bot 被拉入新群 → 懒创建 channel + agent（如 enabled）+ 注册 customer。"""
         event = data.event
         if not event:
             return
         chat_id = event.chat_id or ""
-        if chat_id:
-            self.group_manager.register_customer_chat(chat_id)
-            log.info("Bot added to group %s, role: %s", chat_id, self.group_manager.identify_role(chat_id))
+        if not chat_id:
+            return
+
+        # 先触发懒创建（async），再做 group_manager 本地记录
+        if self.config.lazy_create.enabled:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self._lazy_create_channel_and_agent(chat_id))
+                else:
+                    asyncio.run(self._lazy_create_channel_and_agent(chat_id))
+            except RuntimeError:
+                # 没有 event loop 时直接跑
+                asyncio.run(self._lazy_create_channel_and_agent(chat_id))
+
+        self.group_manager.register_customer_chat(chat_id)
+        log.info("Bot added to group %s, role: %s", chat_id, self.group_manager.identify_role(chat_id))
 
     def _on_user_added(self, data: P2ImChatMemberUserAddedV1) -> None:
         """用户加入群 → 授予角色权限。"""
@@ -229,14 +319,27 @@ class FeishuBridge:
                 self.group_manager.on_member_removed(user_id, chat_id)
 
     def _on_disbanded(self, data: P2ImChatDisbandedV1) -> None:
-        """群解散 → 清理 conversation。"""
+        """群解散 → 调 CLI 清理 channel + 本地 group_manager 清理。"""
         event = data.event
         if not event:
             return
         chat_id = event.chat_id or ""
-        if chat_id:
-            self.group_manager.on_group_disbanded(chat_id)
-            log.info("Group %s disbanded", chat_id)
+        if not chat_id:
+            return
+
+        # 调 CLI 清理对应 channel（async）
+        if chat_id in self._external_to_channel:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self._remove_channel_by_chat(chat_id))
+                else:
+                    asyncio.run(self._remove_channel_by_chat(chat_id))
+            except RuntimeError:
+                asyncio.run(self._remove_channel_by_chat(chat_id))
+
+        self.group_manager.on_group_disbanded(chat_id)
+        log.info("Group %s disbanded", chat_id)
 
     # ------------------------------------------------------------------
     # 入站：飞书 → channel-server（V4 ws_messages 格式）

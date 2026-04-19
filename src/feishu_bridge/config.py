@@ -28,12 +28,22 @@ class GroupsConfig:
 
 
 @dataclass
+class LazyCreateConfig:
+    """bot_added 时懒创建 channel + agent 的配置。"""
+    enabled: bool = False
+    entry_agent_template: str = "fast-agent"  # zchat agent create --type
+    channel_prefix: str = "conv-"              # 新 channel_id 前缀
+
+
+@dataclass
 class BridgeConfig:
     feishu: FeishuConfig
     groups: GroupsConfig
     channel_server_url: str = "ws://127.0.0.1:9999"
     upload_dir: str = ".feishu-bridge/uploads"
     customer_chats_path: str = ".feishu-bridge/customer_chats.json"
+    routing_path: str = "routing.toml"         # 从哪读 routing.toml
+    lazy_create: LazyCreateConfig = field(default_factory=LazyCreateConfig)
 
 
 _ENV_PATTERN = re.compile(r"\$\{(\w+)\}")
@@ -68,6 +78,7 @@ def load_config(path: str | Path) -> BridgeConfig:
     groups = data.get("groups", {})
     storage = data.get("storage", {})
     cs = data.get("channel_server", {})
+    lazy = data.get("lazy_create", {})
 
     return BridgeConfig(
         feishu=FeishuConfig(
@@ -83,5 +94,11 @@ def load_config(path: str | Path) -> BridgeConfig:
         upload_dir=storage.get("upload_dir", ".feishu-bridge/uploads"),
         customer_chats_path=storage.get(
             "customer_chats_path", ".feishu-bridge/customer_chats.json"
+        ),
+        routing_path=storage.get("routing_path", "routing.toml"),
+        lazy_create=LazyCreateConfig(
+            enabled=lazy.get("enabled", False),
+            entry_agent_template=lazy.get("entry_agent_template", "fast-agent"),
+            channel_prefix=lazy.get("channel_prefix", "conv-"),
         ),
     )
