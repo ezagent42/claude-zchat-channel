@@ -92,23 +92,40 @@ IRC_AUTH_TOKEN = os.environ.get("IRC_AUTH_TOKEN", "")
 
 
 async def inject_message(write_stream, msg: dict, context: str) -> None:
-    """将 IRC 侧消息以 MCP notification 注入 Claude Code。"""
+    """将 IRC 侧消息以 MCP notification 注入 Claude Code。
+
+    msg["type"] == "sys" 时 body 是 dict（来自 __zchat_sys: payload），
+    序列化为 "[system event] <sys_type>: <json>" 格式，方便 Claude 识别。
+    """
+    msg_type = msg.get("type", "msg")
     ts = msg.get("ts", 0)
     iso_ts = (
         datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
         if ts
         else datetime.now(tz=timezone.utc).isoformat()
     )
+
+    body = msg.get("body", "")
+    if msg_type == "sys":
+        # sys event: body 是 dict，序列化成可读字符串
+        import json as _json
+        sys_type = body.get("type") if isinstance(body, dict) else "unknown"
+        data = body.get("body") if isinstance(body, dict) else {}
+        content = f"[system event] {sys_type}: {_json.dumps(data, ensure_ascii=False)}"
+    else:
+        content = body
+
     notification = JSONRPCNotification(
         jsonrpc="2.0",
         method="notifications/claude/channel",
         params={
-            "content": msg.get("body", ""),
+            "content": content,
             "meta": {
                 "chat_id": context,
                 "message_id": msg.get("id", ""),
                 "user": msg.get("nick", "unknown"),
                 "ts": iso_ts,
+                "type": msg_type,
             },
         },
     )
@@ -198,6 +215,27 @@ def register_tools(server: Server, state: dict) -> None:
                 },
             ),
             Tool(
+                name="join_channel",
+                description=(
+                    "Join an IRC channel to receive @mentions.\n\n"
+                    "Parameters:\n"
+                    "- channel_name (required): Channel name without # prefix\n\n"
+                    "Usage: dynamically join a new IRC channel at runtime (e.g. when "
+                    "dispatched to a new conversation). The MCP server sends IRC JOIN "
+                    "and starts listening for @mentions in the channel."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "channel_name": {
+                            "type": "string",
+                            "description": "Channel name without # prefix (e.g. 'conv-001')",
+                        },
+                    },
+                    "required": ["channel_name"],
+                },
+            ),
+            Tool(
                 name="run_zchat_cli",
                 description=(
                     "Execute a zchat CLI command and return stdout/stderr.\n\n"
@@ -249,6 +287,8 @@ def register_tools(server: Server, state: dict) -> None:
     async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
         if name == "reply":
             return await _handle_reply(_get_irc(), arguments)
+        if name == "join_channel":
+            return await _handle_join_channel(_get_irc(), arguments)
         if name == "run_zchat_cli":
             return await _handle_run_zchat_cli(arguments)
         raise ValueError(f"Unknown tool: {name}")
@@ -279,6 +319,18 @@ async def _handle_reply(connection, arguments: dict) -> list[TextContent]:
     for chunk in chunk_message(prefixed):
         connection.privmsg(chat_id, chunk)
     return [TextContent(type="text", text=f'{{"message_id": "{message_id}", "sent_to": "{chat_id}"}}')]
+
+
+async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]:
+    """JOIN an IRC channel to receive @mentions."""
+    channel = arguments.get("channel_name", "").lstrip("#")
+    if not channel:
+        return [TextContent(type="text", text="error: channel_name required")]
+    try:
+        connection.join(f"#{channel}")
+    except Exception as e:
+        return [TextContent(type="text", text=f"join failed: {e}")]
+    return [TextContent(type="text", text=f"Joined #{channel}")]
 
 
 async def _handle_run_zchat_cli(arguments: dict) -> list[TextContent]:
@@ -405,12 +457,33 @@ async def main() -> None:
     register_tools(server, state)
 
     def _on_pubmsg(conn, event):
+        from zchat_protocol import irc_encoding
+
         nick = event.source.nick
         body = event.arguments[0]
+        channel = event.target
+
+        parsed = irc_encoding.parse(body)
+        kind = parsed.get("kind")
+
+        # __zchat_sys: 系统事件 → 注入 Claude 作为 system notification
+        if kind == "sys":
+            payload = parsed.get("payload", {})
+            msg = {
+                "id": os.urandom(4).hex(),
+                "nick": nick,
+                "type": "sys",
+                "body": payload,
+                "ts": time.time(),
+            }
+            print(f"[agent-mcp] [{channel}] SYS event: {payload.get('type')}", file=sys.stderr)
+            loop.call_soon_threadsafe(queue.put_nowait, (msg, channel))
+            return
+
+        # 普通消息：必须有 @mention 才触发
         if not detect_mention(body, AGENT_NAME):
             return
         cleaned = clean_mention(body, AGENT_NAME)
-        channel = event.target
         msg = {
             "id": os.urandom(4).hex(),
             "nick": nick,
