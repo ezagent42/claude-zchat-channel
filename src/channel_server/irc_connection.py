@@ -97,6 +97,23 @@ class IRCConnection:
         self._connection.join(channel)
         self._joined_channels.add(channel)
 
+    def part(self, channel: str) -> None:
+        """LEAVE an IRC channel."""
+        if self._connection is None:
+            raise RuntimeError("not connected")
+        if not channel.startswith("#"):
+            channel = f"#{channel}"
+        try:
+            self._connection.part(channel)
+        except Exception as e:
+            log.warning("[irc] part %s failed: %s", channel, e)
+        self._joined_channels.discard(channel)
+
+    @property
+    def joined_channels(self) -> set[str]:
+        """当前已 JOIN 的 channel 集合（含 '#' 前缀）。"""
+        return set(self._joined_channels)
+
     def privmsg(self, target: str, content: str) -> None:
         """发送 PRIVMSG。content 已是 IRC 编码（含前缀）或 @-addressed 文本。"""
         if self._connection is None:
