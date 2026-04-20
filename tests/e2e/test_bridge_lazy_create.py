@@ -28,8 +28,9 @@ def bridge_with_lazy_enabled(tmp_path):
     routing_path.write_text("", encoding="utf-8")
 
     config = BridgeConfig(
+        bot_name="customer",
         feishu=FeishuConfig(app_id="cli_test_app", app_secret="secret"),
-        groups=GroupsConfig(admin_chat_id="oc_admin"),
+        groups=GroupsConfig(),
         channel_server_url="ws://127.0.0.1:9999",
         upload_dir=str(tmp_path / "uploads"),
         customer_chats_path=str(tmp_path / "customer.json"),
@@ -41,12 +42,13 @@ def bridge_with_lazy_enabled(tmp_path):
         ),
     )
 
+    # 先 import 触发 module 加载，patch target 才能找到
+    from feishu_bridge import bridge as _bridge_module
     with patch("lark_oapi.Client.builder") as builder_mock:
         builder_mock.return_value.app_id.return_value.app_secret.return_value.build.return_value = MagicMock()
-        with patch("feishu_bridge.bridge.FeishuSender") as sender_mock:
-            with patch("feishu_bridge.bridge.BridgeAPIClient") as api_mock:
-                from feishu_bridge.bridge import FeishuBridge
-                bridge = FeishuBridge(config, routing_path=str(routing_path))
+        with patch.object(_bridge_module, "FeishuSender") as sender_mock:
+            with patch.object(_bridge_module, "BridgeAPIClient") as api_mock:
+                bridge = _bridge_module.FeishuBridge(config, routing_path=str(routing_path))
                 yield bridge
 
 
@@ -74,15 +76,15 @@ async def test_lazy_create_invokes_zchat_cli(bridge_with_lazy_enabled):
 
     # 至少两次调用：channel create + agent create
     assert len(calls) >= 2
-    # 第一次：zchat channel create <ch> --external-chat oc_xxx --bot-id cli_test_app
+    # 第一次：zchat channel create <ch> --external-chat oc_xxx --bot customer
     first = calls[0]
     assert first[0] == "zchat"
     assert first[1] == "channel"
     assert first[2] == "create"
     assert "--external-chat" in first
     assert "oc_abc12345xyz" in first
-    assert "--bot-id" in first
-    assert "cli_test_app" in first
+    assert "--bot" in first
+    assert "customer" in first
 
     # 第二次：zchat agent create <name> --type fast-agent --channel <ch>
     second = calls[1]

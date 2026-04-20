@@ -35,7 +35,7 @@ from lark_oapi.api.im.v1 import (
 from zchat_protocol import irc_encoding, ws_messages
 
 from feishu_bridge.bridge_api_client import BridgeAPIClient
-from feishu_bridge.config import BridgeConfig, load_config
+from feishu_bridge.config import BridgeConfig
 from feishu_bridge.group_manager import GroupManager
 from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.outbound import OutboundRouter
@@ -66,22 +66,29 @@ class FeishuBridge:
         self._routing_path = routing_path or config.routing_path or os.environ.get(
             "CS_ROUTING_CONFIG", "routing.toml"
         )
-        self._bot_id = config.feishu.app_id
-        self._external_to_channel = read_bridge_mappings(self._routing_path, self._bot_id)
+        # V6: bot_name 是 routing.toml [bots] 里的逻辑名，bridge 用它过滤 channel
+        self._bot_name = config.bot_name or config.feishu.app_id  # 兼容 V5 单 yaml 模式
+        self._external_to_channel = read_bridge_mappings(self._routing_path, self._bot_name)
         # 反向映射：channel_id → external_chat_id（channel_chat_map 给 GroupManager 用）
         channel_chat_map = reverse_mapping(self._external_to_channel)
 
+        # V6: admin_chat_id 不再在 GroupsConfig 里（业务语义已转 routing.toml [bots]）；
+        # 由 bridge 进程自己根据 bot_name 决定（admin bot 把自己的所有 chat 视为 admin）
+        admin_chat_id = ""
+        if self._bot_name == "admin":
+            chats = list(self._external_to_channel.keys())
+            admin_chat_id = chats[0] if chats else ""
+
         self.group_manager = GroupManager(
-            admin_chat_id=config.groups.admin_chat_id,
+            admin_chat_id=admin_chat_id,
             squad_chats=config.groups.squad_chats,
             customer_chats_path=config.customer_chats_path,
             channel_chat_map=channel_chat_map,
         )
-        # V4：出站路由器（按 irc_encoding kind 路由，不读 visibility 字段）
         self.outbound = OutboundRouter(
             sender=self.sender,
             group_manager=self.group_manager,
-            admin_chat_id=config.groups.admin_chat_id,
+            admin_chat_id=admin_chat_id,
         )
 
         # 预注册 customer chats（可选，正式环境通过 bot_added 事件动态注册）
@@ -120,7 +127,7 @@ class FeishuBridge:
 
     def _reload_mappings(self) -> None:
         """重新从 routing.toml 读映射（在 lazy create 后或定期调）。"""
-        new_map = read_bridge_mappings(self._routing_path, self._bot_id)
+        new_map = read_bridge_mappings(self._routing_path, self._bot_name)
         self._external_to_channel = new_map
         self.group_manager._channel_chat_map = reverse_mapping(new_map)
 
@@ -145,7 +152,7 @@ class FeishuBridge:
         """bot_added 事件懒创建 channel + agent。
 
         生成 channel_id = <prefix><chat_id 后缀>，调 CLI:
-          zchat channel create <channel_id> --external-chat <chat_id> --bot-id <app_id>
+          zchat channel create <channel_id> --external-chat <chat_id> --bot <bot_name>
           zchat agent create <name> --type <template> --channel <channel_id>
         """
         lc = self.config.lazy_create
@@ -166,7 +173,7 @@ class FeishuBridge:
         rc, out, err = await self._run_cli(
             "channel", "create", channel_id,
             "--external-chat", chat_id,
-            "--bot-id", self._bot_id,
+            "--bot", self._bot_name,
         )
         if rc != 0:
             log.error("[lazy] channel create failed: rc=%s out=%s err=%s", rc, out, err)
