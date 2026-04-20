@@ -74,8 +74,19 @@ def build_config_from_routing(
     project_dir = Path(routing_path).parent
     bridge_subdir = project_dir / f".feishu-bridge-{bot_name}"
 
-    # bridge 自身负责的 channel 的 external_chat_id 列表（可作 customer_chats 预注册）
+    # bridge 自身负责的 channel 的 external_chat_id 列表
     own_chats = list(read_bridge_mappings(routing_path, bot_name).keys())
+
+    # 按 bot_name 决定 role tag —— V6 一 bot 一 bridge，role 从 bot_name 派生
+    # （这是 V5 `identify_role` 依据 admin_chat_id / squad_chats / customer 三元组做分类的等价最小形）
+    # 未来路径：routing.toml [bots].role 显式字段
+    squad_list: list[dict] = []
+    customer_list: list[str] = []
+    if bot_name == "squad":
+        squad_list = [{"chat_id": c} for c in own_chats]
+    else:
+        # customer / admin / 其他：自己的 chat 归 customer_chats（客户/管理员群）
+        customer_list = own_chats
 
     return BridgeConfig(
         bot_name=bot_name,
@@ -84,8 +95,8 @@ def build_config_from_routing(
             app_secret=bot_cfg["app_secret"],
         ),
         groups=GroupsConfig(
-            squad_chats=[{"chat_id": c} for c in own_chats],   # 该 bot 名下所有 chat 都列为 squad
-            customer_chats=own_chats,
+            squad_chats=squad_list,
+            customer_chats=customer_list,
         ),
         channel_server_url=channel_server_url,
         upload_dir=str(bridge_subdir / "uploads"),
