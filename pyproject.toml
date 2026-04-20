@@ -28,6 +28,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/channel_server", "src/plugins", "src/feishu_bridge"]
 
+# agent_mcp.py + instructions.md + .claude-plugin/ + commands/ 位于仓库根（非 src/）。
+# 用 force-include 带进 wheel，保持与 agent_mcp 同级，运行时可读。
+[tool.hatch.build.targets.wheel.force-include]
+"agent_mcp.py" = "agent_mcp.py"
+"instructions.md" = "instructions.md"
+".claude-plugin" = ".claude-plugin"
+"commands" = "commands"
+
 [project.optional-dependencies]
 test = [
     "pytest",

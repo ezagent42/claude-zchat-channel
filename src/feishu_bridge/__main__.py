@@ -40,3 +40,7 @@ def main():
 
     bridge = FeishuBridge(config)
     bridge.start()
+
+
+if __name__ == "__main__":
+    main()
