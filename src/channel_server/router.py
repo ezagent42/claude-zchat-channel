@@ -102,6 +102,7 @@ class Router:
             if entry:
                 try:
                     self._irc.privmsg(irc_channel, f"@{entry} {encoded}")
+                    log.info("[router] → IRC %s: @%s %s", irc_channel, entry, encoded[:60])
                 except Exception:
                     log.exception("[router] irc privmsg failed")
             else:
