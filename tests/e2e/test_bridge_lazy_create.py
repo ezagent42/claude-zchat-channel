@@ -22,7 +22,7 @@ import pytest
 @pytest.fixture
 def bridge_with_lazy_enabled(tmp_path):
     """构造一个 lazy_create enabled 的 bridge（跳过真 feishu 连接）。"""
-    from feishu_bridge.config import BridgeConfig, FeishuConfig, GroupsConfig, LazyCreateConfig
+    from feishu_bridge.config import BridgeConfig, FeishuConfig, LazyCreateConfig
 
     routing_path = tmp_path / "routing.toml"
     routing_path.write_text("", encoding="utf-8")
@@ -30,10 +30,8 @@ def bridge_with_lazy_enabled(tmp_path):
     config = BridgeConfig(
         bot_name="customer",
         feishu=FeishuConfig(app_id="cli_test_app", app_secret="secret"),
-        groups=GroupsConfig(),
         channel_server_url="ws://127.0.0.1:9999",
         upload_dir=str(tmp_path / "uploads"),
-        customer_chats_path=str(tmp_path / "customer.json"),
         routing_path=str(routing_path),
         lazy_create=LazyCreateConfig(
             enabled=True,

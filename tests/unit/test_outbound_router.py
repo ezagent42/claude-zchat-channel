@@ -1,240 +1,161 @@
-"""OutboundRouter V4 单元测试。
+"""OutboundRouter 单元测试（V6 精简版）。
 
-V4 协议：按 irc_encoding kind 路由，不读 visibility 字段。
-覆盖 TC-1 ~ TC-8：
-- TC-1 test_conv_created_sends_card
-- TC-2 test_card_is_thread_root
-- TC-3 test_msg_kind_dual_write（原 public_reply_dual_write）
-- TC-4 test_side_kind_thread_only（原 side_thread_only）
-- TC-5 test_mode_changed_updates_card
-- TC-6 test_conv_closed_updates_card
-- TC-7 test_msg_id_mapping_for_edit
-- TC-8 test_plain_kind_dual_write
+V6 去 role 化：OutboundRouter 只依赖 ChannelMapper（channel_id → feishu chat_id）。
+- msg/plain: send_text 到 mapper 对应的飞书群
+- side: 若有 supervising thread 则 thread 回复（V6 默认无跨 bot 监管）
+- edit: 查 _msg_id_map 做 update_message
+- on_conversation_created: V6 不再自动发监管卡片（squad bridge 未来扩展处理）
 """
-
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from feishu_bridge.group_manager import ChannelMapper
 from feishu_bridge.outbound import ConvThread, OutboundRouter
 
 
 def _build_router(
     *,
-    squad_chat: str = "oc_squad",
-    customer_chat: str | None = "oc_cust",
-    admin_chat_id: str | None = None,
-    card_msg_id: str = "om_card_root",
+    mapping: dict[str, str] | None = None,
 ) -> tuple[OutboundRouter, MagicMock]:
     sender = MagicMock()
-    gm = MagicMock()
-    gm.get_squad_chat.return_value = squad_chat
-    gm.get_customer_chat.return_value = customer_chat
-    sender.send_card.return_value = card_msg_id
     sender.send_text.return_value = "om_text_default"
+    sender.send_card.return_value = "om_card_default"
     sender.reply_in_thread.return_value = "om_thread_default"
     sender.update_card.return_value = True
     sender.update_message.return_value = True
-    router = OutboundRouter(
-        sender=sender, group_manager=gm, admin_chat_id=admin_chat_id
-    )
-    return router, sender
+    mapper = ChannelMapper(mapping or {"conv_1": "oc_cust_a"})
+    return OutboundRouter(sender=sender, mapper=mapper), sender
 
 
-# ---------------------------------------------------------------------- #
-# TC-1, TC-2: conversation.created → send_card → card_msg_id 存入 ConvThread
-# ---------------------------------------------------------------------- #
+# ---------- conversation.created（V6: no-op by default） ----------
+
+def test_conv_created_no_op_v6() -> None:
+    router, sender = _build_router()
+    result = router.on_conversation_created("conv_1", metadata={"source": "feishu"})
+    assert result is None
+    sender.send_card.assert_not_called()
 
 
-def test_conv_created_sends_card() -> None:
-    """TC-1: conversation.created → sender.send_card 被调用。"""
-    router, sender = _build_router(card_msg_id="om_root_1")
+# ---------- msg/plain routing ----------
 
-    card_msg_id = router.on_conversation_created(
-        "conv_1",
-        metadata={"customer": {"id": "alice", "name": "Alice"}},
-    )
-
-    assert card_msg_id == "om_root_1"
-    assert sender.send_card.call_count == 1
-    args, _ = sender.send_card.call_args
-    assert args[0] == "oc_squad"  # squad 群
-    card = args[1]
-    assert card["header"]["title"]["content"].startswith("对话 conv_1")
+def test_msg_kind_sends_to_customer_chat() -> None:
+    router, sender = _build_router(mapping={"conv_1": "oc_customer"})
+    router.route("conv_1", kind="msg", text="hello customer")
+    sender.send_text.assert_called_once_with("oc_customer", "hello customer")
 
 
-def test_card_is_thread_root() -> None:
-    """TC-2: card_msg_id 存入 ConvThread（作为后续 thread 回复的 root）。"""
-    router, _ = _build_router(card_msg_id="om_root_2")
-
-    router.on_conversation_created("conv_2", metadata={})
-
-    thread = router.get_thread("conv_2")
-    assert isinstance(thread, ConvThread)
-    assert thread.card_msg_id == "om_root_2"
-    assert thread.squad_chat_id == "oc_squad"
-    assert thread.customer_chat_id == "oc_cust"
-    assert thread.state == "active"
+def test_plain_kind_sends_to_customer_chat() -> None:
+    router, sender = _build_router(mapping={"conv_1": "oc_customer"})
+    router.route("conv_1", kind="plain", text="hi plain")
+    sender.send_text.assert_called_once_with("oc_customer", "hi plain")
 
 
-# ---------------------------------------------------------------------- #
-# TC-3: kind=msg → send_text(customer) + reply_in_thread(squad)
-# ---------------------------------------------------------------------- #
-
-
-def test_msg_kind_dual_write() -> None:
-    """TC-3: kind=msg → customer 群 send_text + squad thread reply_in_thread。"""
-    router, sender = _build_router(card_msg_id="om_root_3")
-    router.on_conversation_created("conv_3", metadata={})
-
-    sender.send_text.return_value = "om_cust_msg_1"
-    sender.reply_in_thread.return_value = "om_thread_msg_1"
-
-    customer_msg_id = router.route(
-        "conv_3",
-        kind="msg",
-        text="hello",
-        cs_msg_id="cs_msg_1",
-    )
-
-    assert customer_msg_id == "om_cust_msg_1"
-    sender.send_text.assert_called_once_with("oc_cust", "hello")
-    sender.reply_in_thread.assert_called_once()
-    root_arg, text_arg = sender.reply_in_thread.call_args[0]
-    assert root_arg == "om_root_3"
-    assert "→客户" in text_arg
-    assert "hello" in text_arg
-
-
-# ---------------------------------------------------------------------- #
-# TC-4: kind=side → 仅 reply_in_thread(squad)，不发 customer 群
-# ---------------------------------------------------------------------- #
-
-
-def test_side_kind_thread_only() -> None:
-    """TC-4: kind=side → 仅 reply_in_thread，不 send_text(customer)。"""
-    router, sender = _build_router(card_msg_id="om_root_4")
-    router.on_conversation_created("conv_4", metadata={})
-
-    sender.send_text.reset_mock()
-    sender.reply_in_thread.reset_mock()
-
-    router.route("conv_4", kind="side", text="side note")
-
+def test_msg_with_no_mapping_is_dropped() -> None:
+    router, sender = _build_router(mapping={})
+    router.route("ghost", kind="msg", text="never delivered")
     sender.send_text.assert_not_called()
-    assert sender.reply_in_thread.call_count == 1
-    root_arg, text_arg = sender.reply_in_thread.call_args[0]
-    assert root_arg == "om_root_4"
-    assert "侧栏" in text_arg
-    assert "side note" in text_arg
 
 
-# ---------------------------------------------------------------------- #
-# TC-5: mode.changed → update_card(card_msg_id)
-# ---------------------------------------------------------------------- #
+def test_msg_fallback_to_conversation_id_if_oc_prefix() -> None:
+    """V5 容错：conv_id = oc_xxx 直接当 chat_id。"""
+    router, sender = _build_router(mapping={})
+    router.route("oc_direct", kind="msg", text="legacy")
+    sender.send_text.assert_called_once_with("oc_direct", "legacy")
 
 
-def test_mode_changed_updates_card() -> None:
-    """TC-5: on_mode_changed → sender.update_card(card_msg_id, 新卡片)。"""
-    router, sender = _build_router(card_msg_id="om_root_5")
-    router.on_conversation_created("conv_5", metadata={})
+# ---------- side routing（需要 supervising thread） ----------
 
-    sender.update_card.reset_mock()
-    ok = router.on_mode_changed("conv_5", mode="takeover")
-
-    assert ok is True
-    sender.update_card.assert_called_once()
-    args, _ = sender.update_card.call_args
-    assert args[0] == "om_root_5"
-    card = args[1]
-    # 新卡片应展示 takeover 模式
-    first_div = next(e for e in card["elements"] if e["tag"] == "div")
-    assert "人工接管" in first_div["text"]["content"]
-    assert router.get_thread("conv_5").mode == "takeover"
-
-
-# ---------------------------------------------------------------------- #
-# TC-6: conversation.closed → update_card(state=closed)
-# ---------------------------------------------------------------------- #
-
-
-def test_conv_closed_updates_card() -> None:
-    """TC-6: on_conversation_closed → update_card 展示"已关闭"。"""
-    router, sender = _build_router(card_msg_id="om_root_6")
-    router.on_conversation_created("conv_6", metadata={})
-
-    sender.update_card.reset_mock()
-    ok = router.on_conversation_closed(
-        "conv_6", resolution={"outcome": "resolved", "csat_score": 5}
+def test_side_kind_with_thread_goes_to_thread() -> None:
+    router, sender = _build_router()
+    router._threads["conv_1"] = ConvThread(
+        conversation_id="conv_1",
+        supervising_chat_id="oc_squad",
+        card_msg_id="om_card_root",
     )
-
-    assert ok is True
-    sender.update_card.assert_called_once()
-    args, _ = sender.update_card.call_args
-    assert args[0] == "om_root_6"
-    card = args[1]
-    assert "已关闭" in card["header"]["title"]["content"]
-    # 关闭卡片不应再包含 action 按钮
-    assert all(e["tag"] != "action" for e in card["elements"])
-    # resolution 信息应体现在卡片内
-    first_div = next(e for e in card["elements"] if e["tag"] == "div")
-    assert "resolved" in first_div["text"]["content"]
-    assert router.get_thread("conv_6").state == "closed"
-
-
-# ---------------------------------------------------------------------- #
-# TC-7: msg_id 映射 — msg reply 存映射，edit 查映射
-# ---------------------------------------------------------------------- #
-
-
-def test_msg_id_mapping_for_edit() -> None:
-    """TC-7: kind=msg 时存 {cs_msg_id: feishu_msg_id}，edit 查映射调 update_message。"""
-    router, sender = _build_router(card_msg_id="om_root_7")
-    router.on_conversation_created("conv_7", metadata={})
-
-    sender.send_text.return_value = "om_cust_7"
-    router.route("conv_7", kind="msg", text="original", cs_msg_id="cs_msg_7")
-    assert router.get_feishu_msg_id("cs_msg_7") == "om_cust_7"
-
-    sender.update_message.reset_mock()
-    sender.reply_in_thread.reset_mock()
-    ok = router.on_edit("conv_7", cs_msg_id="cs_msg_7", text="edited content")
-
-    assert ok is True
-    sender.update_message.assert_called_once_with("om_cust_7", "edited content")
-    # edit 也在 thread 中留痕
+    router.route("conv_1", kind="side", text="operator suggestion")
     sender.reply_in_thread.assert_called_once()
-    assert "edited" in sender.reply_in_thread.call_args[0][1].lower()
+    args, _ = sender.reply_in_thread.call_args
+    assert args[0] == "om_card_root"
+    assert "operator suggestion" in args[1]
 
 
-# ---------------------------------------------------------------------- #
-# TC-8: kind=plain 等同 msg（双写）
-# ---------------------------------------------------------------------- #
+def test_side_kind_without_thread_is_dropped() -> None:
+    """V6 默认无跨 bot 监管，side 消息可能没有 thread。"""
+    router, sender = _build_router()
+    router.route("conv_1", kind="side", text="nowhere to go")
+    sender.reply_in_thread.assert_not_called()
 
 
-def test_plain_kind_dual_write() -> None:
-    """TC-8: kind=plain → 同 msg，双写 customer + squad thread。"""
-    router, sender = _build_router(card_msg_id="om_root_8")
-    router.on_conversation_created("conv_8", metadata={})
+# ---------- edit routing ----------
 
-    sender.send_text.return_value = "om_cust_8"
-    sender.reply_in_thread.reset_mock()
-
-    mid = router.route("conv_8", kind="plain", text="plain msg")
-
-    assert mid == "om_cust_8"
-    sender.send_text.assert_called_once_with("oc_cust", "plain msg")
-    sender.reply_in_thread.assert_called_once()
+def test_edit_with_msg_id_calls_update_message() -> None:
+    router, sender = _build_router()
+    router._msg_id_map["cs_msg_1"] = "om_feishu_1"
+    result = router.on_edit("conv_1", "cs_msg_1", "edited text")
+    sender.update_message.assert_called_once_with("om_feishu_1", "edited text")
+    assert result is True
 
 
-def test_edit_without_mapping_still_leaves_thread_trace() -> None:
-    """边界：无 msg_id 映射时 edit 不调 update_message，但仍在 thread 追加 [edited]。"""
-    router, sender = _build_router(card_msg_id="om_root_7b")
-    router.on_conversation_created("conv_7b", metadata={})
-
-    ok = router.on_edit("conv_7b", cs_msg_id="cs_unknown", text="late edit")
-
-    assert ok is False
+def test_edit_without_mapping_noop() -> None:
+    router, sender = _build_router()
+    result = router.on_edit("conv_1", "unknown_cs_msg", "edit")
     sender.update_message.assert_not_called()
-    sender.reply_in_thread.assert_called()
-    assert "edited" in sender.reply_in_thread.call_args[0][1].lower()
+    assert result is False
+
+
+def test_msg_with_cs_msg_id_populates_map_for_future_edit() -> None:
+    router, sender = _build_router(mapping={"conv_1": "oc_customer"})
+    sender.send_text.return_value = "om_feishu_sent"
+    router.route("conv_1", kind="msg", text="hi", cs_msg_id="cs_1")
+    assert router.get_feishu_msg_id("cs_1") == "om_feishu_sent"
+
+
+# ---------- csat ----------
+
+def test_csat_request_sends_card_to_customer() -> None:
+    router, sender = _build_router(mapping={"conv_1": "oc_customer"})
+    router.on_csat_request("conv_1")
+    sender.send_card.assert_called_once()
+    args, _ = sender.send_card.call_args
+    assert args[0] == "oc_customer"
+
+
+# ---------- thread/conversation state ----------
+
+def test_get_conversation_for_thread() -> None:
+    router, _ = _build_router()
+    router._threads["conv_1"] = ConvThread(
+        conversation_id="conv_1",
+        supervising_chat_id="oc_squad_a",
+        state="active",
+    )
+    assert router.get_conversation_for_thread("oc_squad_a") == "conv_1"
+    assert router.get_conversation_for_thread("oc_unknown") is None
+
+
+def test_mode_changed_requires_card() -> None:
+    router, sender = _build_router()
+    # 没有 thread → 返回 False
+    assert router.on_mode_changed("ghost", "takeover") is False
+    # 有 thread 有 card → update_card 被调
+    router._threads["conv_1"] = ConvThread(
+        conversation_id="conv_1",
+        supervising_chat_id="oc_sq",
+        card_msg_id="om_root",
+    )
+    assert router.on_mode_changed("conv_1", "takeover") is True
+    sender.update_card.assert_called_once()
+
+
+def test_conv_closed_requires_card() -> None:
+    router, sender = _build_router()
+    assert router.on_conversation_closed("ghost") is False
+    router._threads["conv_1"] = ConvThread(
+        conversation_id="conv_1",
+        supervising_chat_id="oc_sq",
+        card_msg_id="om_root",
+    )
+    assert router.on_conversation_closed("conv_1") is True
+    thread = router.get_thread("conv_1")
+    assert thread.state == "closed"

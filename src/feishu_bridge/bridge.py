@@ -36,7 +36,7 @@ from zchat_protocol import irc_encoding, ws_messages
 
 from feishu_bridge.bridge_api_client import BridgeAPIClient
 from feishu_bridge.config import BridgeConfig
-from feishu_bridge.group_manager import GroupManager
+from feishu_bridge.group_manager import ChannelMapper
 from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.outbound import OutboundRouter
 from feishu_bridge.routing_reader import read_bridge_mappings, reverse_mapping
@@ -67,33 +67,12 @@ class FeishuBridge:
             "CS_ROUTING_CONFIG", "routing.toml"
         )
         # V6: bot_name 是 routing.toml [bots] 里的逻辑名，bridge 用它过滤 channel
-        self._bot_name = config.bot_name or config.feishu.app_id  # 兼容 V5 单 yaml 模式
+        self._bot_name = config.bot_name or config.feishu.app_id
         self._external_to_channel = read_bridge_mappings(self._routing_path, self._bot_name)
-        # 反向映射：channel_id → external_chat_id（channel_chat_map 给 GroupManager 用）
-        channel_chat_map = {k.lstrip("#"): v for k, v in reverse_mapping(self._external_to_channel).items()}
+        channel_chat_map = reverse_mapping(self._external_to_channel)
 
-        # V6: admin_chat_id 不再在 GroupsConfig 里（业务语义已转 routing.toml [bots]）；
-        # 由 bridge 进程自己根据 bot_name 决定（admin bot 把自己的所有 chat 视为 admin）
-        admin_chat_id = ""
-        if self._bot_name == "admin":
-            chats = list(self._external_to_channel.keys())
-            admin_chat_id = chats[0] if chats else ""
-
-        self.group_manager = GroupManager(
-            admin_chat_id=admin_chat_id,
-            squad_chats=config.groups.squad_chats,
-            customer_chats_path=config.customer_chats_path,
-            channel_chat_map=channel_chat_map,
-        )
-        self.outbound = OutboundRouter(
-            sender=self.sender,
-            group_manager=self.group_manager,
-            admin_chat_id=admin_chat_id,
-        )
-
-        # 预注册 customer chats（可选，正式环境通过 bot_added 事件动态注册）
-        for chat_id in getattr(config.groups, 'customer_chats', []):
-            self.group_manager.register_customer_chat(chat_id)
+        self.mapper = ChannelMapper(channel_chat_map=channel_chat_map)
+        self.outbound = OutboundRouter(sender=self.sender, mapper=self.mapper)
 
         # 文件下载目录
         self._upload_dir = Path(config.upload_dir)
@@ -132,9 +111,7 @@ class FeishuBridge:
         """重新从 routing.toml 读映射（在 lazy create 后或定期调）。"""
         new_map = read_bridge_mappings(self._routing_path, self._bot_name)
         self._external_to_channel = new_map
-        self.group_manager._channel_chat_map = {
-            k.lstrip("#"): v for k, v in reverse_mapping(new_map).items()
-        }
+        self.mapper.replace_all(reverse_mapping(new_map))
 
     async def _run_cli(self, *args: str, timeout: float = 30.0) -> tuple[int, str, str]:
         """执行 zchat CLI 命令。返回 (returncode, stdout, stderr)。"""
@@ -236,11 +213,12 @@ class FeishuBridge:
             self._processed_msg_ids.add(msg_id)
 
         chat_id = msg.chat_id or ""
-        role = self.group_manager.identify_role(chat_id)
-
-        if role == "unknown":
-            log.debug("Ignoring message from unknown group %s", chat_id)
+        # V6: bridge 不分 role；消息都按 chat_id → channel_id 映射转发
+        channel_id = self._external_to_channel.get(chat_id)
+        if channel_id is None:
+            log.debug("Ignoring message from unmapped chat_id=%s", chat_id)
             return
+        channel_id = channel_id.lstrip("#")
 
         msg_type = msg.message_type or "text"
         try:
@@ -255,32 +233,24 @@ class FeishuBridge:
             if event.sender and event.sender.sender_id
             else ""
         )
-        log.info("[%s] %s: %s", role, sender_open_id or "?", text[:100])
+        message_id = msg.message_id or ""
+        log.info("[%s] %s: %s", self._bot_name, sender_open_id or "?", text[:100])
 
-        # Squad thread 回复 → 作为 operator 消息转发到 channel-server
-        is_thread_reply = (
+        # Thread reply 路由：如果消息来自某 squad thread 且对应某 conv（outbound 自己维护），
+        # 转到该 conv；否则走默认（本 channel）。
+        is_thread_reply = bool(
             getattr(msg, "parent_id", None)
             or getattr(msg, "root_id", None)
             or getattr(msg, "thread_id", None)
         )
-        if role == "operator" and is_thread_reply:
-            conv_id = self.outbound.get_conversation_for_squad(chat_id)
-            log.info("[thread] operator thread reply: chat=%s conv=%s connected=%s",
-                     chat_id, conv_id, self._bridge_client.connected)
-            if conv_id and self._bridge_client.connected:
-                # V4：operator thread 回复原样发 WS
-                self._bridge_client.send(
-                    ws_messages.build_message(
-                        channel=conv_id,
-                        source=sender_open_id or "operator",
-                        content=text,
-                    )
-                )
-            return
+        target_channel = channel_id
+        if is_thread_reply:
+            conv_for_thread = self.outbound.get_conversation_for_thread(chat_id)
+            if conv_for_thread:
+                target_channel = conv_for_thread.lstrip("#")
+                log.info("[thread] routed to conv %s", target_channel)
 
-        # 转发到 channel-server Bridge API
-        message_id = msg.message_id or ""
-        self._forward_to_bridge(role, chat_id, text, message_id, sender_open_id)
+        self._forward(target_channel, text, message_id, sender_open_id, chat_id=chat_id)
 
     def _on_bot_added(self, data: P2ImChatMemberBotAddedV1) -> None:
         """bot 被拉入新群 → 懒创建 channel + agent（如 enabled）+ 注册 customer。"""
@@ -303,35 +273,19 @@ class FeishuBridge:
                 # 没有 event loop 时直接跑
                 asyncio.run(self._lazy_create_channel_and_agent(chat_id))
 
-        self.group_manager.register_customer_chat(chat_id)
-        log.info("Bot added to group %s, role: %s", chat_id, self.group_manager.identify_role(chat_id))
+        log.info("Bot added to group %s (bot=%s)", chat_id, self._bot_name)
 
     def _on_user_added(self, data: P2ImChatMemberUserAddedV1) -> None:
-        """用户加入群 → 授予角色权限。"""
-        event = data.event
-        if not event:
-            return
-        chat_id = event.chat_id or ""
-        users = event.users or []
-        for user in users:
-            user_id = user.user_id.open_id if user.user_id else ""
-            if user_id and chat_id:
-                self.group_manager.on_member_added(user_id, chat_id)
+        """用户加入群 — V6 bridge 不再追踪成员权限（spec §2.2 红线 3）。"""
+        # 保留 handler 占位以防飞书 SDK 要求注册；行为留给未来业务 plugin。
+        return
 
     def _on_user_deleted(self, data: P2ImChatMemberUserDeletedV1) -> None:
-        """用户退出群 → 撤销角色权限。"""
-        event = data.event
-        if not event:
-            return
-        chat_id = event.chat_id or ""
-        users = event.users or []
-        for user in users:
-            user_id = user.user_id.open_id if user.user_id else ""
-            if user_id and chat_id:
-                self.group_manager.on_member_removed(user_id, chat_id)
+        """用户退出群 — 同上，V6 不追踪。"""
+        return
 
     def _on_disbanded(self, data: P2ImChatDisbandedV1) -> None:
-        """群解散 → 调 CLI 清理 channel + 本地 group_manager 清理。"""
+        """群解散 → 调 CLI 清理 channel + 本地映射清理。"""
         event = data.event
         if not event:
             return
@@ -350,129 +304,66 @@ class FeishuBridge:
             except RuntimeError:
                 asyncio.run(self._remove_channel_by_chat(chat_id))
 
-        self.group_manager.on_group_disbanded(chat_id)
         log.info("Group %s disbanded", chat_id)
 
     # ------------------------------------------------------------------
-    # 入站：飞书 → channel-server（V4 ws_messages 格式）
+    # 入站：飞书 → channel-server（V6 统一 _forward，不分 role）
     # ------------------------------------------------------------------
 
-    def _forward_customer(
-        self, chat_id: str, text: str, message_id: str, sender_id: str,
+    def _forward(
+        self,
+        target_channel: str,
+        text: str,
+        message_id: str,
+        sender_id: str,
+        *,
+        chat_id: str = "",
     ) -> None:
-        """Customer 消息转发：首次消息 → connect 事件 + squad card + message。
+        """统一转发飞书消息到 channel-server Bridge API。
 
-        CS 对 external_chat_id 透明（spec §2.2 红线 3），bridge 必须自己把
-        chat_id 映射成 channel_id 后再发 WS。
+        - 不分 role：role 概念在 V6 已移除，消息对客户/客服/管理员的可见性
+          由 IRC 层的 `__msg:` / `__side:` 前缀决定（spec §5）
+        - 首次见 chat_id：发 connect 事件 + 可选 squad card（outbound 内部判断）
+        - 常规消息：build_message 发 WS
         """
-        channel_id = self._external_to_channel.get(chat_id)
-        if not channel_id:
-            log.warning(
-                "[forward] no channel mapping for chat_id=%s (bot=%s); "
-                "dropping message. Run `zchat channel create ... --bot %s --external-chat %s`",
-                chat_id, self._bot_name, self._bot_name, chat_id,
-            )
+        if not self._bridge_client.connected:
+            log.warning("[forward] bridge_client disconnected; dropping chat=%s", chat_id)
             return
-
-        if chat_id not in self._known_conversations:
-            # connect 事件：通知 channel-server 新 conversation
+        if not target_channel:
+            log.warning("[forward] empty target_channel for chat=%s", chat_id)
+            return
+        try:
+            # 首次入站：connect 事件 + 可选卡片
+            if chat_id and chat_id not in self._known_conversations:
+                self._bridge_client.send(
+                    ws_messages.build_event(
+                        channel=target_channel,
+                        event="connect",
+                        data={
+                            "sender_id": sender_id,
+                            "metadata": {
+                                "source": "feishu",
+                                "name": sender_id,
+                                "external_chat_id": chat_id,
+                            },
+                        },
+                    )
+                )
+                self.outbound.on_conversation_created(
+                    target_channel,
+                    metadata={"source": "feishu", "sender_id": sender_id},
+                )
+                self._known_conversations.add(chat_id)
             self._bridge_client.send(
-                ws_messages.build_event(
-                    channel=channel_id,
-                    event="connect",
-                    data={
-                        "sender_id": sender_id,
-                        "metadata": {"source": "feishu", "name": sender_id, "external_chat_id": chat_id},
-                    },
+                ws_messages.build_message(
+                    channel=target_channel,
+                    source=sender_id or self._bot_name,
+                    content=text,
+                    message_id=message_id or None,
                 )
             )
-            # 在 squad 群创建 conversation card（thread root）
-            self.outbound.on_conversation_created(
-                channel_id,
-                metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
-            )
-            self._known_conversations.add(chat_id)
-            log.info("[forward] connect+card done for %s (chat=%s)", channel_id, chat_id)
-        log.info("[forward] sending WS message channel=%s source=%s text=%r",
-                 channel_id, sender_id, text[:40])
-        self._bridge_client.send(
-            ws_messages.build_message(
-                channel=channel_id,
-                source=sender_id or "customer",
-                content=text,
-                message_id=message_id or None,
-            )
-        )
-        log.info("[forward] WS message sent for channel=%s", channel_id)
-
-    def _forward_operator(
-        self, chat_id: str, text: str, message_id: str, sender_id: str,
-    ) -> None:
-        """Operator 消息转发：原样发 WS（不分拣命令）。
-
-        - thread 回复（有 active conv）→ 发到对应 conv channel（V4 的原路径，由 _on_message 提前处理）
-        - 主聊消息 → 发到本 bot 自己的 channel（让 squad-agent 在 IRC 层响应）
-        """
-        conv_id = self.outbound.get_conversation_for_squad(chat_id)
-        if not conv_id:
-            # V6：主聊消息 fallback 到 bot 自己的 channel（通常 #squad-001）
-            conv_id = self._external_to_channel.get(chat_id)
-            if not conv_id:
-                log.debug("operator message in %s, no mapping", chat_id)
-                return
-            log.info("[forward_operator] main-chat → bot channel %s", conv_id)
-        self._bridge_client.send(
-            ws_messages.build_message(
-                channel=conv_id,
-                source=sender_id or "operator",
-                content=text,
-                message_id=message_id or None,
-            )
-        )
-
-    def _forward_admin(
-        self, chat_id: str, text: str, message_id: str, sender_id: str,
-    ) -> None:
-        """Admin 命令转发：原样发 WS message（chat_id → channel_id 映射）。"""
-        channel_id = self._external_to_channel.get(chat_id)
-        if not channel_id:
-            log.warning(
-                "[forward] no channel mapping for admin chat_id=%s; dropping",
-                chat_id,
-            )
-            return
-        self._bridge_client.send(
-            ws_messages.build_message(
-                channel=channel_id,
-                source=sender_id or "admin",
-                content=text,
-                message_id=message_id or None,
-            )
-        )
-
-    _ROLE_FORWARDERS: dict[str, str] = {
-        "customer": "_forward_customer",
-        "operator": "_forward_operator",
-        "admin": "_forward_admin",
-    }
-
-    def _forward_to_bridge(
-        self, role: str, chat_id: str, text: str,
-        message_id: str, sender_id: str,
-    ) -> None:
-        """根据角色将飞书消息转发到 channel-server Bridge API。"""
-        if not self._bridge_client.connected:
-            log.warning("[forward] bridge_client disconnected; dropping role=%s chat=%s", role, chat_id)
-            return
-        handler_name = self._ROLE_FORWARDERS.get(role)
-        if handler_name is None:
-            log.warning("[forward] no handler for role=%s", role)
-            return
-        handler = getattr(self, handler_name)
-        try:
-            handler(chat_id, text, message_id, sender_id)
         except Exception:
-            log.exception("[forward] role=%s handler raised; message dropped", role)
+            log.exception("[forward] send failed; message dropped")
 
     # ------------------------------------------------------------------
     # 出站：channel-server → 飞书（V4 按 irc_encoding.parse kind 路由）
