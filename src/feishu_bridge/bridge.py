@@ -448,11 +448,17 @@ class FeishuBridge:
     ) -> None:
         """根据角色将飞书消息转发到 channel-server Bridge API。"""
         if not self._bridge_client.connected:
+            log.warning("[forward] bridge_client disconnected; dropping role=%s chat=%s", role, chat_id)
             return
         handler_name = self._ROLE_FORWARDERS.get(role)
-        if handler_name is not None:
-            handler = getattr(self, handler_name)
+        if handler_name is None:
+            log.warning("[forward] no handler for role=%s", role)
+            return
+        handler = getattr(self, handler_name)
+        try:
             handler(chat_id, text, message_id, sender_id)
+        except Exception:
+            log.exception("[forward] role=%s handler raised; message dropped", role)
 
     # ------------------------------------------------------------------
     # 出站：channel-server → 飞书（V4 按 irc_encoding.parse kind 路由）
