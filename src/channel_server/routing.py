@@ -103,13 +103,17 @@ def load(path: str | Path) -> RoutingTable:
     for ch_id, ch_data in (data.get("channels") or {}).items():
         if not isinstance(ch_data, dict):
             continue
+        # 归一化 channel_id: 裸名（不带 '#'）。
+        # 历史 CLI 以 '#conv-xxx' 作 key 写入；V6 后所有内部逻辑统一用裸名，
+        # IRC 操作端拼 '#'。这样 bridge 发 channel='conv-xxx'、CLI 写 '#conv-xxx' 都能查到。
+        normalized = ch_id.lstrip("#")
         route = ChannelRoute(
-            channel_id=ch_id,
+            channel_id=normalized,
             bot=ch_data.get("bot"),
             external_chat_id=ch_data.get("external_chat_id"),
             entry_agent=ch_data.get("entry_agent"),
             agents=dict(ch_data.get("agents") or {}),
         )
-        channels[ch_id] = route
+        channels[normalized] = route
 
     return RoutingTable(channels=channels, bots=bots)
