@@ -387,6 +387,9 @@ class FeishuBridge:
                 metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
             )
             self._known_conversations.add(chat_id)
+            log.info("[forward] connect+card done for %s (chat=%s)", channel_id, chat_id)
+        log.info("[forward] sending WS message channel=%s source=%s text=%r",
+                 channel_id, sender_id, text[:40])
         self._bridge_client.send(
             ws_messages.build_message(
                 channel=channel_id,
@@ -395,6 +398,7 @@ class FeishuBridge:
                 message_id=message_id or None,
             )
         )
+        log.info("[forward] WS message sent for channel=%s", channel_id)
 
     def _forward_operator(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
