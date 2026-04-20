@@ -132,3 +132,109 @@ def test_read_bot_config_missing_credential_file(toml_file):
 
 def test_read_bot_config_unknown_bot(toml_file):
     assert read_bot_config(toml_file, "ghost") is None
+
+
+# ---- read_supervised_channels (V6 supervision) ----
+
+@pytest.fixture
+def supervision_toml(tmp_path: Path) -> Path:
+    content = textwrap.dedent("""\
+        [bots."customer"]
+        app_id = "cli_c"
+
+        [bots."sales"]
+        app_id = "cli_s"
+
+        [bots."squad"]
+        app_id = "cli_sq"
+        supervises = ["customer", "sales"]
+
+        [bots."squad-lite"]
+        app_id = "cli_sl"
+        supervises = ["customer"]
+
+        [bots."squad-empty"]
+        app_id = "cli_se"
+
+        [channels."conv-a"]
+        bot = "customer"
+        external_chat_id = "oc_cust_a"
+
+        [channels."conv-b"]
+        bot = "customer"
+        external_chat_id = "oc_cust_b"
+
+        [channels."lead-a"]
+        bot = "sales"
+        external_chat_id = "oc_sales_a"
+
+        [channels."squad-main"]
+        bot = "squad"
+        external_chat_id = "oc_squad_room"
+    """)
+    f = tmp_path / "routing.toml"
+    f.write_text(content, encoding="utf-8")
+    return f
+
+
+def test_supervised_multiple_bots(supervision_toml):
+    from feishu_bridge.routing_reader import read_supervised_channels
+    m = read_supervised_channels(supervision_toml, "squad")
+    assert m == {
+        "oc_cust_a": "conv-a",
+        "oc_cust_b": "conv-b",
+        "oc_sales_a": "lead-a",
+    }
+
+
+def test_supervised_single_bot(supervision_toml):
+    from feishu_bridge.routing_reader import read_supervised_channels
+    m = read_supervised_channels(supervision_toml, "squad-lite")
+    assert set(m.values()) == {"conv-a", "conv-b"}
+
+
+def test_supervised_empty_for_non_squad_bot(supervision_toml):
+    from feishu_bridge.routing_reader import read_supervised_channels
+    assert read_supervised_channels(supervision_toml, "customer") == {}
+    assert read_supervised_channels(supervision_toml, "squad-empty") == {}
+
+
+def test_supervised_excludes_own_channels(supervision_toml):
+    """squad bot 自己的 channel（squad-main）不出现在监管集里。"""
+    from feishu_bridge.routing_reader import read_supervised_channels
+    m = read_supervised_channels(supervision_toml, "squad")
+    assert "squad-main" not in m.values()
+
+
+def test_supervised_bot_prefix_equivalent(supervision_toml, tmp_path):
+    """'bot:customer' 和 'customer' 语义等价。"""
+    from feishu_bridge.routing_reader import read_supervised_channels
+    content = supervision_toml.read_text().replace(
+        'supervises = ["customer", "sales"]',
+        'supervises = ["bot:customer", "bot:sales"]',
+    )
+    f2 = tmp_path / "routing2.toml"
+    f2.write_text(content, encoding="utf-8")
+    m = read_supervised_channels(f2, "squad")
+    assert set(m.values()) == {"conv-a", "conv-b", "lead-a"}
+
+
+def test_supervised_tag_prefix_v7_skipped(supervision_toml, tmp_path, caplog):
+    """V7 tag: 语法不抛，只 log warning 跳过。"""
+    import logging
+    from feishu_bridge.routing_reader import read_supervised_channels
+    content = supervision_toml.read_text().replace(
+        'supervises = ["customer", "sales"]',
+        'supervises = ["tag:east"]',
+    )
+    f2 = tmp_path / "routing3.toml"
+    f2.write_text(content, encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        m = read_supervised_channels(f2, "squad")
+    assert m == {}
+    assert any("not implemented" in r.message for r in caplog.records)
+
+
+def test_supervised_missing_file_returns_empty(tmp_path):
+    from feishu_bridge.routing_reader import read_supervised_channels
+    assert read_supervised_channels(tmp_path / "nope.toml", "squad") == {}

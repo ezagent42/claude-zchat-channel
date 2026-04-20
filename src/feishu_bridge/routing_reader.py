@@ -53,6 +53,64 @@ def reverse_mapping(mappings: dict[str, str]) -> dict[str, str]:
     return {v: k for k, v in mappings.items()}
 
 
+def read_supervised_channels(
+    routing_path: str | Path,
+    squad_bot: str,
+) -> dict[str, str]:
+    """读取 squad_bot 监管的所有 channels，返回 {external_chat_id: channel_id}。
+
+    解析 `[bots."<squad_bot>"].supervises` 列表，按前缀语法匹配：
+      - 无前缀 / "bot:<name>" — 匹配 channels 里 bot == <name>
+      - "tag:<label>"         — V7+，当前记 warning 跳过
+      - "pattern:<glob>"      — V7+，当前记 warning 跳过
+
+    squad_bot 自己拥有的 channels（bot == squad_bot）排除（那是自己的，不是监管）。
+    """
+    data = _load_toml(routing_path)
+    bots = data.get("bots") or {}
+    bot_cfg = bots.get(squad_bot) or {}
+    supervises = bot_cfg.get("supervises") or []
+
+    # 解析 supervises 列表为匹配规则
+    matchers: list[tuple[str, str]] = []  # (kind, value) e.g. ("bot", "customer")
+    for entry in supervises:
+        if not isinstance(entry, str):
+            continue
+        if ":" not in entry:
+            matchers.append(("bot", entry))
+        else:
+            prefix, _, value = entry.partition(":")
+            if prefix not in ("bot",):
+                # V7+ 保留语法（tag / pattern），V6 不实现
+                import logging as _logging
+                _logging.getLogger("feishu-bridge.routing_reader").warning(
+                    "supervises prefix %r not implemented in V6; skipping entry %r",
+                    prefix, entry,
+                )
+                continue
+            matchers.append((prefix, value))
+
+    if not matchers:
+        return {}
+
+    result: dict[str, str] = {}
+    for ch_id, ch in (data.get("channels") or {}).items():
+        if not isinstance(ch, dict):
+            continue
+        ch_bot = ch.get("bot")
+        if ch_bot == squad_bot:
+            # 自己的 channel 不算监管
+            continue
+        ext = ch.get("external_chat_id")
+        if not ext:
+            continue
+        for kind, value in matchers:
+            if kind == "bot" and ch_bot == value:
+                result[ext] = ch_id
+                break
+    return result
+
+
 def read_bot_config(
     routing_path: str | Path,
     bot: str,

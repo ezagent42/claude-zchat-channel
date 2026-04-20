@@ -64,9 +64,22 @@ class OutboundRouter:
         return self._msg_id_map.get(cs_msg_id)
 
     def get_conversation_for_thread(self, supervising_chat_id: str) -> str | None:
-        """由承载卡片的外部 chat_id 反查 conversation_id（供 thread 回复路由用）。"""
+        """由承载卡片的外部 chat_id 反查 conversation_id（可能多 conv 共用一 chat，仅返回首个 active）。"""
         for conv_id, thread in self._threads.items():
             if thread.supervising_chat_id == supervising_chat_id and thread.state == "active":
+                return conv_id
+        return None
+
+    def get_conversation_for_card(self, card_msg_id: str) -> str | None:
+        """由 card_msg_id（即 thread root 的飞书 message_id）精确反查 conversation_id。
+
+        V6 监管场景下，一个 squad 飞书群可能承载多个 conv 的 card；thread reply
+        带 parent_id == card_msg_id 时用此方法定位 conv。
+        """
+        if not card_msg_id:
+            return None
+        for conv_id, thread in self._threads.items():
+            if thread.card_msg_id == card_msg_id and thread.state == "active":
                 return conv_id
         return None
 

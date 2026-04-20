@@ -39,7 +39,11 @@ from feishu_bridge.config import BridgeConfig
 from feishu_bridge.group_manager import ChannelMapper
 from feishu_bridge.message_parsers import parse_message
 from feishu_bridge.outbound import OutboundRouter
-from feishu_bridge.routing_reader import read_bridge_mappings, reverse_mapping
+from feishu_bridge.routing_reader import (
+    read_bridge_mappings,
+    read_supervised_channels,
+    reverse_mapping,
+)
 from feishu_bridge.sender import FeishuSender
 from feishu_bridge.ws_client import CardAwareClient
 
@@ -70,6 +74,13 @@ class FeishuBridge:
         self._bot_name = config.bot_name or config.feishu.app_id
         self._external_to_channel = read_bridge_mappings(self._routing_path, self._bot_name)
         channel_chat_map = reverse_mapping(self._external_to_channel)
+
+        # V6 监管：本 bridge 监管的他人 channels
+        # {external_chat_id: channel_id} — 这些 channel 的消息要镜像为卡片到
+        # 本 bridge 的飞书群（单 squad_chat 承载所有监管卡片）。
+        self._supervised_external_to_channel = read_supervised_channels(
+            self._routing_path, self._bot_name
+        )
 
         self.mapper = ChannelMapper(channel_chat_map=channel_chat_map)
         self.outbound = OutboundRouter(sender=self.sender, mapper=self.mapper)
@@ -112,6 +123,10 @@ class FeishuBridge:
         new_map = read_bridge_mappings(self._routing_path, self._bot_name)
         self._external_to_channel = new_map
         self.mapper.replace_all(reverse_mapping(new_map))
+        # 同步 supervision 集合（admin 新建 customer channel 时需要）
+        self._supervised_external_to_channel = read_supervised_channels(
+            self._routing_path, self._bot_name
+        )
 
     async def _run_cli(self, *args: str, timeout: float = 30.0) -> tuple[int, str, str]:
         """执行 zchat CLI 命令。返回 (returncode, stdout, stderr)。"""
@@ -236,21 +251,25 @@ class FeishuBridge:
         message_id = msg.message_id or ""
         log.info("[%s] %s: %s", self._bot_name, sender_open_id or "?", text[:100])
 
-        # Thread reply 路由：如果消息来自某 squad thread 且对应某 conv（outbound 自己维护），
-        # 转到该 conv；否则走默认（本 channel）。
-        is_thread_reply = bool(
+        # Thread reply 路由：operator 在监管卡片的 thread 里回复 → 用 parent_id 反查 conv_id
+        # 把消息包装为 __side: 发回对应 conv channel（V6 监管真正生效的入口）
+        parent_id = (
             getattr(msg, "parent_id", None)
             or getattr(msg, "root_id", None)
             or getattr(msg, "thread_id", None)
         )
         target_channel = channel_id
-        if is_thread_reply:
-            conv_for_thread = self.outbound.get_conversation_for_thread(chat_id)
+        send_text = text
+        if parent_id:
+            conv_for_thread = self.outbound.get_conversation_for_card(str(parent_id))
             if conv_for_thread:
                 target_channel = conv_for_thread.lstrip("#")
-                log.info("[thread] routed to conv %s", target_channel)
+                # operator 在 squad thread 里的回复 = __side: 副驾驶建议（spec §5）
+                send_text = irc_encoding.encode_side(text)
+                log.info("[thread] operator reply routed to conv=%s as __side:",
+                         target_channel)
 
-        self._forward(target_channel, text, message_id, sender_open_id, chat_id=chat_id)
+        self._forward(target_channel, send_text, message_id, sender_open_id, chat_id=chat_id)
 
     def _on_bot_added(self, data: P2ImChatMemberBotAddedV1) -> None:
         """bot 被拉入新群 → 懒创建 channel + agent（如 enabled）+ 注册 customer。"""
@@ -444,16 +463,23 @@ class FeishuBridge:
         conv_id = msg.get("conversation_id", "") or msg.get("channel", "")
         log.info("[recv] raw type=%s channel=%s", msg_type, conv_id)
 
-        # V6: CS 广播给所有 bridge；本 bridge 只处理自己 bot 名下的 channel。
-        # 比较时 normalize 掉 '#' 前缀（routing.toml key 带 #，IRC 广播不带 #）。
         def _norm(ch: str) -> str:
             return (ch or "").lstrip("#")
 
         if msg_type in self._EVENT_HANDLERS and conv_id:
             own = {_norm(c) for c in self._external_to_channel.values()}
-            if _norm(conv_id) not in own:
-                log.debug("[recv] channel=%s not owned by bot=%s; skip (own=%s)",
-                          conv_id, self._bot_name, own)
+            supervised = {_norm(c) for c in self._supervised_external_to_channel.values()}
+            conv_norm = _norm(conv_id)
+            if conv_norm in supervised and conv_norm not in own:
+                # 他人 channel：本 bridge 作为 squad 监管，走镜像路径
+                if msg_type == "message":
+                    self._handle_supervised_message(conv_norm, msg)
+                else:
+                    log.debug("[recv] supervised non-message event ignored: %s", msg_type)
+                return
+            if conv_norm not in own:
+                log.debug("[recv] channel=%s not owned/supervised by bot=%s; skip",
+                          conv_id, self._bot_name)
                 return
 
         handler_name = self._EVENT_HANDLERS.get(msg_type)
@@ -466,6 +492,71 @@ class FeishuBridge:
             log.debug("ack: %s", msg_type)
         else:
             log.debug("unhandled bridge event: %s", msg_type)
+
+    # ------------------------------------------------------------------
+    # V6 监管：把他人 channel 的消息镜像为卡片 + thread 到本 bot 群
+    # ------------------------------------------------------------------
+
+    def _handle_supervised_message(self, conv_id: str, msg: dict) -> None:
+        """把受监管 channel 的消息镜像为卡片 + thread 回复到本 bridge 的飞书群。"""
+        content = msg.get("content", "")
+        source = msg.get("source", "")
+        parsed = irc_encoding.parse(content)
+        kind = parsed.get("kind", "plain")
+        if kind == "sys":
+            return
+        text = parsed.get("text", content)
+
+        # 本 bridge 的飞书群 chat_id（通常只有一个，如 cs-squad）
+        my_chats = list(self._external_to_channel.keys())
+        if not my_chats:
+            log.debug("[supervise] bot=%s has no own chat; cannot host card",
+                      self._bot_name)
+            return
+        host_chat = my_chats[0]
+
+        thread = self.outbound.get_thread(conv_id)
+        if thread is None:
+            # 首次见此 conv，发 card 作 thread root
+            try:
+                from feishu_bridge.feishu_renderer import build_conv_card
+                card = build_conv_card(
+                    conv_id,
+                    {"source": "supervision", "bot": self._bot_name},
+                    mode="fast",
+                    state="active",
+                )
+                card_msg_id = self.sender.send_card(host_chat, card)
+            except Exception:
+                log.exception("[supervise] send_card failed for %s", conv_id)
+                return
+            from feishu_bridge.outbound import ConvThread
+            thread = ConvThread(
+                conversation_id=conv_id,
+                supervising_chat_id=host_chat,
+                card_msg_id=card_msg_id,
+                state="active",
+            )
+            self.outbound._threads[conv_id] = thread
+            log.info("[supervise] card created for %s (msg_id=%s)", conv_id, card_msg_id)
+
+        if not thread.card_msg_id:
+            return
+
+        # 按 source / kind 染色 label（仅视觉提示，不影响协议）
+        if kind == "side":
+            label = "[侧栏]"
+        elif source.startswith("ou_") or source == "customer":
+            label = "[客户]"
+        elif source.startswith(self._bot_name) or "-" in source:
+            label = "[AI]"
+        else:
+            label = f"[{source[:12]}]" if source else ""
+
+        try:
+            self.sender.reply_in_thread(thread.card_msg_id, f"{label} {text}".strip())
+        except Exception:
+            log.exception("[supervise] reply_in_thread failed")
 
     # ------------------------------------------------------------------
     # 卡片回调 (card.action.trigger)
