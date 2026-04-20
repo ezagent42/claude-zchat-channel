@@ -355,29 +355,41 @@ class FeishuBridge:
     def _forward_customer(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
     ) -> None:
-        """Customer 消息转发：首次消息 → connect 事件 + squad card + message。"""
+        """Customer 消息转发：首次消息 → connect 事件 + squad card + message。
+
+        CS 对 external_chat_id 透明（spec §2.2 红线 3），bridge 必须自己把
+        chat_id 映射成 channel_id 后再发 WS。
+        """
+        channel_id = self._external_to_channel.get(chat_id)
+        if not channel_id:
+            log.warning(
+                "[forward] no channel mapping for chat_id=%s (bot=%s); "
+                "dropping message. Run `zchat channel create ... --bot %s --external-chat %s`",
+                chat_id, self._bot_name, self._bot_name, chat_id,
+            )
+            return
+
         if chat_id not in self._known_conversations:
             # connect 事件：通知 channel-server 新 conversation
             self._bridge_client.send(
                 ws_messages.build_event(
-                    channel=chat_id,
+                    channel=channel_id,
                     event="connect",
                     data={
                         "sender_id": sender_id,
-                        "metadata": {"source": "feishu", "name": sender_id},
+                        "metadata": {"source": "feishu", "name": sender_id, "external_chat_id": chat_id},
                     },
                 )
             )
             # 在 squad 群创建 conversation card（thread root）
             self.outbound.on_conversation_created(
-                chat_id,
+                channel_id,
                 metadata={"customer": {"id": sender_id, "name": sender_id}, "source": "feishu"},
             )
             self._known_conversations.add(chat_id)
-        # V4：统一用 build_message
         self._bridge_client.send(
             ws_messages.build_message(
-                channel=chat_id,
+                channel=channel_id,
                 source=sender_id or "customer",
                 content=text,
                 message_id=message_id or None,
@@ -407,10 +419,17 @@ class FeishuBridge:
     def _forward_admin(
         self, chat_id: str, text: str, message_id: str, sender_id: str,
     ) -> None:
-        """Admin 命令转发：原样发 WS message。"""
+        """Admin 命令转发：原样发 WS message（chat_id → channel_id 映射）。"""
+        channel_id = self._external_to_channel.get(chat_id)
+        if not channel_id:
+            log.warning(
+                "[forward] no channel mapping for admin chat_id=%s; dropping",
+                chat_id,
+            )
+            return
         self._bridge_client.send(
             ws_messages.build_message(
-                channel=chat_id,
+                channel=channel_id,
                 source=sender_id or "admin",
                 content=text,
                 message_id=message_id or None,
