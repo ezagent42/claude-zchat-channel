@@ -56,11 +56,14 @@ class WSServer:
         instance_id: str | None = None
         try:
             async for raw in websocket:
+                log.info("[ws] received raw (%d bytes) from %s", len(raw), instance_id or "?")
                 try:
                     msg = ws_messages.parse(raw)
                 except (json.JSONDecodeError, ValueError) as e:
                     log.warning("[ws] invalid message: %s", e)
                     continue
+                log.info("[ws] parsed type=%s channel=%s",
+                         msg.get("type"), msg.get("channel"))
 
                 if msg["type"] == ws_messages.WSType.REGISTER:
                     conn = BridgeConnection(
