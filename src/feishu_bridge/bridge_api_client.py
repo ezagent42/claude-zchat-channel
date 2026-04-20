@@ -48,7 +48,12 @@ class BridgeAPIClient:
             log.warning("not connected, dropping: %s", msg.get("type"))
             return
         raw = json.dumps(msg)
-        asyncio.run_coroutine_threadsafe(self._ws.send(raw), self._loop)
+        fut = asyncio.run_coroutine_threadsafe(self._ws.send(raw), self._loop)
+        try:
+            fut.result(timeout=3)
+        except Exception as e:
+            log.exception("[send] WS send failed: %s (msg.type=%s, channel=%s)",
+                          e, msg.get("type"), msg.get("channel"))
 
     # ── 连接生命周期 ─────────────────────────────────────────────────
 
