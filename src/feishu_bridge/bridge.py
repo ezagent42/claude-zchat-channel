@@ -544,19 +544,24 @@ class FeishuBridge:
         """处理从 channel-server 收到的 Bridge API 事件。"""
         msg_type = msg.get("type", "")
         conv_id = msg.get("conversation_id", "") or msg.get("channel", "")
+        log.info("[recv] raw type=%s channel=%s", msg_type, conv_id)
 
-        # V6: CS 广播给所有 bridge；本 bridge 只处理自己 bot 名下的 channel
-        # （conv_id 是 routing.toml 里的 key，如 #conv-001；通过 _external_to_channel
-        # 反查确认属于本 bot）
+        # V6: CS 广播给所有 bridge；本 bridge 只处理自己 bot 名下的 channel。
+        # 比较时 normalize 掉 '#' 前缀（routing.toml key 带 #，IRC 广播不带 #）。
+        def _norm(ch: str) -> str:
+            return (ch or "").lstrip("#")
+
         if msg_type in self._EVENT_HANDLERS and conv_id:
-            own_channels = set(self._external_to_channel.values())
-            if conv_id not in own_channels:
-                log.debug("[recv] channel=%s not owned by bot=%s; skip", conv_id, self._bot_name)
+            own = {_norm(c) for c in self._external_to_channel.values()}
+            if _norm(conv_id) not in own:
+                log.debug("[recv] channel=%s not owned by bot=%s; skip (own=%s)",
+                          conv_id, self._bot_name, own)
                 return
 
         handler_name = self._EVENT_HANDLERS.get(msg_type)
         if handler_name is not None:
-            log.info("[recv] type=%s channel=%s → %s", msg_type, conv_id, handler_name)
+            log.info("[recv] accepted: type=%s channel=%s → %s",
+                     msg_type, conv_id, handler_name)
             handler = getattr(self, handler_name)
             handler(conv_id, msg)
         elif msg_type in ("registered", "ack"):
