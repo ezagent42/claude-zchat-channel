@@ -410,12 +410,17 @@ class FeishuBridge:
     ) -> None:
         """Operator 消息转发：原样发 WS（不分拣命令）。
 
-        V4：channel-server PluginRegistry 统一处理 / 前缀。
+        - thread 回复（有 active conv）→ 发到对应 conv channel（V4 的原路径，由 _on_message 提前处理）
+        - 主聊消息 → 发到本 bot 自己的 channel（让 squad-agent 在 IRC 层响应）
         """
         conv_id = self.outbound.get_conversation_for_squad(chat_id)
         if not conv_id:
-            log.debug("operator message in squad %s but no active conversation", chat_id)
-            return
+            # V6：主聊消息 fallback 到 bot 自己的 channel（通常 #squad-001）
+            conv_id = self._external_to_channel.get(chat_id)
+            if not conv_id:
+                log.debug("operator message in %s, no mapping", chat_id)
+                return
+            log.info("[forward_operator] main-chat → bot channel %s", conv_id)
         self._bridge_client.send(
             ws_messages.build_message(
                 channel=conv_id,
