@@ -26,6 +26,9 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
 
+log = logging.getLogger("channel_server.boot")
+
+
 async def _main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -108,12 +111,21 @@ async def _main() -> None:
     await ws_server.start()
     irc_conn.connect()
 
+    # 等待 IRC welcome（避免在 JOIN 命令在 NICK/USER 协商前发出导致 server 静默拒绝）
+    import time as _time
+    _deadline = _time.time() + 5.0
+    while _time.time() < _deadline and not irc_conn._connection.is_connected():
+        await asyncio.sleep(0.1)
+    await asyncio.sleep(0.5)  # 给 welcome 后再缓冲一帧
+
     # Auto-join configured channels
     for ch_id in routing.channels:
         try:
-            irc_conn.join(f"#{ch_id}")
+            normalized = ch_id.lstrip("#")
+            irc_conn.join(f"#{normalized}")
+            log.info("[boot] joined #%s", normalized)
         except Exception:
-            pass
+            log.exception("[boot] join #%s failed", ch_id)
 
     # 启动 routing.toml watcher（热更新路由表）
     watcher_task = asyncio.create_task(

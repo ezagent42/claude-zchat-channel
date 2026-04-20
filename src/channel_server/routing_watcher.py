@@ -52,7 +52,7 @@ async def watch_routing(
                     router.update_routing(RoutingTable())
                     for ch in sorted(last_channels):
                         try:
-                            irc_conn.part(f"#{ch}")
+                            irc_conn.part(f"#{ch.lstrip('#')}")
                         except Exception:
                             log.exception("[watcher] part %s failed", ch)
                     last_channels = set()
@@ -78,14 +78,14 @@ async def watch_routing(
 
             for ch in sorted(added):
                 try:
-                    irc_conn.join(f"#{ch}")
+                    irc_conn.join(f"#{ch.lstrip('#')}")
                     log.info("[watcher] joined new channel #%s", ch)
                 except Exception:
                     log.exception("[watcher] join #%s failed", ch)
 
             for ch in sorted(removed):
                 try:
-                    irc_conn.part(f"#{ch}")
+                    irc_conn.part(f"#{ch.lstrip('#')}")
                     log.info("[watcher] parted removed channel #%s", ch)
                 except Exception:
                     log.exception("[watcher] part #%s failed", ch)
