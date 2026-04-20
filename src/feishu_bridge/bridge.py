@@ -100,11 +100,14 @@ class FeishuBridge:
         self._upload_dir.mkdir(parents=True, exist_ok=True)
 
         # Bridge API 传输层
+        # V6: instance_id 必须唯一（CS 用它作 _connections key），
+        # 3 个 bridge 共用 "feishu-bridge" 会导致 CS 只保留最后一个，
+        # 广播消息时其他 bridge 收不到 → 出站消息丢失。
         self._bridge_client = BridgeAPIClient(
             config.channel_server_url,
             register_data=ws_messages.build_register(
                 bridge_type="feishu",
-                instance_id="feishu-bridge",
+                instance_id=f"feishu-{self._bot_name}",
                 capabilities=["customer", "operator", "admin"],
             ),
         )
@@ -542,8 +545,18 @@ class FeishuBridge:
         msg_type = msg.get("type", "")
         conv_id = msg.get("conversation_id", "") or msg.get("channel", "")
 
+        # V6: CS 广播给所有 bridge；本 bridge 只处理自己 bot 名下的 channel
+        # （conv_id 是 routing.toml 里的 key，如 #conv-001；通过 _external_to_channel
+        # 反查确认属于本 bot）
+        if msg_type in self._EVENT_HANDLERS and conv_id:
+            own_channels = set(self._external_to_channel.values())
+            if conv_id not in own_channels:
+                log.debug("[recv] channel=%s not owned by bot=%s; skip", conv_id, self._bot_name)
+                return
+
         handler_name = self._EVENT_HANDLERS.get(msg_type)
         if handler_name is not None:
+            log.info("[recv] type=%s channel=%s → %s", msg_type, conv_id, handler_name)
             handler = getattr(self, handler_name)
             handler(conv_id, msg)
         elif msg_type in ("registered", "ack"):
