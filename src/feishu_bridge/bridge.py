@@ -70,7 +70,7 @@ class FeishuBridge:
         self._bot_name = config.bot_name or config.feishu.app_id  # 兼容 V5 单 yaml 模式
         self._external_to_channel = read_bridge_mappings(self._routing_path, self._bot_name)
         # 反向映射：channel_id → external_chat_id（channel_chat_map 给 GroupManager 用）
-        channel_chat_map = reverse_mapping(self._external_to_channel)
+        channel_chat_map = {k.lstrip("#"): v for k, v in reverse_mapping(self._external_to_channel).items()}
 
         # V6: admin_chat_id 不再在 GroupsConfig 里（业务语义已转 routing.toml [bots]）；
         # 由 bridge 进程自己根据 bot_name 决定（admin bot 把自己的所有 chat 视为 admin）
@@ -132,7 +132,9 @@ class FeishuBridge:
         """重新从 routing.toml 读映射（在 lazy create 后或定期调）。"""
         new_map = read_bridge_mappings(self._routing_path, self._bot_name)
         self._external_to_channel = new_map
-        self.group_manager._channel_chat_map = reverse_mapping(new_map)
+        self.group_manager._channel_chat_map = {
+            k.lstrip("#"): v for k, v in reverse_mapping(new_map).items()
+        }
 
     async def _run_cli(self, *args: str, timeout: float = 30.0) -> tuple[int, str, str]:
         """执行 zchat CLI 命令。返回 (returncode, stdout, stderr)。"""
