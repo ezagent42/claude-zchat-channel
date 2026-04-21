@@ -1,12 +1,11 @@
-"""Unit tests: FeishuTestClient 7 个扩展方法。
+"""Unit tests: FeishuTestClient 6 个扩展方法。
 
-覆盖 Phase Final eval-doc BEH-1 ~ BEH-7:
+覆盖 Phase Final eval-doc BEH-1 ~ BEH-5, BEH-7:
 - assert_message_edited — 轮询检测 content 变化
 - assert_card_appears — 过滤 msg_type=interactive
 - assert_card_updated — card content 变化检测
 - send_thread_reply — reply_in_thread=True API 调用
 - assert_thread_message_appears — root_id 过滤
-- send_message_as_operator — 委托 send_message
 - click_card_action — 构造 payload 存储
 """
 
@@ -195,22 +194,6 @@ def test_assert_thread_message_appears_timeout():
             client.assert_thread_message_appears(
                 "oc_xxx", "om_root", "找不到", timeout=10
             )
-
-
-# ── BEH-6: send_message_as_operator ──────────────────────────────────
-
-
-def test_send_message_as_operator_delegates():
-    """BEH-6: 委托 send_message。"""
-    client = _make_client()
-
-    resp = MagicMock(success=lambda: True)
-    resp.data.message_id = "om_op"
-    client.client.im.v1.message.create.return_value = resp
-
-    msg_id = client.send_message_as_operator("oc_xxx", "operator 消息")
-    assert msg_id == "om_op"
-    client.client.im.v1.message.create.assert_called_once()
 
 
 # ── BEH-7 (partial): click_card_action ───────────────────────────────

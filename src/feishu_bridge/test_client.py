@@ -245,10 +245,6 @@ class FeishuTestClient:
             f"not found in {chat_id} within {timeout}s"
         )
 
-    def send_message_as_operator(self, chat_id: str, text: str) -> str:
-        """以 operator 身份发消息（测试场景下 bot 即 operator）。"""
-        return self.send_message(chat_id, text)
-
     def click_card_action(
         self, chat_id: str, action_value: str, conv_id: str = ""
     ) -> None:

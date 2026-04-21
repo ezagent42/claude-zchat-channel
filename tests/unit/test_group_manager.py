@@ -39,6 +39,3 @@ def test_replace_all_overwrites():
     assert m.get_feishu_chat("conv-new") == "oc_new"
 
 
-def test_backward_compat_alias():
-    from feishu_bridge.group_manager import GroupManager
-    assert GroupManager is ChannelMapper

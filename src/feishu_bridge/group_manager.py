@@ -47,8 +47,3 @@ class ChannelMapper:
         self._channel_chat_map = {
             (k or "").lstrip("#"): v for k, v in channel_chat_map.items()
         }
-
-
-# 向后兼容别名：过渡期内允许 from group_manager import GroupManager
-# V6 下一轮清理时可以删除
-GroupManager = ChannelMapper
