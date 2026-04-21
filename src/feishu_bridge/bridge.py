@@ -98,7 +98,7 @@ class FeishuBridge:
             register_data=ws_messages.build_register(
                 bridge_type="feishu",
                 instance_id=f"feishu-{self._bot_name}",
-                capabilities=["customer", "operator", "admin"],
+                capabilities=[],  # V6 去 role 化；保留字段兼容 protocol schema
             ),
         )
         self._bridge_client.on_message = self._on_bridge_event
@@ -402,26 +402,8 @@ class FeishuBridge:
             log.warning("[forward] empty target_channel for chat=%s", chat_id)
             return
         try:
-            # 首次入站：connect 事件 + 可选卡片
+            # 首次入站：记录 conv_id（本地去重；无下游订阅者，不再 emit connect event）
             if chat_id and chat_id not in self._known_conversations:
-                self._bridge_client.send(
-                    ws_messages.build_event(
-                        channel=target_channel,
-                        event="connect",
-                        data={
-                            "sender_id": sender_id,
-                            "metadata": {
-                                "source": "feishu",
-                                "name": sender_id,
-                                "external_chat_id": chat_id,
-                            },
-                        },
-                    )
-                )
-                self.outbound.on_conversation_created(
-                    target_channel,
-                    metadata={"source": "feishu", "sender_id": sender_id},
-                )
                 self._known_conversations.add(chat_id)
             self._bridge_client.send(
                 ws_messages.build_message(
@@ -601,44 +583,9 @@ class FeishuBridge:
         cs_msg_id = msg.get("message_id") or parsed.get("message_id")
         self.outbound.route(conv_id, kind=kind, text=text, cs_msg_id=cs_msg_id)
 
-    def _handle_edit_event(self, conv_id: str, msg: dict) -> None:
-        """处理显式 edit 事件（兼容 channel-server 发 type=edit 的场景）。"""
-        cs_msg_id = msg.get("message_id", "")
-        content = msg.get("content", "")
-        if content:
-            parsed = irc_encoding.parse(content)
-            text = parsed.get("text", content)
-        else:
-            text = msg.get("text", "")
-        self.outbound.on_edit(conv_id, cs_msg_id, text)
-
-    def _handle_conv_created(self, conv_id: str, msg: dict) -> None:
-        """处理 conversation.created 事件。"""
-        metadata = msg.get("metadata", {})
-        self.outbound.on_conversation_created(conv_id, metadata)
-
-    def _handle_mode_changed(self, conv_id: str, msg: dict) -> None:
-        """处理 mode.changed 事件。"""
-        mode = msg.get("mode", "fast")
-        self.outbound.on_mode_changed(conv_id, mode)
-
-    def _handle_conv_closed(self, conv_id: str, msg: dict) -> None:
-        """处理 conversation.closed 事件。"""
-        resolution = msg.get("resolution")
-        self.outbound.on_conversation_closed(conv_id, resolution)
-
-    def _handle_csat_request(self, conv_id: str, msg: dict) -> None:
-        """处理 csat_request 事件。"""
-        self.outbound.on_csat_request(conv_id)
-
     _EVENT_HANDLERS: dict[str, str] = {
+        # V6 CS 只向 bridge 发两种 WS type：message 和 event。
         "message": "_handle_message_event",
-        "reply": "_handle_message_event",       # 向后兼容
-        "edit": "_handle_edit_event",
-        "conversation.created": "_handle_conv_created",
-        "mode.changed": "_handle_mode_changed",
-        "conversation.closed": "_handle_conv_closed",
-        "csat_request": "_handle_csat_request",
         "event": "_handle_sys_event",
     }
 

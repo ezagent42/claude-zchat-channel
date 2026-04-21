@@ -80,7 +80,7 @@ def make_routing_with_entry(
     channel_id: str = "general",
     entry_agent: str | None = "yaosh-fast-001",
 ) -> RoutingTable:
-    route = ChannelRoute(channel_id=channel_id, entry_agent=entry_agent)
+    route = ChannelRoute(entry_agent=entry_agent)
     return RoutingTable(channels={channel_id: route})
 
 
@@ -414,7 +414,7 @@ async def test_copilot_mode_entry_present_does_not_short_circuit():
 @pytest.mark.asyncio
 async def test_copilot_mode_without_entry_agent_emits_help_requested():
     """copilot mode 但 channel 无 entry_agent → 不 @ 任何人，emit help_requested 系统事件。"""
-    route = ChannelRoute(channel_id="orphan", entry_agent=None)
+    route = ChannelRoute(entry_agent=None)
     routing = RoutingTable(channels={"orphan": route})
     registry = PluginRegistry()
     router, irc_conn, _ = make_router(routing=routing, registry=registry)

@@ -79,15 +79,16 @@ def test_channel_without_entry_agent(basic_toml_file: Path):
     assert table.channels["ch-2"].entry_agent is None
 
 
-def test_external_chat_id(basic_toml_file: Path):
+def test_external_chat_id_on_route(basic_toml_file: Path):
+    """ChannelRoute.external_chat_id 字段按 toml 读入。"""
     table = load(basic_toml_file)
-    assert table.external_chat_id("ch-1") == "oc_xxx"
-    assert table.external_chat_id("ch-3") == "oc_backup"
-    assert table.external_chat_id("ch-2") is None
+    assert table.channels["ch-1"].external_chat_id == "oc_xxx"
+    assert table.channels["ch-3"].external_chat_id == "oc_backup"
+    assert table.channels["ch-2"].external_chat_id is None
 
 
 def test_channel_route_defaults():
-    route = ChannelRoute(channel_id="test")
+    route = ChannelRoute()
     assert route.bot is None
     assert route.external_chat_id is None
     assert route.entry_agent is None
@@ -127,15 +128,6 @@ def test_load_bots(basic_toml_file: Path):
     assert customer.lazy_create_enabled is True
     admin = table.bots["admin"]
     assert admin.lazy_create_enabled is False
-
-
-def test_channels_for_bot(basic_toml_file: Path):
-    table = load(basic_toml_file)
-    customer_chs = table.channels_for_bot("customer")
-    admin_chs = table.channels_for_bot("admin")
-    assert {c.channel_id for c in customer_chs} == {"ch-1"}
-    assert {c.channel_id for c in admin_chs} == {"ch-3"}
-    assert table.channels_for_bot("ghost") == []
 
 
 def test_bot_dataclass_defaults():

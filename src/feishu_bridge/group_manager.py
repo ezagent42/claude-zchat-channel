@@ -34,14 +34,6 @@ class ChannelMapper:
         """由 CS channel_id 查飞书 chat_id。"""
         return self._channel_chat_map.get((channel_id or "").lstrip("#"))
 
-    def set_mapping(self, channel_id: str, feishu_chat_id: str) -> None:
-        """动态注册映射（懒创建时调用）。"""
-        self._channel_chat_map[(channel_id or "").lstrip("#")] = feishu_chat_id
-
-    def remove_mapping(self, channel_id: str) -> None:
-        """移除映射（群解散时调用）。"""
-        self._channel_chat_map.pop((channel_id or "").lstrip("#"), None)
-
     def replace_all(self, channel_chat_map: dict[str, str]) -> None:
         """批量替换（routing.toml reload 时调用）。"""
         self._channel_chat_map = {

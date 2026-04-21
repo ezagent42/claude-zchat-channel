@@ -1,31 +1,51 @@
-# routing.toml — zchat channel-server V4 路由配置
+# routing.toml — zchat channel-server V6 路由配置
 #
 # 将此文件复制为 routing.toml（与 server.py 同目录），
 # 或通过环境变量 CS_ROUTING_CONFIG 指定路径，例如：
 #   CS_ROUTING_CONFIG=/etc/zchat/routing.toml
 #
-# 由 zchat CLI 写入 / bridge 动态写入。
-# 由 channel-server 启动时加载。
+# 由 zchat CLI 写入（`zchat bot add`、`zchat channel create`、
+# `zchat channel set-entry`）；由 channel-server 启动时加载 + watch reload；
+# bridge 独立解析 bots/channels 段映射 chat_id ↔ channel_id。
+
+# ── bots ─────────────────────────────────────────────────
+# 每个外部平台（如飞书）的 bot 身份 + 凭证。
+# `zchat up` 时每个 bot 起一个独立 feishu_bridge 进程。
+
+[bots.customer]
+app_id = "cli_xxxxxxxxxxxx"
+credential_file = "credentials/customer.json"
+default_agent_template = "fast-agent"
+lazy_create_enabled = true                      # bot_added 事件自动懒创建 channel + agent
+
+[bots.admin]
+app_id = "cli_yyyyyyyyyyyy"
+credential_file = "credentials/admin.json"
+default_agent_template = "admin-agent"
+
+[bots.squad]
+app_id = "cli_zzzzzzzzzzzz"
+credential_file = "credentials/squad.json"
+default_agent_template = "squad-agent"
+supervises = ["customer"]                       # squad 监管 customer bot 的所有 channel
 
 # ── channels ─────────────────────────────────────────────
-# 每个 channel 对应一个 IRC 频道。
-# channel_id 就是 IRC 频道名（不含 #）。
+# 每个 channel 对应一个 IRC 频道 + 可选外部平台映射。
 
-[channels.general]
-# 纯 IRC channel，不绑定飞书。所有 agent 默认加入。
-agents = { primary = "alice-agent0" }
+[channels."#conv-001"]
+bot = "customer"                                # 引用 [bots] 中的 name
+external_chat_id = "oc_4842ab45da40..."         # 飞书群 chat_id
+entry_agent = "yaosh-fast-001"                  # router @ 该 agent；其它 peer 由 list_peers 动态发现
 
-[channels."conv-001"]
-# 绑定飞书客户群：消息双向转发。
-external_chat_id = "oc_客户群A"
-agents = { fast = "alice-fast0", deep = "alice-deep0" }
+[channels."#admin"]
+bot = "admin"
+external_chat_id = "oc_885883b976c1..."
+entry_agent = "yaosh-admin-0"
 
-[channels."conv-002"]
-external_chat_id = "oc_客户群B"
-agents = { fast = "alice-fast1" }
+[channels."#squad-001"]
+bot = "squad"
+external_chat_id = "oc_ee40c7c69521..."
+entry_agent = "yaosh-squad-0"
 
-# ── operators ────────────────────────────────────────────
-# 可选：operator 元数据（供 bridge 查询）。
-
-[operators.alice]
-nick = "alice"
+# 注：V6 起 routing.toml 不存 channel→agents 列表；
+# 运行时 roster 由 IRC NAMES 反映，agent 通过 list_peers() MCP tool 查询。

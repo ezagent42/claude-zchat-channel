@@ -40,7 +40,6 @@ class Bot:
 
 @dataclass
 class ChannelRoute:
-    channel_id: str
     bot: str | None = None                              # 引用 [bots] name
     external_chat_id: str | None = None                 # bridge 用（CS 不解析）
     entry_agent: str | None = None                      # router @ 谁（copilot 模式）
@@ -55,15 +54,6 @@ class RoutingTable:
         """返回 channel 的入口 agent nick（copilot 模式下被 @ 的唯一 agent）。"""
         ch = self.channels.get(channel_id)
         return ch.entry_agent if ch else None
-
-    def external_chat_id(self, channel_id: str) -> str | None:
-        """返回 channel 对应的 external_chat_id。"""
-        ch = self.channels.get(channel_id)
-        return ch.external_chat_id if ch else None
-
-    def channels_for_bot(self, bot_name: str) -> list[ChannelRoute]:
-        """返回某 bot 名下的所有 channel route。"""
-        return [c for c in self.channels.values() if c.bot == bot_name]
 
 
 def load(path: str | Path) -> RoutingTable:
@@ -100,7 +90,6 @@ def load(path: str | Path) -> RoutingTable:
         # IRC 操作端拼 '#'。这样 bridge 发 channel='conv-xxx'、CLI 写 '#conv-xxx' 都能查到。
         normalized = ch_id.lstrip("#")
         route = ChannelRoute(
-            channel_id=normalized,
             bot=ch_data.get("bot"),
             external_chat_id=ch_data.get("external_chat_id"),
             entry_agent=ch_data.get("entry_agent"),

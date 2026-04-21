@@ -28,12 +28,11 @@ log = logging.getLogger("feishu-bridge.outbound")
 
 @dataclass
 class ConvThread:
-    """跟踪一个 conversation 在某外部群的 card+thread 状态（可选，squad 监管用）。"""
+    """跟踪一个 conversation 在某外部群的 card+thread 状态（可选，supervise 用）。"""
 
     conversation_id: str
-    supervising_chat_id: str          # 承载卡片的飞书群 chat_id（squad 群）
+    supervising_chat_id: str          # 承载卡片的外部群 chat_id
     card_msg_id: str | None = None
-    customer_chat_id: str | None = None
     mode: str = "fast"
     state: str = "active"
     metadata: dict = field(default_factory=dict)
@@ -62,16 +61,6 @@ class OutboundRouter:
     def get_thread(self, conversation_id: str) -> ConvThread | None:
         return self._threads.get(conversation_id)
 
-    def get_feishu_msg_id(self, cs_msg_id: str) -> str | None:
-        return self._msg_id_map.get(cs_msg_id)
-
-    def get_conversation_for_thread(self, supervising_chat_id: str) -> str | None:
-        """由承载卡片的外部 chat_id 反查 conversation_id（可能多 conv 共用一 chat，仅返回首个 active）。"""
-        for conv_id, thread in self._threads.items():
-            if thread.supervising_chat_id == supervising_chat_id and thread.state == "active":
-                return conv_id
-        return None
-
     def get_conversation_for_card(self, card_msg_id: str) -> str | None:
         """由 card_msg_id（即 thread root 的飞书 message_id）精确反查 conversation_id。
 
@@ -85,23 +74,6 @@ class OutboundRouter:
                 return conv_id
         return None
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
-    def on_conversation_created(
-        self,
-        conversation_id: str,
-        metadata: dict | None = None,
-    ) -> str | None:
-        """V6: 当前 bridge 只发本 bot 的 customer 消息，不跨 bot 发监管卡片。
-
-        跨 bot 监管（squad 群看到 customer conv 卡片）留给未来 supervises 机制：
-        squad bridge 订阅 customer channels + 调用此方法的扩展版本。
-        """
-        log.debug("[outbound] on_conversation_created: %s (V6 no cross-bot supervision yet)",
-                  conversation_id)
-        return None
 
     # ------------------------------------------------------------------
     # 消息路由

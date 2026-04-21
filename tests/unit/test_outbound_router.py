@@ -1,10 +1,9 @@
-"""OutboundRouter 单元测试（V6 精简版）。
+"""OutboundRouter 单元测试（V6+）。
 
-V6 去 role 化：OutboundRouter 只依赖 ChannelMapper（channel_id → feishu chat_id）。
 - msg/plain: send_text 到 mapper 对应的飞书群
-- side: 若有 supervising thread 则 thread 回复（V6 默认无跨 bot 监管）
-- edit: 查 _msg_id_map 做 update_message
-- on_conversation_created: V6 不再自动发监管卡片（squad bridge 未来扩展处理）
+- side: 若有 supervising thread 则 thread 回复
+- edit: 查 _msg_id_map 做 reply_in_thread（V6+: reply-to-placeholder 语义）
+- csat_request: 向 mapper 对应飞书群发评分卡
 """
 from __future__ import annotations
 
@@ -26,15 +25,6 @@ def _build_router(
     sender.update_message.return_value = True
     mapper = ChannelMapper(mapping or {"conv_1": "oc_cust_a"})
     return OutboundRouter(sender=sender, mapper=mapper), sender
-
-
-# ---------- conversation.created（V6: no-op by default） ----------
-
-def test_conv_created_no_op_v6() -> None:
-    router, sender = _build_router()
-    result = router.on_conversation_created("conv_1", metadata={"source": "feishu"})
-    assert result is None
-    sender.send_card.assert_not_called()
 
 
 # ---------- msg/plain routing ----------
@@ -109,10 +99,11 @@ def test_edit_without_mapping_noop() -> None:
 
 
 def test_msg_with_cs_msg_id_populates_map_for_future_edit() -> None:
+    """发 msg 时若带 cs_msg_id，后续 edit 链能通过 _msg_id_map 定位到 feishu msg_id。"""
     router, sender = _build_router(mapping={"conv_1": "oc_customer"})
     sender.send_text.return_value = "om_feishu_sent"
     router.route("conv_1", kind="msg", text="hi", cs_msg_id="cs_1")
-    assert router.get_feishu_msg_id("cs_1") == "om_feishu_sent"
+    assert router._msg_id_map["cs_1"] == "om_feishu_sent"
 
 
 # ---------- csat ----------
@@ -126,16 +117,6 @@ def test_csat_request_sends_card_to_customer() -> None:
 
 
 # ---------- thread/conversation state ----------
-
-def test_get_conversation_for_thread() -> None:
-    router, _ = _build_router()
-    router._threads["conv_1"] = ConvThread(
-        conversation_id="conv_1",
-        supervising_chat_id="oc_squad_a",
-        state="active",
-    )
-    assert router.get_conversation_for_thread("oc_squad_a") == "conv_1"
-    assert router.get_conversation_for_thread("oc_unknown") is None
 
 
 def test_mode_changed_requires_card() -> None:

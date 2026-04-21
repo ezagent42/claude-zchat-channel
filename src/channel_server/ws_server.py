@@ -104,8 +104,3 @@ class WSServer:
                 await conn.websocket.send(data)
             except Exception:
                 log.exception("[ws] broadcast failed to %s", conn.instance_id)
-
-    @property
-    def connection_count(self) -> int:
-        """当前已注册 bridge 连接数。"""
-        return len(self._connections)
