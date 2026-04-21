@@ -1,47 +1,43 @@
 {
-  "test_run_timestamp": "2026-04-17",
-  "command": "uv run pytest tests/unit_v4/ src/feishu_bridge/tests/ -v",
-  "summary": {
-    "total": 114,
-    "passed": 114,
-    "failed": 0,
-    "errors": 0,
-    "skipped": 0,
-    "duration_seconds": 3.84
-  },
-  "test_suites": {
-    "unit_v4": {
-      "total": 58,
-      "passed": 58,
+  "project_root": "/home/yaosh/projects/zchat/zchat-channel-server",
+  "timestamp": "2026-04-21T12:08:21Z",
+  "test_runs": [
+    {
+      "command": "uv run pytest tests/unit -v",
+      "exit_code": 0,
+      "duration_seconds": 96.3,
+      "passed": 183,
       "failed": 0,
-      "files": [
-        {"file": "tests/unit_v4/test_agent_mcp.py", "passed": 9, "failed": 0},
-        {"file": "tests/unit_v4/test_mode_plugin.py", "passed": 10, "failed": 0},
-        {"file": "tests/unit_v4/test_plugin_registry.py", "passed": 12, "failed": 0},
-        {"file": "tests/unit_v4/test_router.py", "passed": 14, "failed": 0},
-        {"file": "tests/unit_v4/test_routing.py", "passed": 7, "failed": 0},
-        {"file": "tests/unit_v4/test_sla_plugin.py", "passed": 6, "failed": 0}
-      ]
+      "skipped": 0,
+      "stdout_tail": "_visibility_router.py::test_msg_kind_goes_to_customer_chat PASSED [ 98%]\ntests/unit/test_visibility_router.py::test_side_kind_with_thread_goes_to_thread_only PASSED [ 99%]\ntests/unit/test_visibility_router.py::test_side_kind_without_thread_is_dropped PASSED [100%]\n\n=============================== warnings summary ===============================\n.venv/lib/python3.13/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).\n    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)\n\n.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26: DeprecationWarning: There is no current event loop\n    loop = asyncio.get_event_loop()\n\n.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67: DeprecationWarning: websockets.InvalidStatusCode is deprecated\n    def _parse_ws_conn_exception(e: websockets.InvalidStatusCode):\n\n.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n================== 183 passed, 4 warnings in 84.18s (0:01:24) ==================\n",
+      "stderr_tail": ""
     },
-    "feishu_bridge_unit": {
-      "total": 56,
-      "passed": 56,
+    {
+      "command": "uv run pytest tests/e2e -v -m e2e",
+      "exit_code": 5,
+      "duration_seconds": 2.0,
+      "passed": 0,
       "failed": 0,
-      "files": [
-        {"file": "src/feishu_bridge/tests/test_card_action.py", "passed": 9, "failed": 0},
-        {"file": "src/feishu_bridge/tests/test_client_extended.py", "passed": 12, "failed": 0},
-        {"file": "src/feishu_bridge/tests/test_group_manager.py", "passed": 13, "failed": 0},
-        {"file": "src/feishu_bridge/tests/test_outbound_router.py", "passed": 9, "failed": 0},
-        {"file": "src/feishu_bridge/tests/test_parsers.py", "passed": 8, "failed": 0},
-        {"file": "src/feishu_bridge/tests/test_sender.py", "passed": 3, "failed": 0},
-        {"file": "src/feishu_bridge/tests/test_visibility_router.py", "passed": 2, "failed": 0}
-      ]
+      "skipped": 0,
+      "stdout_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /home/yaosh/projects/zchat/zchat-channel-server/.venv/bin/python\ncachedir: .pytest_cache\nrootdir: /home/yaosh/projects/zchat/zchat-channel-server\nconfigfile: pytest.ini\nplugins: asyncio-1.3.0, anyio-4.12.1, timeout-2.4.0\nasyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 12 items / 12 deselected / 0 selected\n\n============================ 12 deselected in 0.17s ============================\n",
+      "stderr_tail": ""
     },
-    "pre_release": {
-      "note": "Pre-release tests require full stack (IRC + channel-server + feishu_bridge + agents + feishu credentials). Not run in bootstrap.",
-      "total": 14,
-      "status": "not_run",
-      "reason": "requires full stack + feishu credentials"
+    {
+      "command": "uv run pytest tests -v",
+      "exit_code": 1,
+      "duration_seconds": 27.6,
+      "passed": 191,
+      "failed": 4,
+      "skipped": 0,
+      "stdout_tail": "f/internal/well_known_types.py:91\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).\n    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)\n\n.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:26: DeprecationWarning: There is no current event loop\n    loop = asyncio.get_event_loop()\n\n.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/lark_oapi/ws/client.py:67: DeprecationWarning: websockets.InvalidStatusCode is deprecated\n    def _parse_ws_conn_exception(e: websockets.InvalidStatusCode):\n\n.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6\n  /home/yaosh/projects/zchat/zchat-channel-server/.venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/e2e/test_csat_lifecycle.py::test_csat_full_lifecycle - assert No...\nFAILED tests/e2e/test_csat_lifecycle.py::test_csat_multiple_channels - assert...\nFAILED tests/e2e/test_help_request_lifecycle.py::test_operator_responds_in_time\nFAILED tests/e2e/test_help_request_lifecycle.py::test_operator_no_response_emits_timeout\n================== 4 failed, 191 passed, 4 warnings in 19.78s ==================\n",
+      "stderr_tail": ""
     }
+  ],
+  "summary": {
+    "total_suites": 3,
+    "total_passed": 374,
+    "total_failed": 4,
+    "total_skipped": 0,
+    "all_passed": false
   }
 }

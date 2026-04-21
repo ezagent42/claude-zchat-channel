@@ -67,9 +67,8 @@ class Router:
         elif msg_type == ws_messages.WSType.EVENT:
             # 让 plugin 订阅
             await self._registry.broadcast_event(msg)
-            # 转发给其它 bridge（supervise 场景需要：customer bridge emit chat_info
-            # → squad bridge 接收并缓存 chat_name）。sender bridge 会收到自己的
-            # event 但按 own/supervised 检查过滤。
+            # 转发给其它 bridge（bridge-to-bridge supervise 场景需要 event 跨桥流转）。
+            # 源 bridge 也会收到自己的 event，由其 own/supervised 路由过滤。
             await self._ws.broadcast(msg)
         # REGISTER 在 ws_server 层处理
 

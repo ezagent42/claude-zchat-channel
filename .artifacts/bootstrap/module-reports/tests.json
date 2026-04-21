@@ -1,57 +1,65 @@
 {
   "module": "tests",
-  "description": "两层测试体系：unit_v4（58 tests）+ feishu_bridge unit（56 tests）+ pre_release（14 tests, 需要全栈+飞书）。E2E 测试已删除。",
-  "test_layers": {
-    "unit_v4": {
-      "path": "tests/unit_v4/",
-      "total_tests": 58,
-      "status": "all_pass",
-      "files": {
-        "test_agent_mcp.py": {"tests": 9, "covers": "agent_mcp.py — 前缀使用 protocol、run_zchat_cli 行为、tool 注册"},
-        "test_mode_plugin.py": {"tests": 10, "covers": "ModePlugin — hijack/release/copilot/resolve 命令、mode_changed/channel_resolved 事件"},
-        "test_plugin_registry.py": {"tests": 12, "covers": "PluginRegistry — 注册/冲突/广播/容错/query"},
-        "test_router.py": {"tests": 14, "covers": "Router — WS→IRC 路由、IRC→WS 广播、命令分派、mode 行为、多 agent、双重编码防止、IRC 侧命令分派"},
-        "test_routing.py": {"tests": 7, "covers": "RoutingTable — TOML 加载/解析/查询/容错（external_chat_id 取代 feishu_chat_id）"},
-        "test_sla_plugin.py": {"tests": 6, "covers": "SlaPlugin — timer 启动/取消/到期/多 channel 独立"}
-      }
-    },
-    "feishu_bridge_unit": {
-      "path": "src/feishu_bridge/tests/",
-      "total_tests": 56,
-      "status": "all_pass",
-      "files": {
-        "test_card_action.py": {"tests": 9, "covers": "CardAwareClient CARD 帧分发、_on_card_action CSAT/hijack/resolve 逻辑"},
-        "test_client_extended.py": {"tests": 12, "covers": "FeishuTestClient 7 个扩展方法（assert_edited/card_appears/card_updated/thread_reply/thread_appears/operator/click_card）"},
-        "test_group_manager.py": {"tests": 13, "covers": "GroupManager 角色识别/动态注册/持久化/成员变动/群解散/auto-hijack 检测 + channel_chat_map V4 映射"},
-        "test_outbound_router.py": {"tests": 9, "covers": "OutboundRouter V4 路由 — conv_created/msg_kind/side_kind/mode_changed/conv_closed/msg_id_mapping/edit"},
-        "test_parsers.py": {"tests": 8, "covers": "message_parsers 8 种消息类型解析"},
-        "test_sender.py": {"tests": 3, "covers": "FeishuSender API 调用路径（send_text/send_card/update_message）"},
-        "test_visibility_router.py": {"tests": 2, "covers": "OutboundRouter V4 路由逻辑（msg→双写、side→仅squad）"}
-      }
-    },
-    "e2e": {
-      "path": "tests/e2e/",
-      "status": "deleted",
-      "note": "E2E 测试目录已删除。之前包含 17 个测试（server_startup/bridge_registration/customer_connect/mode_switching 等），现已由 pre_release 测试覆盖。"
-    },
-    "pre_release": {
-      "path": "tests/pre_release/",
-      "total_tests": 14,
-      "status": "not_run",
-      "requires": "full stack (ergo + channel-server + agents + feishu_bridge + feishu credentials)",
-      "files": {
-        "test_feishu_e2e.py": {"tests": 14, "covers": "飞书全自动 E2E — 6步状态机/占位编辑/timer升级/CSAT评分/gate隔离/admin命令/SLA告警/授权模型"}
-      }
-    }
-  },
-  "coverage_gaps": [
-    "src/channel_server/ws_server.py — 无独立单元测试（通过 MockWSServer 间接覆盖）",
-    "src/channel_server/irc_connection.py — 无独立单元测试",
-    "src/channel_server/__main__.py — 进程入口，无单元测试",
-    "src/feishu_bridge/bridge.py — 无独立单元测试（部分逻辑通过 test_card_action.py 覆盖）",
-    "src/feishu_bridge/bridge_api_client.py — 无独立单元测试",
-    "src/feishu_bridge/ws_client.py — 仅 test_card_action.py 部分覆盖",
-    "src/feishu_bridge/config.py — 无独立单元测试",
-    "src/feishu_bridge/feishu_renderer.py — 仅通过 test_outbound_router.py 间接覆盖"
-  ]
+  "files": [
+    "tests/__init__.py",
+    "tests/unit/__init__.py",
+    "tests/unit/conftest.py",
+    "tests/unit/test_activation_plugin.py",
+    "tests/unit/test_agent_mcp.py",
+    "tests/unit/test_audit_plugin.py",
+    "tests/unit/test_card_action.py",
+    "tests/unit/test_client_extended.py",
+    "tests/unit/test_csat_plugin.py",
+    "tests/unit/test_group_manager.py",
+    "tests/unit/test_mode_plugin.py",
+    "tests/unit/test_outbound_router.py",
+    "tests/unit/test_parsers.py",
+    "tests/unit/test_plugin_registry.py",
+    "tests/unit/test_resolve_plugin.py",
+    "tests/unit/test_router.py",
+    "tests/unit/test_routing.py",
+    "tests/unit/test_routing_reader.py",
+    "tests/unit/test_routing_watcher.py",
+    "tests/unit/test_sender.py",
+    "tests/unit/test_sla_plugin.py",
+    "tests/unit/test_visibility_router.py",
+    "tests/e2e/__init__.py",
+    "tests/e2e/test_bridge_lazy_create.py",
+    "tests/e2e/test_csat_lifecycle.py",
+    "tests/e2e/test_help_request_lifecycle.py",
+    "tests/e2e/test_plugin_pipeline.py"
+  ],
+  "description": "两层测试:unit(19 file, ~180 test case, 无外部依赖)+ e2e(4 file, ~12 test case, 标记 @pytest.mark.e2e;部分要求飞书真 API/真 CS 实例)。pytest.ini 设 testpaths=tests, pythonpath=src, asyncio_mode=auto, markers=e2e/prerelease。conftest.py 强制 sys.path.insert(0, src) 以免根目录旧 plugins 污染。单元测试普遍用 AsyncMock / MagicMock stub 飞书/IRC/WS。",
+  "key_classes_functions": [
+    {"name": "conftest sys.path 注入", "file": "tests/unit/conftest.py", "line": 11, "purpose": "确保 src/ 在 sys.path 首位,plugins 导入指向 src/plugins/(非根 plugins/)。"},
+    {"name": "TestEncodeUsesProtocol/TestRunZchatCli/TestJoinChannel/TestSysMessageInjection", "file": "tests/unit/test_agent_mcp.py", "line": 58, "purpose": "agent_mcp 覆盖:encode_*/subprocess stub/list_tools 包含 run_zchat_cli/join_channel 调用/sys event 注入注入 notifications/claude/channel。"},
+    {"name": "Router 单元测试组", "file": "tests/unit/test_router.py", "line": 104, "purpose": "20+ test 全覆盖:default mode/copilot @ 前缀/takeover 不 @/命令 → plugin 不去 IRC/未知命令去 IRC/IRC inbound broadcast/strip #/msg 前缀解析/plugin broadcast/event 三路广播/entry offline 熔断/NAMES 熔断 fail-open/已编码不双编码/IRC inbound 命令分派。"},
+    {"name": "SLA 双 timer 测试", "file": "tests/unit/test_sla_plugin.py", "line": 134, "purpose": "__side 首个 @operator/@admin trigger/agent quote marker 不 trigger(首个 @ 不匹配)/human relay side 取消 timer/独立 timer per channel/help timeout emit help_timeout。"},
+    {"name": "routing_reader 监管测试", "file": "tests/unit/test_routing_reader.py", "line": 180, "purpose": "supervises:multiple bots / single bot / 排除 own / 'bot:' prefix / 'tag:' V7 跳过 warn。 test_no_import_of_channel_server(line 92) 断言 bridge reader 不依赖 CS。"},
+    {"name": "E2E pipeline", "file": "tests/e2e/test_plugin_pipeline.py", "line": 67, "purpose": "test_full_lifecycle 覆盖 mode→takeover→resolve→csat→audit 聚合。"},
+    {"name": "E2E help_request_lifecycle", "file": "tests/e2e/test_help_request_lifecycle.py", "line": 21, "purpose": "operator 及时响应/无响应 timeout/help+takeover timer 独立。"},
+    {"name": "E2E bridge lazy_create", "file": "tests/e2e/test_bridge_lazy_create.py", "line": 54, "purpose": "bot_added 懒创建调 zchat CLI(channel create + agent create)+ channel_id 从 chat_id 生成 + 已映射跳过 + disbanded 清理。"}
+  ],
+  "public_interface": [
+    "pytest 入口:uv run pytest tests/unit/ -v 或 tests/e2e/ -v -m e2e",
+    "markers: e2e, prerelease",
+    "asyncio_mode=auto(无需 @pytest.mark.asyncio)"
+  ],
+  "depends_on": [
+    "pytest >=9, pytest-asyncio >=1.3, pytest-timeout, pytest-order",
+    "unittest.mock (AsyncMock / MagicMock)",
+    "被测模块: channel_server.* / plugins.* / feishu_bridge.* / agent_mcp"
+  ],
+  "tests": [],
+  "evidence_file_lines": [
+    "pytest.ini:1-7 — testpaths/pythonpath/markers/asyncio_mode",
+    "tests/unit/conftest.py:11-17 — sys.path 注入",
+    "tests/unit/test_routing_reader.py:92 — test_no_import_of_channel_server",
+    "tests/unit/test_sla_plugin.py:173 — test_agent_to_agent_side_with_quoted_operator_does_not_trigger",
+    "tests/unit/test_router.py:371 — test_copilot_mode_entry_offline_emits_help_requested",
+    "tests/unit/test_router.py:439 — test_already_encoded_content_not_double_encoded",
+    "tests/e2e/test_plugin_pipeline.py:67 — test_full_lifecycle",
+    "tests/e2e/test_bridge_lazy_create.py:54 — test_lazy_create_invokes_zchat_cli"
+  ],
+  "red_line_violations": []
 }

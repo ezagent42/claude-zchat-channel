@@ -1,0 +1,76 @@
+{
+  "module": "channel_server",
+  "files": [
+    "src/channel_server/__init__.py",
+    "src/channel_server/__main__.py",
+    "src/channel_server/irc_connection.py",
+    "src/channel_server/plugin.py",
+    "src/channel_server/router.py",
+    "src/channel_server/routing.py",
+    "src/channel_server/routing_watcher.py",
+    "src/channel_server/ws_server.py"
+  ],
+  "description": "V4 核心路由引擎。纯基础设施层：routing.toml 加载/热更新 + IRC 长连接 + WebSocket bridge 接入 + Plugin 框架 + WS↔IRC 双向翻译。不含业务语义，所有业务扩展通过 plugin 挂载。进程入口是 __main__._main(),启动顺序: load_routing → PluginRegistry → WSServer → IRCConnection → Router → 注册 6 个官方 plugin → wire callbacks → auto-join channels → routing_watcher。",
+  "key_classes_functions": [
+    {"name": "IRCConnection", "file": "src/channel_server/irc_connection.py", "line": 20, "purpose": "IRC 客户端封装：连接管理 + pubmsg/privmsg 发送 + namreply/join/part/quit/nick 事件维护 _members 成员字典。独立 reactor 线程运行。"},
+    {"name": "IRCConnection.send_sys", "file": "src/channel_server/irc_connection.py", "line": 175, "purpose": "发送 __zchat_sys: 系统消息（委托 zchat_protocol.irc_encoding）。"},
+    {"name": "IRCConnection.names", "file": "src/channel_server/irc_connection.py", "line": 164, "purpose": "返回 channel 已知成员 nick 集合;供 router NAMES 熔断使用。"},
+    {"name": "Plugin (Protocol)", "file": "src/channel_server/plugin.py", "line": 13, "purpose": "Plugin 接口协议:handles_commands/on_ws_message/on_ws_event/on_command/query。"},
+    {"name": "BasePlugin", "file": "src/channel_server/plugin.py", "line": 39, "purpose": "Plugin 基类,提供所有方法空默认实现。"},
+    {"name": "PluginRegistry", "file": "src/channel_server/plugin.py", "line": 60, "purpose": "维护 plugin 集合 + command→plugin 分派表,启动时命令冲突检测(ValueError 即时失败),broadcast_message/broadcast_event 给所有 plugin。"},
+    {"name": "Router", "file": "src/channel_server/router.py", "line": 38, "purpose": "中枢路由:forward_inbound_ws (bridge→IRC)、forward_inbound_irc (IRC→bridges+plugins)、emit_event(三路广播:WS+plugin+IRC sys);命令分派走 PluginRegistry.get_handler。"},
+    {"name": "Router._route_to_irc", "file": "src/channel_server/router.py", "line": 104, "purpose": "copilot 模式 @ entry_agent 并带熔断(entry 不在 NAMES 则 emit help_requested);takeover 直发不 @。"},
+    {"name": "Router.emit_event", "file": "src/channel_server/router.py", "line": 213, "purpose": "统一 event 出口,IRC 路径走 _slim_for_irc 截断长文本(200 bytes)防 RFC 2812 超限。"},
+    {"name": "_slim_for_irc", "file": "src/channel_server/router.py", "line": 21, "purpose": "Router 内部工具:截断 text/content/message 字段到 200 bytes UTF-8。"},
+    {"name": "RoutingTable", "file": "src/channel_server/routing.py", "line": 50, "purpose": "V6 routing schema 运行时对象:channels{ChannelRoute} + bots{Bot}。entry_agent/external_chat_id/channels_for_bot 查询 API。"},
+    {"name": "ChannelRoute", "file": "src/channel_server/routing.py", "line": 42, "purpose": "单个 channel 路由:bot + external_chat_id + entry_agent。"},
+    {"name": "Bot", "file": "src/channel_server/routing.py", "line": 33, "purpose": "Bot 定义:name/app_id/credential_file/default_agent_template/lazy_create_enabled。"},
+    {"name": "load (routing)", "file": "src/channel_server/routing.py", "line": 69, "purpose": "从 routing.toml 加载 RoutingTable;channel_id lstrip('#') 归一化;文件缺失/解析失败返回空表。"},
+    {"name": "watch_routing", "file": "src/channel_server/routing_watcher.py", "line": 23, "purpose": "mtime 轮询(默认 2s)+ reload + IRC JOIN/PART 差异 channel;文件被删时清空路由 + PART 全部;malformed 保留旧表。"},
+    {"name": "WSServer", "file": "src/channel_server/ws_server.py", "line": 30, "purpose": "WebSocket server:管理 BridgeConnection 注册(instance_id 唯一) + broadcast 给所有 bridge + 入站消息交 on_inbound handler。"},
+    {"name": "BridgeConnection", "file": "src/channel_server/ws_server.py", "line": 22, "purpose": "已注册 bridge 连接 dataclass:instance_id/bridge_type/capabilities/websocket。"},
+    {"name": "_main (entry)", "file": "src/channel_server/__main__.py", "line": 32, "purpose": "进程入口:读 env → 加载 routing → 注册 6 个 plugin(mode/sla/resolve/audit/activation/csat)→ wire callbacks → auto-join → 启 routing watcher。"}
+  ],
+  "public_interface": [
+    "channel_server.__main__.main — 进程入口(setuptools entry: zchat-channel-server)",
+    "channel_server.routing.load(path) → RoutingTable",
+    "channel_server.routing.RoutingTable / Bot / ChannelRoute",
+    "channel_server.plugin.BasePlugin / Plugin / PluginRegistry",
+    "channel_server.router.Router(routing, registry, irc_conn, ws_server)",
+    "channel_server.irc_connection.IRCConnection",
+    "channel_server.ws_server.WSServer",
+    "channel_server.routing_watcher.watch_routing"
+  ],
+  "depends_on": [
+    "zchat_protocol (irc_encoding, ws_messages)",
+    "irc >=20 (IRC 协议)",
+    "websockets (WS server)",
+    "tomllib / tomli (routing.toml)",
+    "plugins.* (只在 __main__ 导入作 wiring,非核心依赖)"
+  ],
+  "tests": [
+    "tests/unit/test_router.py — 20+ test: 双向路由/copilot@/takeover 不@/命令分派/熔断/event 截断/__msg 不双编码/IRC 命令分派",
+    "tests/unit/test_routing.py — 13 test: load empty/missing/malformed/channels/bots/channels_for_bot",
+    "tests/unit/test_routing_watcher.py — 5 test: detect new/removed/file deleted/malformed keeps old",
+    "tests/unit/test_plugin_registry.py — 11 test: register/duplicate/command conflict/broadcast/error tolerance"
+  ],
+  "evidence_file_lines": [
+    "src/channel_server/__init__.py:1-4 — 纯路由服务核心文档",
+    "src/channel_server/__main__.py:17-22 — 导入 6 个官方 plugin(mode/sla/resolve/audit/activation/csat)",
+    "src/channel_server/__main__.py:81-93 — plugin 注册顺序",
+    "src/channel_server/__main__.py:121-128 — auto-join routing.channels",
+    "src/channel_server/__main__.py:131-133 — 启动 watcher_task",
+    "src/channel_server/router.py:17 — _IRC_SYS_TEXT_BYTES_LIMIT=200",
+    "src/channel_server/router.py:45 — DEFAULT_MODE='copilot'",
+    "src/channel_server/router.py:86-97 — 命令前缀/路由分派",
+    "src/channel_server/router.py:136-148 — NAMES 熔断逻辑(entry 不在 emit help_requested)",
+    "src/channel_server/routing.py:98-108 — channel_id lstrip('#') 归一化",
+    "src/channel_server/routing_watcher.py:47-60 — 文件缺失清空并 PART",
+    "src/channel_server/ws_server.py:68-82 — REGISTER → REGISTERED 握手",
+    "src/channel_server/irc_connection.py:87-134 — NAMES/JOIN/PART/QUIT/NICK 事件维护 _members",
+    "src/channel_server/plugin.py:67-79 — command 冲突检测 ValueError"
+  ],
+  "red_line_violations": [
+    "src/channel_server/router.py:70-71 — 注释中提到 'customer bridge/squad bridge' 业务场景示例(注释,非代码;router 本身不感知这些角色),可选择改成通用用词如 'originator bridge/supervisor bridge'"
+  ]
+}

@@ -1,207 +1,82 @@
 {
   "module": "feishu_bridge",
-  "path": "src/feishu_bridge/",
-  "description": "飞书 ↔ channel-server 协议转换桥。包含主编排类 (bridge.py)、API 传输层 (bridge_api_client.py)、消息发送 (sender.py)、消息解析 (message_parsers.py)、群角色管理 (group_manager.py)、出站路由 (outbound.py)、卡片渲染 (feishu_renderer.py)、WSS 客户端 (ws_client.py)、E2E 测试客户端 (test_client.py)。",
   "files": [
-    {
-      "path": "src/feishu_bridge/bridge.py",
-      "lines": 566,
-      "classes": [
-        {
-          "name": "FeishuBridge",
-          "line": 48,
-          "description": "飞书 Bridge 主编排类。注册 5 个飞书事件：im.message.receive_v1, bot_added, user_added, user_deleted, chat_disbanded。入站消息 V4 协议用 ws_messages.build_message()，出站按 irc_encoding.parse kind 路由。",
-          "methods": [
-            {"name": "__init__", "line": 48, "signature": "(self, config: BridgeConfig) -> None"},
-            {"name": "_on_message", "line": 109, "signature": "(self, data: P2ImMessageReceiveV1) -> None"},
-            {"name": "_on_bot_added", "line": 172, "signature": "(self, data) -> None"},
-            {"name": "_on_user_added", "line": 182, "signature": "(self, data) -> None"},
-            {"name": "_on_user_deleted", "line": 194, "signature": "(self, data) -> None"},
-            {"name": "_on_disbanded", "line": 206, "signature": "(self, data) -> None"},
-            {"name": "_forward_customer", "line": 220, "signature": "(self, chat_id, text, message_id, sender_id) -> None"},
-            {"name": "_forward_operator", "line": 252, "signature": "(self, chat_id, text, message_id, sender_id) -> None"},
-            {"name": "_forward_admin", "line": 271, "signature": "(self, chat_id, text, message_id, sender_id) -> None"},
-            {"name": "_forward_to_bridge", "line": 291, "signature": "(self, role, chat_id, text, message_id, sender_id) -> None"},
-            {"name": "_handle_message_event", "line": 307, "signature": "(self, conv_id, msg) -> None"},
-            {"name": "_handle_edit_event", "line": 336, "signature": "(self, conv_id, msg) -> None"},
-            {"name": "_parse_card_action", "line": 395, "signature": "static (payload: dict) -> tuple"},
-            {"name": "_on_card_action", "line": 407, "signature": "(self, payload: dict) -> None"},
-            {"name": "download_file", "line": 447, "signature": "(self, message_id, message) -> str"},
-            {"name": "build_event_handler", "line": 512, "signature": "(self) -> EventDispatcherHandler"},
-            {"name": "start", "line": 526, "signature": "(self) -> None"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/bridge_api_client.py",
-      "lines": 104,
-      "classes": [
-        {
-          "name": "BridgeAPIClient",
-          "line": 24,
-          "description": "channel-server Bridge API 的 WebSocket 传输客户端。连接管理 + reconnect + JSON 发送/接收。",
-          "methods": [
-            {"name": "__init__", "line": 27, "signature": "(self, url: str, register_data: dict | None = None) -> None"},
-            {"name": "connected", "line": 39, "signature": "property -> bool"},
-            {"name": "send", "line": 45, "signature": "(self, msg: dict) -> None"},
-            {"name": "start", "line": 55, "signature": "(self) -> None"},
-            {"name": "stop", "line": 62, "signature": "(self) -> None"},
-            {"name": "_connect_loop", "line": 75, "signature": "async (self) -> None"},
-            {"name": "_connect_once", "line": 85, "signature": "async (self) -> None"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/sender.py",
-      "lines": 175,
-      "classes": [
-        {
-          "name": "FeishuSender",
-          "line": 25,
-          "description": "飞书 API 发送封装 — text/card/edit/thread reply。",
-          "methods": [
-            {"name": "send_text_sync", "line": 40, "signature": "(self, chat_id, text) -> str | None"},
-            {"name": "send_card_sync", "line": 69, "signature": "(self, chat_id, card) -> str | None"},
-            {"name": "update_message_sync", "line": 94, "signature": "(self, message_id, text) -> bool"},
-            {"name": "update_card_sync", "line": 121, "signature": "(self, message_id, card) -> bool"},
-            {"name": "reply_in_thread_sync", "line": 148, "signature": "(self, root_msg_id, text) -> str | None"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/message_parsers.py",
-      "lines": 322,
-      "description": "可插拔消息类型解析器。@register_parser 装饰器注册。支持 text/post/image/file/audio/media/interactive/merge_forward/sticker/share_chat/share_user/location/todo/system/hongbao/vote/video_chat/calendar/folder。",
-      "functions": [
-        {"name": "register_parser", "line": 26, "signature": "(*msg_types: str) -> decorator"},
-        {"name": "parse_message", "line": 35, "signature": "(msg_type, content, message, bridge) -> tuple[str, str]"}
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/group_manager.py",
-      "lines": 187,
-      "classes": [
-        {
-          "name": "GroupManager",
-          "line": 18,
-          "description": "飞书群 chat_id → 角色映射 + 动态 customer 注册。三种角色：admin/operator/customer。V4 新增 channel_chat_map：channel_id → feishu_chat_id 映射（来自 routing.toml），用于 outbound 路由。",
-          "methods": [
-            {"name": "__init__", "line": 25, "signature": "(self, admin_chat_id, squad_chats, customer_chats_path=None, channel_chat_map=None) -> None"},
-            {"name": "identify_role", "line": 54, "signature": "(self, chat_id) -> str"},
-            {"name": "get_operator_id", "line": 65, "signature": "(self, chat_id) -> str | None"},
-            {"name": "get_customer_chat", "line": 72, "signature": "(self, conversation_id) -> str | None", "description": "先查 channel_chat_map（routing.toml 映射），再查动态 customer 群"},
-            {"name": "get_squad_chat", "line": 86, "signature": "(self, conversation_id) -> str | None"},
-            {"name": "set_channel_mapping", "line": 96, "signature": "(self, channel_id, feishu_chat_id) -> None", "description": "动态注册 channel_id → feishu_chat_id 映射"},
-            {"name": "remove_channel_mapping", "line": 100, "signature": "(self, channel_id) -> None", "description": "移除 channel_id 映射"},
-            {"name": "register_customer_chat", "line": 108, "signature": "(self, chat_id) -> None"},
-            {"name": "on_member_added", "line": 122, "signature": "(self, user_id, chat_id) -> None"},
-            {"name": "on_member_removed", "line": 129, "signature": "(self, user_id, chat_id) -> None"},
-            {"name": "on_group_disbanded", "line": 136, "signature": "(self, chat_id) -> None"},
-            {"name": "has_admin_permission", "line": 145, "signature": "(self, user_id) -> bool"},
-            {"name": "has_operator_permission", "line": 148, "signature": "(self, user_id, chat_id) -> bool"},
-            {"name": "is_operator", "line": 151, "signature": "(self, user_id) -> bool"},
-            {"name": "is_operator_in_customer_chat", "line": 155, "signature": "(self, user_id, chat_id) -> bool"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/outbound.py",
-      "lines": 220,
-      "classes": [
-        {
-          "name": "ConvThread",
-          "line": 29,
-          "description": "跟踪一个 conversation 在 squad 群的 card+thread 状态。"
-        },
-        {
-          "name": "OutboundRouter",
-          "line": 42,
-          "description": "出站消息按 kind 路由到飞书群。kind=msg/plain → customer+squad，kind=side → squad only。",
-          "methods": [
-            {"name": "on_conversation_created", "line": 84, "signature": "(self, conversation_id, metadata) -> str | None"},
-            {"name": "route", "line": 111, "signature": "(self, conversation_id, *, kind, text, cs_msg_id) -> str | None"},
-            {"name": "on_csat_request", "line": 159, "signature": "(self, conversation_id) -> None"},
-            {"name": "on_edit", "line": 176, "signature": "(self, conversation_id, cs_msg_id, text) -> bool"},
-            {"name": "on_mode_changed", "line": 194, "signature": "(self, conversation_id, mode, **kwargs) -> bool"},
-            {"name": "on_conversation_closed", "line": 209, "signature": "(self, conversation_id, resolution) -> bool"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/feishu_renderer.py",
-      "lines": 98,
-      "functions": [
-        {"name": "build_conv_card", "line": 11, "signature": "(conversation_id, metadata, mode, state) -> dict"},
-        {"name": "csat_card", "line": 79, "signature": "(conversation_id) -> dict"}
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/ws_client.py",
-      "lines": 114,
-      "classes": [
-        {
-          "name": "CardAwareClient",
-          "line": 41,
-          "description": "继承 lark.ws.Client，补上 CARD 帧分发。覆写 _handle_data_frame 将 CARD 帧分发到 card_handler。",
-          "methods": [
-            {"name": "__init__", "line": 55, "signature": "(self, app_id, app_secret, *, event_handler, card_handler, log_level)"},
-            {"name": "_handle_data_frame", "line": 72, "signature": "async (self, frame: Frame) -> None"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/test_client.py",
-      "lines": 262,
-      "classes": [
-        {
-          "name": "FeishuTestClient",
-          "line": 25,
-          "description": "飞书 API 封装，用于 E2E 自动化测试。提供 send_message、list_messages、assert_message_appears/absent/edited、assert_card_appears/updated 等方法。",
-          "methods": [
-            {"name": "send_message", "line": 36, "signature": "(self, chat_id, text) -> str"},
-            {"name": "send_card", "line": 56, "signature": "(self, chat_id, card) -> str"},
-            {"name": "list_messages", "line": 76, "signature": "(self, chat_id, start_time, page_size) -> list[dict]"},
-            {"name": "get_message", "line": 106, "signature": "(self, message_id) -> dict"},
-            {"name": "assert_message_appears", "line": 122, "signature": "(self, chat_id, contains, timeout) -> dict"},
-            {"name": "assert_message_absent", "line": 138, "signature": "(self, chat_id, contains, wait) -> None"},
-            {"name": "assert_message_edited", "line": 151, "signature": "(self, chat_id, message_id, contains, timeout) -> dict"},
-            {"name": "assert_card_appears", "line": 165, "signature": "(self, chat_id, contains, timeout) -> dict"},
-            {"name": "assert_card_updated", "line": 184, "signature": "(self, chat_id, contains, timeout) -> dict"},
-            {"name": "send_thread_reply", "line": 202, "signature": "(self, chat_id, root_msg_id, text) -> str"},
-            {"name": "assert_thread_message_appears", "line": 226, "signature": "(self, chat_id, root_msg_id, contains, timeout) -> dict"},
-            {"name": "send_message_as_operator", "line": 248, "signature": "(self, chat_id, text) -> str"},
-            {"name": "click_card_action", "line": 253, "signature": "(self, chat_id, action_value, conv_id) -> None"}
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/feishu_bridge/config.py",
-      "lines": 87,
-      "classes": [
-        {"name": "FeishuConfig", "line": 18, "description": "飞书 app_id + app_secret"},
-        {"name": "GroupsConfig", "line": 23, "description": "admin/squad/customer 群配置"},
-        {"name": "BridgeConfig", "line": 30, "description": "完整桥接配置"}
-      ],
-      "functions": [
-        {"name": "load_config", "line": 61, "signature": "(path: str | Path) -> BridgeConfig"}
-      ]
-    }
+    "src/feishu_bridge/__init__.py",
+    "src/feishu_bridge/__main__.py",
+    "src/feishu_bridge/bridge.py",
+    "src/feishu_bridge/bridge_api_client.py",
+    "src/feishu_bridge/config.py",
+    "src/feishu_bridge/feishu_renderer.py",
+    "src/feishu_bridge/group_manager.py",
+    "src/feishu_bridge/message_parsers.py",
+    "src/feishu_bridge/outbound.py",
+    "src/feishu_bridge/routing_reader.py",
+    "src/feishu_bridge/sender.py",
+    "src/feishu_bridge/test_client.py",
+    "src/feishu_bridge/ws_client.py"
   ],
-  "test_files": [
-    "src/feishu_bridge/tests/test_sender.py",
-    "src/feishu_bridge/tests/test_parsers.py",
-    "src/feishu_bridge/tests/test_group_manager.py",
-    "src/feishu_bridge/tests/test_client_extended.py",
-    "src/feishu_bridge/tests/test_outbound_router.py",
-    "src/feishu_bridge/tests/test_visibility_router.py",
-    "src/feishu_bridge/tests/test_card_action.py"
+  "description": "V6 飞书 ↔ channel-server 业务桥接层。一 bot 一 bridge,从 routing.toml [bots.<name>] 派生配置。飞书 WSS 长连接(CardAwareClient)接收 im.message.receive_v1/bot.added/user.added|deleted/chat.disbanded/card.action.trigger 事件;通过 BridgeAPIClient WS 连到 channel-server 收发 Bridge API 消息。入站: 消息 → _forward → build_message → WS;出站: _on_bridge_event → 按 irc_encoding.parse kind 路由(msg/plain→send_text,side→reply_in_thread,edit→reply-to-placeholder,sys→按 own/supervisor 分发)。V6 支持 supervises(监管他人 channel → squad 卡片 + thread 镜像)、lazy_create(bot_added 时 CLI 懒创建 channel+agent)、CSAT 卡片回调。",
+  "key_classes_functions": [
+    {"name": "FeishuBridge", "file": "src/feishu_bridge/bridge.py", "line": 53, "purpose": "主编排类:持有 lark.Client + FeishuSender + BridgeAPIClient + ChannelMapper + OutboundRouter + routing/supervised 映射 + 会话缓存 + 去重 deque。"},
+    {"name": "FeishuBridge._on_message", "file": "src/feishu_bridge/bridge.py", "line": 214, "purpose": "im.message.receive_v1:自发回环过滤 + msg_id 去重(maxlen=10000 LRU)+ parse_message 分发(text/post/image/...)+ thread reply 回链 conv(parent_id→conv_id,__side 包装)+ _forward。"},
+    {"name": "FeishuBridge._on_bridge_event", "file": "src/feishu_bridge/bridge.py", "line": 645, "purpose": "channel-server 出站分发:按 own/supervised 判定; message 走 _EVENT_HANDLERS 映射,supervised message 走 _handle_supervised_message 镜像卡片。"},
+    {"name": "FeishuBridge._handle_sys_event", "file": "src/feishu_bridge/bridge.py", "line": 441, "purpose": "按 conv ownership 分发 event:own→csat_request;supervisor→help_requested/help_timeout/mode_changed/chat_info/channel_resolved 刷新卡片。"},
+    {"name": "FeishuBridge._handle_supervised_message", "file": "src/feishu_bridge/bridge.py", "line": 689, "purpose": "V6 监管:他人 channel 消息 → 本 bot 群创建 ConvThread(card+thread),thread reply 按 source/kind 染色 [客户]/[AI]/[侧栏]。"},
+    {"name": "FeishuBridge._lazy_create_channel_and_agent", "file": "src/feishu_bridge/bridge.py", "line": 154, "purpose": "bot_added 懒创建:zchat channel create <id> --external-chat <chat_id> --bot + zchat agent create。"},
+    {"name": "FeishuBridge._on_card_action", "file": "src/feishu_bridge/bridge.py", "line": 771, "purpose": "卡片按钮点击:hijack/resolve→ws build_message(/cmd);csat score→ws build_event(csat_score),recall 旧卡 + send 感谢卡。"},
+    {"name": "FeishuBridge.build_event_handler / start", "file": "src/feishu_bridge/bridge.py", "line": 922, "purpose": "构造 lark EventDispatcherHandler 注册 5 种飞书事件 + start() 启动 BridgeAPIClient + CardAwareClient WSS。"},
+    {"name": "BridgeConfig / FeishuConfig / LazyCreateConfig", "file": "src/feishu_bridge/config.py", "line": 14, "purpose": "V6 dataclass:bot_name/feishu(app_id/secret)/channel_server_url/upload_dir/routing_path/lazy_create。"},
+    {"name": "build_config_from_routing", "file": "src/feishu_bridge/config.py", "line": 37, "purpose": "从 routing.toml 派生 BridgeConfig(调 routing_reader.read_bot_config)。"},
+    {"name": "BridgeAPIClient", "file": "src/feishu_bridge/bridge_api_client.py", "line": 24, "purpose": "纯 WS 传输层,后台线程 connect_loop + 自动重连 + send(线程安全 run_coroutine_threadsafe)+ on_message 回调。"},
+    {"name": "OutboundRouter", "file": "src/feishu_bridge/outbound.py", "line": 42, "purpose": "按 kind 路由出站:route(msg/plain→send_text,side→thread reply);on_edit 用 reply-to-placeholder(飞书 patch 不支持 text);_msg_id_map/_csat_card_msg_ids/_threads 缓存。"},
+    {"name": "ConvThread", "file": "src/feishu_bridge/outbound.py", "line": 30, "purpose": "监管 thread 状态:conversation_id/supervising_chat_id/card_msg_id/mode/state/metadata。"},
+    {"name": "FeishuSender", "file": "src/feishu_bridge/sender.py", "line": 27, "purpose": "lark-oapi im.v1 封装:send_text/send_card/update_message/update_card/reply_in_thread/recall/get_chat_info 及 _sync 版本。"},
+    {"name": "build_conv_card / csat_card / thank_you_card", "file": "src/feishu_bridge/feishu_renderer.py", "line": 32, "purpose": "飞书 interactive card JSON 纯函数构建;state→template 色值 + update_multi=true 让 PATCH 对所有查看者生效。"},
+    {"name": "ChannelMapper", "file": "src/feishu_bridge/group_manager.py", "line": 21, "purpose": "channel_id ↔ feishu chat_id 双向映射,lstrip # 归一化。"},
+    {"name": "register_parser / parse_message", "file": "src/feishu_bridge/message_parsers.py", "line": 26, "purpose": "装饰器注册表 + 分发解析器,支持 text/post/image/file/audio/media/interactive/merge_forward/sticker/share_chat/share_user/location/todo/system/hongbao/vote/video_chat/calendar/folder。"},
+    {"name": "read_bridge_mappings / read_supervised_channels / read_bot_config / reverse_mapping", "file": "src/feishu_bridge/routing_reader.py", "line": 28, "purpose": "独立工具读 routing.toml,不依赖 channel_server.routing;支持 supervises 语法(bot:<name>;tag/pattern V7+ 跳过 warn)+ credential_file 解析。"},
+    {"name": "CardAwareClient", "file": "src/feishu_bridge/ws_client.py", "line": 41, "purpose": "继承 lark.ws.Client,覆写 _handle_data_frame 补 CARD 帧分发(lark_oapi 1.5.3 默认丢弃)。"},
+    {"name": "FeishuTestClient", "file": "src/feishu_bridge/test_client.py", "line": 25, "purpose": "E2E 测试用真飞书 API 封装:send_message/send_card/list_messages/get_message/assert_* 轮询断言/send_thread_reply/click_card_action(模拟 payload)。"}
   ],
-  "test_results": {"passed": 56, "failed": 0, "total": 56}
+  "public_interface": [
+    "feishu_bridge.__main__.main — CLI entry(--bot <name> --routing <path> --channel-server-url)",
+    "setuptools entry: zchat-feishu-bridge",
+    "FeishuBridge(config).start()",
+    "build_config_from_routing(routing_path, bot_name)",
+    "read_bridge_mappings / read_supervised_channels / read_bot_config"
+  ],
+  "depends_on": [
+    "lark-oapi >=1.4 (飞书 SDK,WSS + im.v1)",
+    "zchat_protocol (irc_encoding, ws_messages)",
+    "websockets (BridgeAPIClient)",
+    "tomllib / tomli",
+    "channel_server(运行时 CS 端,bridge 不 import)",
+    "zchat CLI(lazy_create/disband 通过 subprocess)"
+  ],
+  "tests": [
+    "tests/unit/test_outbound_router.py — 14 test: conv_created/msg/plain/side/edit/csat/mode_changed/conv_closed",
+    "tests/unit/test_group_manager.py — 5 test: ChannelMapper 基本操作",
+    "tests/unit/test_routing_reader.py — 18 test: read_bot/supervised/credential/malformed/ no_import_of_channel_server",
+    "tests/unit/test_sender.py — 3 test: send_text/card/update_message API 调用",
+    "tests/unit/test_parsers.py — 9 test: text/post/image/interactive/sticker/unknown/location/system",
+    "tests/unit/test_card_action.py — 9 test: CardAwareClient CARD 帧分发 + csat/hijack/resolve/unknown action",
+    "tests/unit/test_client_extended.py — 12 test: FeishuTestClient 断言辅助",
+    "tests/unit/test_visibility_router.py — 3 test: 兼容性(old visibility_router path)",
+    "tests/e2e/test_bridge_lazy_create.py — 4 test: lazy create CLI / channel_id 生成 / 已映射跳过 / disband",
+    "tests/e2e/test_csat_lifecycle.py — 2 test: CSAT 全流程 / 多 channel 独立"
+  ],
+  "evidence_file_lines": [
+    "src/feishu_bridge/bridge.py:96-103 — instance_id=feishu-<bot_name> 保证唯一(旧版共用导致 CS 只保留最后一个)",
+    "src/feishu_bridge/bridge.py:117-118 — _processed_msg_order deque(maxlen=10000)去重",
+    "src/feishu_bridge/bridge.py:280-296 — thread reply 路由 parent_id→conv,__side 包装",
+    "src/feishu_bridge/bridge.py:634-643 — _EVENT_HANDLERS 映射表",
+    "src/feishu_bridge/bridge.py:654-672 — own/supervised 分支判定",
+    "src/feishu_bridge/outbound.py:130-149 — route 按 kind 分发",
+    "src/feishu_bridge/outbound.py:172-183 — on_edit 改为 reply-to-placeholder",
+    "src/feishu_bridge/feishu_renderer.py:111-121 — update_multi=true 让 PATCH 生效",
+    "src/feishu_bridge/routing_reader.py:56-111 — read_supervised_channels 解析 supervises 语法",
+    "src/feishu_bridge/ws_client.py:72-114 — _handle_data_frame CARD 分发覆写",
+    "src/feishu_bridge/config.py:60-75 — build_config_from_routing 构造"
+  ],
+  "red_line_violations": []
 }

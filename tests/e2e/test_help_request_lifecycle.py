@@ -41,11 +41,11 @@ async def test_operator_responds_in_time(tmp_path):
     })
     assert "conv-1" in sla._help_timers
 
-    # 100ms 后 operator 回应
+    # 100ms 后 human 经 bridge 中继回应（V6+: source = cs-bot）
     await asyncio.sleep(0.1)
     await sla.on_ws_message({
         "channel": "conv-1",
-        "source": "operator_xiaoli",
+        "source": "cs-bot",
         "content": "__side:好的",
     })
     await asyncio.sleep(0)
@@ -86,7 +86,7 @@ async def test_operator_no_response_emits_timeout(tmp_path):
     timeouts = [e for e in events if e["event"] == "help_timeout"]
     assert len(timeouts) == 1
     assert timeouts[0]["channel"] == "conv-1"
-    assert timeouts[0]["data"]["reason"] == "operator_no_response"
+    assert timeouts[0]["data"]["reason"] == "no_human_response"
 
 
 @pytest.mark.asyncio

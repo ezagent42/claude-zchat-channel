@@ -1,62 +1,493 @@
 {
-  "project": "zchat-channel-server",
-  "version": "1.0.0.dev0",
-  "generated_at": "2026-04-17",
-  "total_files": 44,
-  "total_lines": 6621,
-  "source_files": [
-    {"path": "agent_mcp.py", "lines": 528, "type": "source"},
-    {"path": "src/channel_server/__init__.py", "lines": 4, "type": "source"},
-    {"path": "src/channel_server/router.py", "lines": 161, "type": "source"},
-    {"path": "src/channel_server/plugin.py", "lines": 106, "type": "source"},
-    {"path": "src/channel_server/ws_server.py", "lines": 108, "type": "source"},
-    {"path": "src/channel_server/routing.py", "lines": 63, "type": "source"},
-    {"path": "src/channel_server/irc_connection.py", "lines": 117, "type": "source"},
-    {"path": "src/channel_server/__main__.py", "lines": 113, "type": "source"},
-    {"path": "src/plugins/__init__.py", "lines": 3, "type": "source"},
-    {"path": "src/plugins/mode/__init__.py", "lines": 1, "type": "source"},
-    {"path": "src/plugins/mode/plugin.py", "lines": 67, "type": "source"},
-    {"path": "src/plugins/sla/__init__.py", "lines": 1, "type": "source"},
-    {"path": "src/plugins/sla/plugin.py", "lines": 96, "type": "source"},
-    {"path": "src/feishu_bridge/__init__.py", "lines": 1, "type": "source"},
-    {"path": "src/feishu_bridge/__main__.py", "lines": 21, "type": "source"},
-    {"path": "src/feishu_bridge/config.py", "lines": 87, "type": "source"},
-    {"path": "src/feishu_bridge/ws_client.py", "lines": 114, "type": "source"},
-    {"path": "src/feishu_bridge/sender.py", "lines": 175, "type": "source"},
-    {"path": "src/feishu_bridge/message_parsers.py", "lines": 322, "type": "source"},
-    {"path": "src/feishu_bridge/group_manager.py", "lines": 187, "type": "source"},
-    {"path": "src/feishu_bridge/feishu_renderer.py", "lines": 98, "type": "source"},
-    {"path": "src/feishu_bridge/test_client.py", "lines": 262, "type": "source"},
-    {"path": "src/feishu_bridge/outbound.py", "lines": 220, "type": "source"},
-    {"path": "src/feishu_bridge/bridge.py", "lines": 566, "type": "source"},
-    {"path": "src/feishu_bridge/bridge_api_client.py", "lines": 104, "type": "source"},
-    {"path": "src/feishu_bridge/tests/__init__.py", "lines": 0, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_sender.py", "lines": 42, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_parsers.py", "lines": 69, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_group_manager.py", "lines": 176, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_client_extended.py", "lines": 234, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_outbound_router.py", "lines": 240, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_visibility_router.py", "lines": 47, "type": "test"},
-    {"path": "src/feishu_bridge/tests/test_card_action.py", "lines": 301, "type": "test"},
-    {"path": "tests/__init__.py", "lines": 0, "type": "test"},
-    {"path": "tests/unit_v4/__init__.py", "lines": 0, "type": "test"},
-    {"path": "tests/unit_v4/conftest.py", "lines": 17, "type": "test"},
-    {"path": "tests/unit_v4/test_plugin_registry.py", "lines": 175, "type": "test"},
-    {"path": "tests/unit_v4/test_routing.py", "lines": 97, "type": "test"},
-    {"path": "tests/unit_v4/test_router.py", "lines": 363, "type": "test"},
-    {"path": "tests/unit_v4/test_mode_plugin.py", "lines": 124, "type": "test"},
-    {"path": "tests/unit_v4/test_sla_plugin.py", "lines": 128, "type": "test"},
-    {"path": "tests/unit_v4/test_agent_mcp.py", "lines": 276, "type": "test"},
-    {"path": "tests/pre_release/conftest.py", "lines": 357, "type": "test"},
-    {"path": "tests/pre_release/test_feishu_e2e.py", "lines": 450, "type": "test"}
+  "project_root": "/home/yaosh/projects/zchat/zchat-channel-server",
+  "files": [
+    {
+      "path": ".claude-plugin/plugin.json",
+      "size_bytes": 189,
+      "lines": 6,
+      "extension": ".json"
+    },
+    {
+      "path": ".feishu-bridge/customer_chats.json",
+      "size_bytes": 78,
+      "lines": 1,
+      "extension": ".json"
+    },
+    {
+      "path": ".git",
+      "size_bytes": 45,
+      "lines": 1,
+      "extension": ""
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "size_bytes": 306,
+      "lines": 17,
+      "extension": ".yml"
+    },
+    {
+      "path": ".gitignore",
+      "size_bytes": 140,
+      "lines": 12,
+      "extension": ""
+    },
+    {
+      "path": ".mcp.json",
+      "size_bytes": 155,
+      "lines": 8,
+      "extension": ".json"
+    },
+    {
+      "path": "LICENSE",
+      "size_bytes": 1066,
+      "lines": 21,
+      "extension": ""
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 2332,
+      "lines": 81,
+      "extension": ".md"
+    },
+    {
+      "path": "agent_mcp.py",
+      "size_bytes": 25234,
+      "lines": 648,
+      "extension": ".py"
+    },
+    {
+      "path": "commands/broadcast.md",
+      "size_bytes": 1389,
+      "lines": 41,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/dm.md",
+      "size_bytes": 803,
+      "lines": 29,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/join.md",
+      "size_bytes": 682,
+      "lines": 27,
+      "extension": ".md"
+    },
+    {
+      "path": "commands/reply.md",
+      "size_bytes": 993,
+      "lines": 29,
+      "extension": ".md"
+    },
+    {
+      "path": "instructions.md",
+      "size_bytes": 2821,
+      "lines": 55,
+      "extension": ".md"
+    },
+    {
+      "path": "pyproject.toml",
+      "size_bytes": 1542,
+      "lines": 57,
+      "extension": ".toml"
+    },
+    {
+      "path": "pytest.ini",
+      "size_bytes": 177,
+      "lines": 7,
+      "extension": ".ini"
+    },
+    {
+      "path": "routing.example.toml",
+      "size_bytes": 1202,
+      "lines": 31,
+      "extension": ".toml"
+    },
+    {
+      "path": "src/channel_server/__init__.py",
+      "size_bytes": 129,
+      "lines": 4,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/__main__.py",
+      "size_bytes": 4994,
+      "lines": 150,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/irc_connection.py",
+      "size_bytes": 6889,
+      "lines": 186,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/plugin.py",
+      "size_bytes": 3690,
+      "lines": 106,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/router.py",
+      "size_bytes": 9721,
+      "lines": 241,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/routing.py",
+      "size_bytes": 3844,
+      "lines": 110,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/routing_watcher.py",
+      "size_bytes": 3340,
+      "lines": 103,
+      "extension": ".py"
+    },
+    {
+      "path": "src/channel_server/ws_server.py",
+      "size_bytes": 3977,
+      "lines": 111,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/__init__.py",
+      "size_bytes": 59,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/__main__.py",
+      "size_bytes": 1352,
+      "lines": 46,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/bridge.py",
+      "size_bytes": 41869,
+      "lines": 951,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/bridge_api_client.py",
+      "size_bytes": 4071,
+      "lines": 109,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/config.py",
+      "size_bytes": 2349,
+      "lines": 76,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/feishu_renderer.py",
+      "size_bytes": 5803,
+      "lines": 174,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/group_manager.py",
+      "size_bytes": 2052,
+      "lines": 49,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/message_parsers.py",
+      "size_bytes": 11768,
+      "lines": 322,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/outbound.py",
+      "size_bytes": 8995,
+      "lines": 214,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/routing_reader.py",
+      "size_bytes": 5110,
+      "lines": 154,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/sender.py",
+      "size_bytes": 7913,
+      "lines": 216,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/test_client.py",
+      "size_bytes": 9171,
+      "lines": 258,
+      "extension": ".py"
+    },
+    {
+      "path": "src/feishu_bridge/ws_client.py",
+      "size_bytes": 3380,
+      "lines": 114,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/__init__.py",
+      "size_bytes": 166,
+      "lines": 3,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/activation/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/activation/plugin.py",
+      "size_bytes": 4077,
+      "lines": 123,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/audit/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/audit/plugin.py",
+      "size_bytes": 7792,
+      "lines": 207,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/csat/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/csat/plugin.py",
+      "size_bytes": 2363,
+      "lines": 74,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/mode/__init__.py",
+      "size_bytes": 73,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/mode/plugin.py",
+      "size_bytes": 1449,
+      "lines": 49,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/resolve/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/resolve/plugin.py",
+      "size_bytes": 1006,
+      "lines": 38,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/sla/__init__.py",
+      "size_bytes": 60,
+      "lines": 1,
+      "extension": ".py"
+    },
+    {
+      "path": "src/plugins/sla/plugin.py",
+      "size_bytes": 8040,
+      "lines": 214,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_bridge_lazy_create.py",
+      "size_bytes": 5669,
+      "lines": 171,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_csat_lifecycle.py",
+      "size_bytes": 3358,
+      "lines": 96,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_help_request_lifecycle.py",
+      "size_bytes": 3933,
+      "lines": 132,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/e2e/test_plugin_pipeline.py",
+      "size_bytes": 5798,
+      "lines": 164,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/__init__.py",
+      "size_bytes": 0,
+      "lines": 0,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/conftest.py",
+      "size_bytes": 445,
+      "lines": 17,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_activation_plugin.py",
+      "size_bytes": 2419,
+      "lines": 77,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_agent_mcp.py",
+      "size_bytes": 16814,
+      "lines": 437,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_audit_plugin.py",
+      "size_bytes": 4526,
+      "lines": 134,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_card_action.py",
+      "size_bytes": 10625,
+      "lines": 308,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_client_extended.py",
+      "size_bytes": 8543,
+      "lines": 217,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_csat_plugin.py",
+      "size_bytes": 2872,
+      "lines": 103,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_group_manager.py",
+      "size_bytes": 1245,
+      "lines": 41,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_mode_plugin.py",
+      "size_bytes": 3177,
+      "lines": 96,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_outbound_router.py",
+      "size_bytes": 6211,
+      "lines": 165,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_parsers.py",
+      "size_bytes": 2314,
+      "lines": 69,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_plugin_registry.py",
+      "size_bytes": 5109,
+      "lines": 175,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_resolve_plugin.py",
+      "size_bytes": 820,
+      "lines": 34,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_router.py",
+      "size_bytes": 16724,
+      "lines": 482,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_routing.py",
+      "size_bytes": 4111,
+      "lines": 145,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_routing_reader.py",
+      "size_bytes": 7377,
+      "lines": 240,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_routing_watcher.py",
+      "size_bytes": 5786,
+      "lines": 221,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_sender.py",
+      "size_bytes": 1511,
+      "lines": 42,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_sla_plugin.py",
+      "size_bytes": 9058,
+      "lines": 281,
+      "extension": ".py"
+    },
+    {
+      "path": "tests/unit/test_visibility_router.py",
+      "size_bytes": 1989,
+      "lines": 53,
+      "extension": ".py"
+    },
+    {
+      "path": "uv.lock",
+      "size_bytes": 215053,
+      "lines": 1351,
+      "extension": ".lock"
+    }
   ],
-  "config_files": [
-    {"path": "pyproject.toml", "type": "config"},
-    {"path": "routing.example.toml", "type": "config"},
-    {"path": "tests/pre_release/routing.toml", "type": "config"},
-    {"path": "tests/pre_release/feishu-e2e-config.yaml", "type": "config"},
-    {"path": ".github/workflows/publish.yml", "type": "ci"},
-    {"path": ".mcp.json", "type": "config"},
-    {"path": ".claude-plugin/plugin.json", "type": "config"}
-  ]
+  "summary": {
+    "total_files": 79,
+    "total_lines": 10727,
+    "by_extension": {
+      ".py": 62,
+      ".md": 6,
+      "(no ext)": 3,
+      ".json": 3,
+      ".toml": 2,
+      ".lock": 1,
+      ".ini": 1,
+      ".yml": 1
+    }
+  }
 }

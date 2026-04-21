@@ -1,10 +1,10 @@
 """E2E: CSAT 完整生命周期。
 
-场景：
+场景（V6+）：
   1. operator 触发 /resolve → resolve plugin → emit channel_resolved
   2. csat plugin 订阅到 → emit csat_request → bridge 收到应发评分卡片
-  3. 客户评分 → bridge 转发 __csat_score:N 消息 → csat plugin 收到
-  4. csat plugin 调用 audit.record_csat → audit.json 记录分数
+  3. 客户评分 → bridge emit `csat_score` event（走 event 通道，不走 message）
+  4. csat plugin 订阅 csat_score → 调 audit.record_csat → audit.json 记录分数
 """
 
 from __future__ import annotations
@@ -49,13 +49,8 @@ async def test_csat_full_lifecycle(tmp_path):
     assert "channel_resolved" in event_names
     assert "csat_request" in event_names
 
-    # 2. 客户评分（bridge 转发的 __csat_score:5 消息）
-    await registry.broadcast_message({
-        "type": "message",
-        "channel": "conv-csat",
-        "source": "customer",
-        "content": "__csat_score:5",
-    })
+    # 2. 客户评分（bridge 发的 csat_score event，走 event 通道 V6+）
+    await emit_event("csat_score", "conv-csat", {"score": 5, "source": "customer"})
 
     # csat plugin 应该调用 audit.record_csat
     status = audit.query("status", {"channel": "conv-csat"})
@@ -82,15 +77,10 @@ async def test_csat_multiple_channels(tmp_path):
     registry.register(resolve)
     registry.register(csat)
 
-    # 3 个 channel 分别评分
-    for i, (ch, score) in enumerate([("c1", 5), ("c2", 3), ("c3", 4)]):
+    # 3 个 channel 分别评分（V6+: csat_score event 通道）
+    for ch, score in [("c1", 5), ("c2", 3), ("c3", 4)]:
         await resolve.on_command("resolve", {"channel": ch, "source": "op"})
-        await registry.broadcast_message({
-            "type": "message",
-            "channel": ch,
-            "source": "customer",
-            "content": f"__csat_score:{score}",
-        })
+        await emit_event("csat_score", ch, {"score": score, "source": "customer"})
 
     agg = audit._compute_aggregates()
     assert agg["csat_mean"] == pytest.approx(4.0, abs=0.01)

@@ -1,0 +1,68 @@
+{
+  "module": "plugins",
+  "files": [
+    "src/plugins/__init__.py",
+    "src/plugins/activation/__init__.py",
+    "src/plugins/activation/plugin.py",
+    "src/plugins/audit/__init__.py",
+    "src/plugins/audit/plugin.py",
+    "src/plugins/csat/__init__.py",
+    "src/plugins/csat/plugin.py",
+    "src/plugins/mode/__init__.py",
+    "src/plugins/mode/plugin.py",
+    "src/plugins/resolve/__init__.py",
+    "src/plugins/resolve/plugin.py",
+    "src/plugins/sla/__init__.py",
+    "src/plugins/sla/plugin.py"
+  ],
+  "description": "6 个官方业务 plugin,通过 BasePlugin 接口挂入 PluginRegistry。全部在 channel_server.__main__ 初始化时注册。plugins/ 是 namespace package(extend_path),支持与根目录 plugins/ 合并以便部署期第三方 plugin 扩展。业务语义集中在此层:mode(copilot/takeover)/resolve(结案)/sla(双 timer 守护)/audit(数据统计持久化)/activation(休眠+回访)/csat(评分卡片)。core 的 router 不感知这些事件名,只做分派。",
+  "key_classes_functions": [
+    {"name": "ModePlugin", "file": "src/plugins/mode/plugin.py", "line": 14, "purpose": "channel mode 管理(copilot/takeover),命令:/hijack /release /copilot,emit mode_changed event(from/to/triggered_by/cmd)。query('get',{channel}) 返回当前 mode(默认 copilot)。"},
+    {"name": "ResolvePlugin", "file": "src/plugins/resolve/plugin.py", "line": 17, "purpose": "/resolve 命令 → emit channel_resolved event(resolved_by)。无持久化。"},
+    {"name": "SlaPlugin", "file": "src/plugins/sla/plugin.py", "line": 55, "purpose": "SLA 守护双 timer:Timer1 takeover 超时(默认 180s)→ emit sla_breach + emit_command('release');Timer2 求助等待(检测 __side 中首个 @-mention 为 HELP_REQUEST_MARKERS = (@operator/@人工/@admin/@客服))→ emit help_requested + 启 timer,超时 emit help_timeout;bridge 中继的 side(source 含 cs-bot)取消 timer。"},
+    {"name": "_first_at_is_help_marker", "file": "src/plugins/sla/plugin.py", "line": 40, "purpose": "只在 text 第一个 @-token 是 marker 时触发,避免 agent 互 quote marker 误触发。"},
+    {"name": "AuditPlugin", "file": "src/plugins/audit/plugin.py", "line": 36, "purpose": "运行时统计 + JSON 持久化(audit.json,atomic tmp+replace):每 channel 状态(active/takeover/resolved)/takeovers 列表/first_message/first_reply_at/message_count/csat_score;record_csat API 供 csat plugin 调用。query('status'/'report')。"},
+    {"name": "AuditPlugin._compute_aggregates", "file": "src/plugins/audit/plugin.py", "line": 169, "purpose": "聚合 KPI: escalation_resolve_rate = takeover_then_resolve/total_takeovers, csat_mean。"},
+    {"name": "AuditPlugin._looks_like_agent", "file": "src/plugins/audit/plugin.py", "line": 202, "purpose": "source 含 '-' 且不在 _INFRASTRUCTURE_SOURCES={cs-bot/internal/card_action} 视为 agent。"},
+    {"name": "ActivationPlugin", "file": "src/plugins/activation/plugin.py", "line": 30, "purpose": "channel 活跃度跟踪(activation-state.json):每条消息更新 last_activity;channel_resolved → is_dormant=True + last_closed_at;dormant channel 新消息 → emit customer_returned(sender/preview/last_closed_at)。"},
+    {"name": "CsatPlugin", "file": "src/plugins/csat/plugin.py", "line": 20, "purpose": "CSAT 评分链路:channel_resolved → emit csat_request(bridge 发卡片);订阅 csat_score 事件(1-5)→ audit.record_csat + emit csat_recorded。直接引用 AuditPlugin(懒耦合)。"}
+  ],
+  "public_interface": [
+    "plugins.mode.plugin.ModePlugin",
+    "plugins.sla.plugin.SlaPlugin",
+    "plugins.resolve.plugin.ResolvePlugin",
+    "plugins.audit.plugin.AuditPlugin",
+    "plugins.activation.plugin.ActivationPlugin",
+    "plugins.csat.plugin.CsatPlugin"
+  ],
+  "depends_on": [
+    "channel_server.plugin.BasePlugin",
+    "zchat_protocol.irc_encoding (sla 解析 __side)",
+    "asyncio (sla timer)"
+  ],
+  "tests": [
+    "tests/unit/test_mode_plugin.py — 8 test: hijack/release/copilot/query/event emit",
+    "tests/unit/test_resolve_plugin.py — 2 test: command handle + channel_resolved emit",
+    "tests/unit/test_sla_plugin.py — 12 test: takeover timer/help timer/marker first-at/quoted marker 不触发/human relay 取消/双 channel 独立",
+    "tests/unit/test_audit_plugin.py — 13 test: message count/first_reply/mode_changed/takeover pair/resolved/aggregates/persistence/csat_mean/query unknown",
+    "tests/unit/test_activation_plugin.py — 7 test: last_activity/dormant/customer_return/persistence",
+    "tests/unit/test_csat_plugin.py — 7 test: csat_request trigger/score recorded/invalid/out-of-range/non-event ignored/works without audit",
+    "tests/e2e/test_help_request_lifecycle.py — 3 test: operator 及时响应/超时/help+takeover 双 timer 独立",
+    "tests/e2e/test_plugin_pipeline.py — 3 test: 全生命周期/escalation rate/csat via audit"
+  ],
+  "evidence_file_lines": [
+    "src/plugins/__init__.py:1-3 — namespace package 合并根 plugins/",
+    "src/plugins/mode/plugin.py:32 — handles_commands = [hijack/release/copilot]",
+    "src/plugins/mode/plugin.py:38-43 — hijack=takeover,其他=copilot + emit mode_changed",
+    "src/plugins/sla/plugin.py:29 — HELP_REQUEST_MARKERS",
+    "src/plugins/sla/plugin.py:33 — HUMAN_RELAY_SOURCE_MARKERS=(cs-bot,)",
+    "src/plugins/sla/plugin.py:107-133 — takeover timer expiry → sla_breach + /release",
+    "src/plugins/sla/plugin.py:138-173 — on_ws_message 检测 __side + 首个 @ marker",
+    "src/plugins/audit/plugin.py:33 — _INFRASTRUCTURE_SOURCES 排除",
+    "src/plugins/audit/plugin.py:114-138 — mode_changed takeover/copilot pair + channel_resolved",
+    "src/plugins/audit/plugin.py:185-195 — aggregates 计算",
+    "src/plugins/activation/plugin.py:77-101 — dormant + customer_returned emit",
+    "src/plugins/csat/plugin.py:42-72 — csat_request / csat_score → record_csat"
+  ],
+  "red_line_violations": []
+}

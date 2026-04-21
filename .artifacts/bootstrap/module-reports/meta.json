@@ -1,0 +1,55 @@
+{
+  "module": "meta",
+  "files": [
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+    "pytest.ini",
+    "uv.lock",
+    "routing.example.toml",
+    ".claude-plugin/plugin.json",
+    ".mcp.json",
+    ".gitignore",
+    ".github/workflows/publish.yml",
+    "instructions.md",
+    "commands/broadcast.md",
+    "commands/dm.md",
+    "commands/join.md",
+    "commands/reply.md",
+    ".feishu-bridge/customer_chats.json"
+  ],
+  "description": "仓库配置元数据:pyproject.toml 定义 3 个 entry script(zchat-channel-server / zchat-feishu-bridge / zchat-agent-mcp),wheel 打包 src/channel_server + src/plugins + src/feishu_bridge 三个 package,force-include agent_mcp.py + instructions.md + .claude-plugin + commands。pytest.ini 配置 pythonpath=src + asyncio_mode=auto + markers=e2e/prerelease。routing.example.toml 提供 V6 [bots]/[channels] schema 参考。.claude-plugin + commands/ 是 Claude Code Code plugin 元数据(broadcast/dm/join/reply 四个 slash command 文档)。GitHub Actions publish.yml 跑打包发布流程。",
+  "key_classes_functions": [
+    {"name": "pyproject.toml [project.scripts]", "file": "pyproject.toml", "line": 47, "purpose": "3 个 entry points: zchat-channel-server → channel_server.__main__:main, zchat-feishu-bridge → feishu_bridge.__main__:main, zchat-agent-mcp → agent_mcp:entry_point。"},
+    {"name": "pyproject.toml packages", "file": "pyproject.toml", "line": 29, "purpose": "wheel 包含 src/channel_server + src/plugins + src/feishu_bridge。"},
+    {"name": "pyproject.toml force-include", "file": "pyproject.toml", "line": 33, "purpose": "根目录 agent_mcp.py / instructions.md / .claude-plugin / commands 强制打入 wheel。"},
+    {"name": "pyproject.toml [tool.uv.sources]", "file": "pyproject.toml", "line": 21, "purpose": "zchat-protocol 使用 path editable ../zchat-protocol (dev);prod 走 PyPI。"},
+    {"name": "pytest.ini", "file": "pytest.ini", "line": 1, "purpose": "testpaths=tests, pythonpath=src, markers=(e2e, prerelease), asyncio_mode=auto。"},
+    {"name": "README 架构图", "file": "README.md", "line": 6, "purpose": "展示 Bridge(WS)↔Router↔IRC 拓扑 + PluginRegistry 挂载。"},
+    {"name": "routing.example.toml", "file": "routing.example.toml", "line": 1, "purpose": "V6 路由配置示例:[bots.<name>] + [channels.<id>]。"},
+    {"name": "instructions.md", "file": "instructions.md", "line": 1, "purpose": "agent_mcp 载入的 Claude Code 系统提示模板($agent_name)。"},
+    {"name": "commands/*.md", "file": "commands/broadcast.md", "line": 1, "purpose": "Claude Code plugin 提供的 slash command 文档:broadcast/dm/join/reply。"}
+  ],
+  "public_interface": [
+    "setuptools entry_points: zchat-channel-server / zchat-feishu-bridge / zchat-agent-mcp",
+    "wheel packages: channel_server, plugins, feishu_bridge + force-include agent_mcp.py",
+    "pytest markers: e2e, prerelease"
+  ],
+  "depends_on": [
+    "hatchling (build backend)",
+    "uv (dev 环境管理)",
+    "GitHub Actions (.github/workflows/publish.yml)"
+  ],
+  "tests": [],
+  "evidence_file_lines": [
+    "pyproject.toml:2-3 — version=1.0.0.dev0",
+    "pyproject.toml:6-13 — 核心依赖 mcp/irc/zchat-protocol/websockets/lark-oapi/pyyaml",
+    "pyproject.toml:21-22 — zchat-protocol editable",
+    "pyproject.toml:28-29 — wheel packages",
+    "pyproject.toml:33-37 — force-include agent_mcp + instructions + .claude-plugin + commands",
+    "pyproject.toml:47-50 — 3 个 script entry",
+    "pytest.ini:1-7 — 测试配置全部",
+    "README.md:14-18 — 架构组件清单"
+  ],
+  "red_line_violations": []
+}
