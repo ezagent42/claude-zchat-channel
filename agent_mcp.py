@@ -236,6 +236,28 @@ def register_tools(server: Server, state: dict) -> None:
                 },
             ),
             Tool(
+                name="list_peers",
+                description=(
+                    "List other agent nicks currently joined to a given IRC channel.\n\n"
+                    "Returns: JSON list[str] of nicks (excluding self and well-known service "
+                    "nicks like cs-bot). Useful before delegating: discover who else is in your "
+                    "channel and pick a peer by naming convention (e.g. matches '*-deep-*').\n\n"
+                    "Parameters:\n"
+                    "- channel (required): channel name with or without leading '#'\n\n"
+                    "Returns empty list if you haven't joined that channel or no peers present."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "channel": {
+                            "type": "string",
+                            "description": "Channel name (e.g. 'conv-001' or '#conv-001')",
+                        },
+                    },
+                    "required": ["channel"],
+                },
+            ),
+            Tool(
                 name="run_zchat_cli",
                 description=(
                     "Execute a zchat CLI command and return stdout/stderr.\n\n"
@@ -291,6 +313,8 @@ def register_tools(server: Server, state: dict) -> None:
             return await _handle_join_channel(_get_irc(), arguments)
         if name == "run_zchat_cli":
             return await _handle_run_zchat_cli(arguments)
+        if name == "list_peers":
+            return await _handle_list_peers(state.get("members") or {}, arguments)
         raise ValueError(f"Unknown tool: {name}")
 
 
@@ -331,6 +355,24 @@ async def _handle_join_channel(connection, arguments: dict) -> list[TextContent]
     except Exception as e:
         return [TextContent(type="text", text=f"join failed: {e}")]
     return [TextContent(type="text", text=f"Joined #{channel}")]
+
+
+# Service nicks excluded from list_peers (they are bridge / channel-server hosts,
+# not deployable peer agents). Add new service nicks here if introduced.
+_SERVICE_NICKS = {"cs-bot"}
+
+
+async def _handle_list_peers(members: dict[str, set[str]], arguments: dict) -> list[TextContent]:
+    """Return JSON list of peer agent nicks in a channel (excludes self + service nicks)."""
+    import json as _json
+    channel = arguments.get("channel", "").strip()
+    if not channel:
+        return [TextContent(type="text", text="error: channel required")]
+    key = channel if channel.startswith("#") else f"#{channel}"
+    nicks = set(members.get(key, set()))
+    nicks.discard(AGENT_NAME)
+    nicks -= _SERVICE_NICKS
+    return [TextContent(type="text", text=_json.dumps(sorted(nicks)))]
 
 
 async def _handle_run_zchat_cli(arguments: dict) -> list[TextContent]:
@@ -378,14 +420,20 @@ def _start_irc(
     loop: asyncio.AbstractEventLoop,
     on_pubmsg_fn: Any,
     on_privmsg_fn: Any,
+    members: dict[str, set[str]] | None = None,
 ) -> tuple[Any, Any]:
-    """在独立线程启动 IRC reactor，返回 (reactor, connection)。"""
+    """在独立线程启动 IRC reactor，返回 (reactor, connection)。
+
+    members 字典 caller 维护引用，按 IRC 事件实时更新：channel name (含 '#') → set[nick]。
+    用于 list_peers MCP tool 查询同 channel 成员，零额外 IRC roundtrip。
+    """
     import functools
     import ssl
     import threading
 
     import irc.connection
 
+    members_map: dict[str, set[str]] = members if members is not None else {}
     reactor = irc.client.Reactor()
 
     connect_kwargs: dict = {}
@@ -430,9 +478,55 @@ def _start_irc(
                 print(f"[agent-mcp] Joined #{ch_clean}", file=sys.stderr)
         print(f"[agent-mcp] {nick} ready on IRC ({server}:{port})", file=sys.stderr)
 
+    # ---- channel membership tracking (for list_peers MCP tool) ----
+    def _on_namreply(conn, event):
+        # event.arguments: ['=', '#chan', 'nick1 nick2 nick3 ...']
+        args = event.arguments
+        if len(args) < 3:
+            return
+        ch = args[1]
+        for raw_nick in args[2].split():
+            clean = raw_nick.lstrip("@+%&~")
+            if clean:
+                members_map.setdefault(ch, set()).add(clean)
+
+    def _on_join(conn, event):
+        ch = event.target
+        joiner = event.source.nick if event.source else None
+        if ch and joiner:
+            members_map.setdefault(ch, set()).add(joiner)
+
+    def _on_part(conn, event):
+        ch = event.target
+        leaver = event.source.nick if event.source else None
+        if ch and leaver and ch in members_map:
+            members_map[ch].discard(leaver)
+
+    def _on_quit(conn, event):
+        leaver = event.source.nick if event.source else None
+        if not leaver:
+            return
+        for nicks in members_map.values():
+            nicks.discard(leaver)
+
+    def _on_nick(conn, event):
+        old = event.source.nick if event.source else None
+        new = event.target if event.target else None
+        if not (old and new):
+            return
+        for nicks in members_map.values():
+            if old in nicks:
+                nicks.discard(old)
+                nicks.add(new)
+
     connection.add_global_handler("welcome", _on_welcome)
     connection.add_global_handler("pubmsg", _pubmsg_handler)
     connection.add_global_handler("privmsg", _privmsg_handler)
+    connection.add_global_handler("namreply", _on_namreply)
+    connection.add_global_handler("join", _on_join)
+    connection.add_global_handler("part", _on_part)
+    connection.add_global_handler("quit", _on_quit)
+    connection.add_global_handler("nick", _on_nick)
 
     def irc_thread():
         try:
@@ -514,12 +608,15 @@ async def main() -> None:
         print(f"[agent-mcp] [private:{nick} conv={conv_id}] {actual_body}", file=sys.stderr)
         loop.call_soon_threadsafe(queue.put_nowait, (msg, context))
 
+    members_map: dict[str, set[str]] = {}
     irc_reactor, irc_connection = _start_irc(
         IRC_SERVER, IRC_PORT, AGENT_NAME, channels,
         IRC_TLS, IRC_AUTH_TOKEN,
         queue, loop, _on_pubmsg, _on_privmsg,
+        members=members_map,
     )
     state["irc_connection"] = irc_connection
+    state["members"] = members_map
 
     init_opts = InitializationOptions(
         server_name=f"zchat-agent-{AGENT_NAME}",

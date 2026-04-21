@@ -87,19 +87,23 @@ def test_side_kind_without_thread_is_dropped() -> None:
     sender.reply_in_thread.assert_not_called()
 
 
-# ---------- edit routing ----------
+# ---------- edit routing (V6+: reply-to-placeholder) ----------
 
-def test_edit_with_msg_id_calls_update_message() -> None:
+def test_edit_with_msg_id_calls_reply_in_thread() -> None:
+    """V6+: __edit 映射为 reply_in_thread，挂到占位消息下（飞书 text 不可 patch）。"""
     router, sender = _build_router()
     router._msg_id_map["cs_msg_1"] = "om_feishu_1"
+    sender.reply_in_thread.return_value = "om_thread_reply"
     result = router.on_edit("conv_1", "cs_msg_1", "edited text")
-    sender.update_message.assert_called_once_with("om_feishu_1", "edited text")
+    sender.reply_in_thread.assert_called_once_with("om_feishu_1", "edited text")
+    sender.update_message.assert_not_called()
     assert result is True
 
 
 def test_edit_without_mapping_noop() -> None:
     router, sender = _build_router()
     result = router.on_edit("conv_1", "unknown_cs_msg", "edit")
+    sender.reply_in_thread.assert_not_called()
     sender.update_message.assert_not_called()
     assert result is False
 

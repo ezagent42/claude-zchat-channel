@@ -13,6 +13,8 @@ import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
     CreateMessageRequest,
     CreateMessageRequestBody,
+    DeleteMessageRequest,
+    GetChatRequest,
     PatchMessageRequest,
     PatchMessageRequestBody,
     ReplyMessageRequest,
@@ -173,3 +175,42 @@ class FeishuSender:
     def send_card(self, chat_id: str, card: dict) -> str | None:
         """send_card 别名（同步）。"""
         return self.send_card_sync(chat_id, card)
+
+    # ------------------------------------------------------------------
+    # recall (delete) — 撤回已发消息（card / text 都可；限 24h 内本 bot 发的）
+    # ------------------------------------------------------------------
+
+    def recall(self, message_id: str) -> bool:
+        """撤回消息。飞书 PATCH 对卡片 shape 大改不生效时，用 recall+resend 替代。"""
+        try:
+            req = DeleteMessageRequest.builder().message_id(message_id).build()
+            resp = self._client.im.v1.message.delete(req)
+            if not resp.success():
+                log.warning("recall failed: %s %s", resp.code, resp.msg)
+                return False
+            return True
+        except Exception:
+            log.exception("recall exception for msg_id=%s", message_id)
+            return False
+
+    # ------------------------------------------------------------------
+    # get_chat_info (im.v1.chat.get) — 取群名等信息
+    # ------------------------------------------------------------------
+
+    def get_chat_info(self, chat_id: str) -> dict | None:
+        """取飞书群信息。返回 dict {name, description, avatar, ...} 或 None。"""
+        try:
+            req = GetChatRequest.builder().chat_id(chat_id).build()
+            resp = self._client.im.v1.chat.get(req)
+            if not resp.success() or not resp.data:
+                log.warning("get_chat_info failed: %s %s", resp.code, resp.msg)
+                return None
+            data = resp.data
+            return {
+                "name": getattr(data, "name", None) or "",
+                "description": getattr(data, "description", None) or "",
+                "avatar": getattr(data, "avatar", None) or "",
+            }
+        except Exception:
+            log.exception("get_chat_info exception for chat_id=%s", chat_id)
+            return None

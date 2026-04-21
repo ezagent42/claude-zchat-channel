@@ -15,13 +15,21 @@ from zchat_protocol import irc_encoding, ws_messages
 # ---- Mock 帮助类 ----
 
 class MockIRCConnection:
-    """记录 privmsg 调用，不实际连接 IRC。"""
+    """记录 privmsg 调用，不实际连接 IRC。
 
-    def __init__(self):
+    可选 _members 字典 → 用于 router NAMES 熔断测试（将 channel 映射到 member nick set）。
+    """
+
+    def __init__(self, members: dict[str, set[str]] | None = None):
         self.sent: list[tuple[str, str]] = []  # (target, content)
+        self._members = members or {}
 
     def privmsg(self, target: str, content: str) -> None:
         self.sent.append((target, content))
+
+    def names(self, channel: str) -> set[str]:
+        ch = channel if channel.startswith("#") else f"#{channel}"
+        return set(self._members.get(ch, set()))
 
 
 class MockWSServer:
@@ -68,16 +76,11 @@ class CommandPlugin(BasePlugin):
 
 # ---- Fixtures ----
 
-def make_routing_with_agents(
+def make_routing_with_entry(
     channel_id: str = "general",
-    agents: dict[str, str] | None = None,
-    entry_agent: str | None = None,
+    entry_agent: str | None = "yaosh-fast-001",
 ) -> RoutingTable:
-    agents = agents or {"fast": "yaosh-fast-001", "deep": "yaosh-deep-001"}
-    # 默认 entry_agent = agents 中第一个 value
-    if entry_agent is None and agents:
-        entry_agent = next(iter(agents.values()))
-    route = ChannelRoute(channel_id=channel_id, agents=agents, entry_agent=entry_agent)
+    route = ChannelRoute(channel_id=channel_id, entry_agent=entry_agent)
     return RoutingTable(channels={channel_id: route})
 
 
@@ -106,8 +109,8 @@ async def test_default_mode_when_no_mode_plugin():
 
 @pytest.mark.asyncio
 async def test_message_without_command_routes_to_irc_with_at_prefix_in_copilot():
-    """普通消息 + copilot mode → 向 channel_agents 各 @ 发送。"""
-    routing = make_routing_with_agents("general", {"fast": "yaosh-fast-001"})
+    """普通消息 + copilot mode → 向 entry_agent @ 发送。"""
+    routing = make_routing_with_entry("general", "yaosh-fast-001")
     registry = PluginRegistry()
     mode_plugin = ModePlugin("copilot")
     registry.register(mode_plugin)
@@ -133,7 +136,7 @@ async def test_message_without_command_routes_to_irc_with_at_prefix_in_copilot()
 @pytest.mark.asyncio
 async def test_message_without_command_routes_to_irc_without_prefix_in_takeover():
     """takeover mode → 直接发 IRC，不 @ prefix。"""
-    routing = make_routing_with_agents("general", {"fast": "yaosh-fast-001"})
+    routing = make_routing_with_entry("general", "yaosh-fast-001")
     registry = PluginRegistry()
     mode_plugin = ModePlugin("takeover")
     registry.register(mode_plugin)
@@ -160,7 +163,7 @@ async def test_message_without_command_routes_to_irc_without_prefix_in_takeover(
 @pytest.mark.asyncio
 async def test_message_with_infra_command_goes_to_plugin_not_irc():
     """以 '/' 开头且有注册 plugin 的命令 → plugin 处理，不发 IRC。"""
-    routing = make_routing_with_agents("general")
+    routing = make_routing_with_entry("general")
     registry = PluginRegistry()
     cmd_plugin = CommandPlugin("mode", ["mode"])
     registry.register(cmd_plugin)
@@ -185,7 +188,7 @@ async def test_message_with_infra_command_goes_to_plugin_not_irc():
 @pytest.mark.asyncio
 async def test_message_with_unknown_command_routes_to_irc():
     """/unknown 命令无 plugin 注册 → 当普通消息转发到 IRC。"""
-    routing = make_routing_with_agents("general", {"fast": "yaosh-fast-001"})
+    routing = make_routing_with_entry("general", "yaosh-fast-001")
     registry = PluginRegistry()
     # 不注册任何 plugin
 
@@ -293,12 +296,8 @@ async def test_emit_event_broadcasts_to_ws_and_plugins():
 
 @pytest.mark.asyncio
 async def test_copilot_mode_only_ats_entry_agent():
-    """copilot mode + 多 agent → 只 @ entry_agent，不群 @。"""
-    routing = make_routing_with_agents(
-        "general",
-        {"fast": "yaosh-fast-001", "deep": "yaosh-deep-001"},
-        entry_agent="yaosh-fast-001",
-    )
+    """copilot mode → router 只 @ entry_agent。"""
+    routing = make_routing_with_entry("general", entry_agent="yaosh-fast-001")
     registry = PluginRegistry()
 
     router, irc_conn, _ = make_router(routing=routing, registry=registry)
@@ -350,9 +349,72 @@ async def test_emit_event_no_channel_skips_irc():
 
 
 @pytest.mark.asyncio
-async def test_copilot_mode_without_entry_agent_drops_message():
-    """copilot mode 但 channel 无 entry_agent → 不发 IRC（log warning）。"""
-    route = ChannelRoute(channel_id="orphan", agents={"fast": "yaosh-fast-001"}, entry_agent=None)
+async def test_emit_event_truncates_long_text_for_irc():
+    """长 text 字段（中文 200+ bytes）不能让 IRC sys payload 超 512 字节。WS 路径不截。"""
+    router, irc_conn, ws_server = make_router()
+    long_text = "中" * 300  # 300 字符 × 3 bytes/utf-8 = 900 bytes
+    await router.emit_event("c1", "help_requested",
+                             {"text": long_text, "channel": "c1"})
+
+    # WS broadcast 保留 full text
+    assert len(ws_server.broadcasts) == 1
+    assert ws_server.broadcasts[0]["data"]["text"] == long_text
+    # IRC sys payload encoded 字节数不超过 IRC PRIVMSG 512 limit（含协议头 ~50 byte 富余）
+    assert len(irc_conn.sent) == 1
+    _, irc_content = irc_conn.sent[0]
+    assert len(irc_content.encode("utf-8")) <= 462  # 512 - 50 (IRC prefix headroom)
+    # 截断标记 "…" 在 IRC 版本里
+    assert "…" in irc_content
+
+
+@pytest.mark.asyncio
+async def test_copilot_mode_entry_offline_emits_help_requested():
+    """copilot mode + entry_agent 不在 IRC NAMES → 不空 @，emit help_requested。"""
+    routing = make_routing_with_entry("general", entry_agent="alice-fast")
+    registry = PluginRegistry()
+    # IRC channel 里只有 cs-bot，alice-fast 不在
+    irc_conn = MockIRCConnection(members={"#general": {"cs-bot"}})
+    router, _, _ = make_router(routing=routing, registry=registry, irc_conn=irc_conn)
+
+    msg = {
+        "type": ws_messages.WSType.MESSAGE,
+        "channel": "general",
+        "content": "anyone home",
+    }
+    await router.forward_inbound_ws(msg)
+
+    has_at = any(c.startswith("@") for _, c in irc_conn.sent)
+    assert not has_at
+    sys_events = [c for _, c in irc_conn.sent if "help_requested" in c]
+    assert len(sys_events) == 1
+    assert "entry_offline" in sys_events[0]
+
+
+@pytest.mark.asyncio
+async def test_copilot_mode_entry_present_does_not_short_circuit():
+    """copilot mode + entry_agent 在 IRC NAMES → 正常 @，不 emit help_requested。"""
+    routing = make_routing_with_entry("general", entry_agent="alice-fast")
+    registry = PluginRegistry()
+    irc_conn = MockIRCConnection(members={"#general": {"cs-bot", "alice-fast"}})
+    router, _, _ = make_router(routing=routing, registry=registry, irc_conn=irc_conn)
+
+    msg = {
+        "type": ws_messages.WSType.MESSAGE,
+        "channel": "general",
+        "content": "hi",
+    }
+    await router.forward_inbound_ws(msg)
+
+    at_lines = [c for _, c in irc_conn.sent if c.startswith("@alice-fast")]
+    assert len(at_lines) == 1
+    sys_events = [c for _, c in irc_conn.sent if "help_requested" in c]
+    assert len(sys_events) == 0
+
+
+@pytest.mark.asyncio
+async def test_copilot_mode_without_entry_agent_emits_help_requested():
+    """copilot mode 但 channel 无 entry_agent → 不 @ 任何人，emit help_requested 系统事件。"""
+    route = ChannelRoute(channel_id="orphan", entry_agent=None)
     routing = RoutingTable(channels={"orphan": route})
     registry = PluginRegistry()
     router, irc_conn, _ = make_router(routing=routing, registry=registry)
@@ -364,13 +426,19 @@ async def test_copilot_mode_without_entry_agent_drops_message():
     }
     await router.forward_inbound_ws(msg)
 
-    assert len(irc_conn.sent) == 0
+    # 没 @ 任何 agent
+    has_at = any(content.startswith("@") for _, content in irc_conn.sent)
+    assert not has_at, "should not @ any agent when no entry_agent"
+    # 应有 1 条 help_requested 系统事件
+    sys_events = [c for _, c in irc_conn.sent if "help_requested" in c]
+    assert len(sys_events) == 1
+    assert "no_entry_agent" in sys_events[0]
 
 
 @pytest.mark.asyncio
 async def test_already_encoded_content_not_double_encoded():
     """content 已带 __msg: 前缀 → router 不再重复 encode。"""
-    routing = make_routing_with_agents("general", {"fast": "yaosh-fast-001"})
+    routing = make_routing_with_entry("general", "yaosh-fast-001")
     registry = PluginRegistry()
 
     router, irc_conn, _ = make_router(routing=routing, registry=registry)

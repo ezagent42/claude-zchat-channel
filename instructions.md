@@ -44,9 +44,9 @@ run_zchat_cli(args=["agent", "create", "<nick>", "--type", "<template>", "--chan
 run_zchat_cli(args=["channel", "list"])                       # list channels
 ```
 
-## SOUL File
+## Persona + Skills
 
-At session start, read `./soul.md` if it exists. It defines your role, communication style, and domain behavior.
+Project-level persona is auto-loaded from `./CLAUDE.md` (no read needed). Workflow procedures are in `./.claude/skills/<name>/SKILL.md`; Claude Code triggers each by its frontmatter `description` when relevant. Use the `Skill` tool to invoke explicitly when scenario clearly matches.
 
 ## Message Handling
 

@@ -52,6 +52,8 @@ class OutboundRouter:
         self._threads: dict[str, ConvThread] = {}
         # cs_msg_id → feishu_msg_id（edit 事件查映射）
         self._msg_id_map: dict[str, str] = {}
+        # conversation_id → CSAT 卡片 feishu message_id（点击 ⭐ 后本地 update_card 用）
+        self._csat_card_msg_ids: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # 状态查询
@@ -149,23 +151,36 @@ class OutboundRouter:
         return customer_facing_msg_id
 
     def on_csat_request(self, conversation_id: str) -> None:
-        """向本 bot 对应的客户群发送 CSAT 评分卡。"""
+        """向本 bot 对应的客户群发送 CSAT 评分卡（记住 msg_id 用于后续 update）。"""
         customer_chat = self.mapper.get_feishu_chat(conversation_id)
         if customer_chat is None and conversation_id.startswith("oc_"):
             customer_chat = conversation_id
-        if customer_chat:
-            self.sender.send_card(customer_chat, csat_card(conversation_id))
+        if not customer_chat:
+            return
+        msg_id = self.sender.send_card(customer_chat, csat_card(conversation_id))
+        if msg_id:
+            self._csat_card_msg_ids[conversation_id] = msg_id
+
+    def pop_csat_card_msg_id(self, conversation_id: str) -> str:
+        """取出并清除 csat 卡片 msg_id（防止重复点击的静默 noop）。"""
+        return self._csat_card_msg_ids.pop(conversation_id, "")
 
     # ------------------------------------------------------------------
-    # 编辑
+    # 编辑（V6+: reply-to-placeholder 语义）
     # ------------------------------------------------------------------
 
     def on_edit(self, conversation_id: str, cs_msg_id: str, text: str) -> bool:
-        """cs 侧 edit → update_message（查 msg_id 映射）。"""
+        """cs 侧 `__edit:<cs_msg_id>:<text>` → 在飞书端以 reply-to 挂到占位消息下。
+
+        飞书 `im.v1.message.patch` API 仅支持 card 消息；普通 text 消息不可原地
+        替换。V6+ 采用 reply-to-placeholder 方案：`__edit:` 映射为
+        `im.v1.message.reply`，把答复挂在占位消息下方（客户视角"稍等…" + 展开
+        完整答复两层，保持上下文连续）。
+        """
         feishu_msg_id = self._msg_id_map.get(cs_msg_id)
         if not feishu_msg_id:
             return False
-        return bool(self.sender.update_message(feishu_msg_id, text))
+        return bool(self.sender.reply_in_thread(feishu_msg_id, text))
 
     # ------------------------------------------------------------------
     # 卡片生命周期（squad 监管可选）

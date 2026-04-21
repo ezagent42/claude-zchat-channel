@@ -4,17 +4,18 @@ Timer 1：takeover 超时
   订阅 mode_changed：to=="takeover" → 启动 timer；to!="takeover" → 取消
   到期：emit sla_breach + emit /release command
 
-Timer 2：求助等待（Phase 10）
-  订阅 on_ws_message：检测 __side: 消息中的 @operator/@人工/@admin pattern
-    → 启动 help_wait timer（独立于 takeover timer）
-  订阅 on_ws_message：检测到同 channel 内 operator 的 side 回复 → 取消 timer
-  到期：emit help_timeout event（agent 通过 IRC sys 收到，按 soul.md 发安抚消息）
+Timer 2：求助等待
+  订阅 on_ws_message：检测 __side: 消息中的人工求助 marker
+    → emit help_requested event + 启动 help_wait timer（独立于 takeover timer）
+  订阅 on_ws_message：检测同 channel 内 bridge-relayed 的 side 回复 → 取消 timer
+  到期：emit help_timeout event（带原求助文本）。
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any, Awaitable, Callable
 
 from channel_server.plugin import BasePlugin
@@ -23,11 +24,32 @@ from zchat_protocol import irc_encoding
 log = logging.getLogger(__name__)
 
 
-# 求助 pattern — 在 __side: 内容中出现任一即视为 agent 求助
-HELP_MENTION_PATTERNS = ("@operator", "@人工", "@admin", "@客服")
+# 求助标记 — 在 __side: 内容中出现任一即视为 agent 申请人工介入。
+# 这些是 agent 模板里约定的 trigger 文本，不是协议字段。
+HELP_REQUEST_MARKERS = ("@operator", "@人工", "@admin", "@客服")
 
-# operator 源标识（source 字段包含任一即认为是 operator 回应）
-OPERATOR_SOURCE_MARKERS = ("operator", "ou_")  # 飞书 open_id 以 ou_ 开头
+# Bridge / 服务源 IRC nick — source 字段含任一即视为"人类经由 bridge 中继"，
+# 用于在 help_requested 等待期间识别"人工已响应"，取消 timer。
+HUMAN_RELAY_SOURCE_MARKERS = ("cs-bot",)
+
+
+# 匹配 "@" 紧跟的**第一个** token（到空白为止）
+_FIRST_AT_RE = re.compile(r"@\S+")
+
+
+def _first_at_is_help_marker(text: str) -> bool:
+    """True 仅当 text 第一个 @-mention 是 HELP_REQUEST_MARKERS 之一。
+
+    避免 false positive：agent 之间互相 quote marker（如 deep 在 side 里
+    说"@yaosh-fast-001 ... 建议走 @operator 流程"）不应触发求助。
+    """
+    if not text:
+        return False
+    m = _FIRST_AT_RE.search(text)
+    if not m:
+        return False
+    first_at = m.group(0)
+    return any(first_at.startswith(marker) for marker in HELP_REQUEST_MARKERS)
 
 
 class SlaPlugin(BasePlugin):
@@ -110,17 +132,17 @@ class SlaPlugin(BasePlugin):
             log.exception("[sla] emit_command release failed for channel %r", channel)
 
     # ------------------------------------------------------------------
-    # Timer 2: 求助等待（agent 发 __side:@operator → 启动 timer）
+    # Timer 2: 求助等待（agent 在 side 消息里写 HELP_REQUEST_MARKERS → 启动 timer）
     # ------------------------------------------------------------------
 
     async def on_ws_message(self, msg: dict) -> None:
         """检测 side 消息：
-        - 含 @operator/@人工/@admin → agent 求助 → 启动 help timer
-        - source 看起来是 operator → 取消 help timer（已响应）
+        - 含 HELP_REQUEST_MARKERS → agent 申请人工 → emit help_requested + 启动 help timer
+        - source 是 bridge 中继（cs-bot 等）→ 视作人工已响应 → 取消 help timer
         """
         content = msg.get("content") or ""
         channel = msg.get("channel") or ""
-        source = (msg.get("source") or "").lower()
+        source = msg.get("source") or ""
         if not channel or not content:
             return
 
@@ -129,18 +151,30 @@ class SlaPlugin(BasePlugin):
             return
         text = parsed.get("text") or ""
 
-        if self._looks_like_operator(source):
-            # operator 回应 → 取消 help timer（如果有）
+        if self._is_human_relay(source.lower()):
+            # bridge 转发的 side（人工通过 squad thread 写的建议）→ 取消 help timer
             self._cancel_help_timer(channel)
             return
 
-        if any(marker in text for marker in HELP_MENTION_PATTERNS):
-            # agent 发起求助
-            await self._start_help_timer(channel)
+        if _first_at_is_help_marker(text):
+            # agent 发起求助：emit 立即通知 + 启动 timer
+            try:
+                await self._emit_event(
+                    "help_requested",
+                    channel,
+                    {
+                        "channel": channel,
+                        "text": text,
+                        "requesting_source": source,
+                    },
+                )
+            except Exception:
+                log.exception("[sla] emit help_requested failed for %r", channel)
+            await self._start_help_timer(channel, text)
 
-    async def _start_help_timer(self, channel: str) -> None:
+    async def _start_help_timer(self, channel: str, request_text: str = "") -> None:
         self._cancel_help_timer(channel)
-        task = asyncio.create_task(self._help_timer_task(channel))
+        task = asyncio.create_task(self._help_timer_task(channel, request_text))
         self._help_timers[channel] = task
         log.info("[sla] channel %r: help wait timer started (%ss)", channel, self._help_timeout_seconds)
 
@@ -149,8 +183,8 @@ class SlaPlugin(BasePlugin):
         if task is not None and not task.done():
             task.cancel()
 
-    async def _help_timer_task(self, channel: str) -> None:
-        """求助超时 → emit help_timeout event。"""
+    async def _help_timer_task(self, channel: str, request_text: str) -> None:
+        """求助超时 → emit help_timeout event（payload 带原求助文本）。"""
         try:
             await asyncio.sleep(self._help_timeout_seconds)
         except asyncio.CancelledError:
@@ -164,16 +198,17 @@ class SlaPlugin(BasePlugin):
                 channel,
                 {
                     "channel": channel,
-                    "reason": "operator_no_response",
+                    "reason": "no_human_response",
                     "timeout_seconds": self._help_timeout_seconds,
+                    "text": request_text,
                 },
             )
         except Exception:
             log.exception("[sla] emit help_timeout failed for channel %r", channel)
 
     @staticmethod
-    def _looks_like_operator(source: str) -> bool:
-        """source 是否为 operator（基于约定）。"""
+    def _is_human_relay(source: str) -> bool:
+        """source 是否是 bridge 服务源（人工通过 bridge 转发回来的 side）。"""
         if not source:
             return False
-        return any(m in source for m in OPERATOR_SOURCE_MARKERS)
+        return any(m in source for m in HUMAN_RELAY_SOURCE_MARKERS)

@@ -13,6 +13,28 @@ from .routing import RoutingTable
 log = logging.getLogger(__name__)
 
 
+# IRC PRIVMSG 单条硬上限 512 字节（含协议头）；给 payload 留 ~200 字节文本空间
+_IRC_SYS_TEXT_BYTES_LIMIT = 200
+_IRC_SYS_TEXT_FIELDS = ("text", "content", "message")
+
+
+def _slim_for_irc(data: dict) -> dict:
+    """返回 data 的浅 copy，其中长文本字段按 UTF-8 字节截断，避免 IRC 超长。"""
+    if not data:
+        return {}
+    out = dict(data)
+    for key in _IRC_SYS_TEXT_FIELDS:
+        v = out.get(key)
+        if not isinstance(v, str):
+            continue
+        encoded = v.encode("utf-8")
+        if len(encoded) <= _IRC_SYS_TEXT_BYTES_LIMIT:
+            continue
+        clipped = encoded[:_IRC_SYS_TEXT_BYTES_LIMIT].decode("utf-8", errors="ignore")
+        out[key] = clipped + "…"
+    return out
+
+
 class Router:
     """核心路由。
 
@@ -45,6 +67,10 @@ class Router:
         elif msg_type == ws_messages.WSType.EVENT:
             # 让 plugin 订阅
             await self._registry.broadcast_event(msg)
+            # 转发给其它 bridge（supervise 场景需要：customer bridge emit chat_info
+            # → squad bridge 接收并缓存 chat_name）。sender bridge 会收到自己的
+            # event 但按 own/supervised 检查过滤。
+            await self._ws.broadcast(msg)
         # REGISTER 在 ws_server 层处理
 
     async def _handle_message(self, msg: dict) -> None:
@@ -93,23 +119,39 @@ class Router:
             mid = msg.get("message_id") or str(uuid.uuid4())
             encoded = irc_encoding.encode_msg(mid, content)
         else:
-            # 已有前缀（比如 operator 在 side thread 的消息可能被 bridge 加了 __side:）
+            # 已有前缀（bridge 转发的 thread reply 已自带 __side: 等）
             encoded = content
 
         # Mode 决定是否 @ prefix
         if mode in ("auto", "copilot"):
             entry = self._routing.entry_agent(channel)
-            if entry:
-                try:
-                    self._irc.privmsg(irc_channel, f"@{entry} {encoded}")
-                    log.info("[router] → IRC %s: @%s %s", irc_channel, entry, encoded[:60])
-                except Exception:
-                    log.exception("[router] irc privmsg failed")
-            else:
+            if not entry:
                 log.warning(
-                    "[router] channel %r has no entry_agent; message not delivered to any agent",
+                    "[router] channel %r has no entry_agent; emit help_requested",
                     channel,
                 )
+                await self.emit_event(channel, "help_requested",
+                                       {"reason": "no_entry_agent"})
+                return
+
+            # 熔断：entry agent 不在 IRC channel 里 → emit help_requested 而非空 @
+            # 只在 NAMES 缓存已 populated（非空）且 entry 不在的情况下熔断；
+            # 空缓存 = 启动期还没收到 NAMES reply，fail open（允许 @，避免假阳性）。
+            members = self._irc.names(irc_channel) if hasattr(self._irc, "names") else None
+            if members and entry not in members:
+                log.warning(
+                    "[router] channel %r entry %r not in IRC NAMES; emit help_requested",
+                    channel, entry,
+                )
+                await self.emit_event(channel, "help_requested",
+                                       {"reason": "entry_offline", "entry": entry})
+                return
+
+            try:
+                self._irc.privmsg(irc_channel, f"@{entry} {encoded}")
+                log.info("[router] → IRC %s: @%s %s", irc_channel, entry, encoded[:60])
+            except Exception:
+                log.exception("[router] irc privmsg failed")
         else:
             # takeover: 不 @，消息直接到 IRC channel（agent 不会收到）
             try:
@@ -180,13 +222,17 @@ class Router:
         await self._ws.broadcast(msg)
         await self._registry.broadcast_event(msg)
 
-        # IRC sys 消息通知 channel 内的 agent
+        # IRC sys 消息通知 channel 内的 agent。
+        # IRC PRIVMSG 512 字节硬上限：agent 不需要完整 data.text（原消息它已收到），
+        # 只需要 event + channel + 关键 meta。所以给 IRC 路径发**瘦身版 payload**：
+        # 截断 text/content/message 字段到 ~200 bytes。WS 路径已发 full data。
         if channel:
             try:
+                irc_data = _slim_for_irc(data or {})
                 payload = irc_encoding.make_sys_payload(
                     nick="cs-bot",
                     sys_type=event,
-                    body=data or {},
+                    body=irc_data,
                 )
                 irc_channel = channel if channel.startswith("#") else f"#{channel}"
                 self._irc.privmsg(irc_channel, irc_encoding.encode_sys(payload))

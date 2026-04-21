@@ -27,6 +27,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# zchat infrastructure source labels — these are NOT agent nicks; exclude from
+# "first agent reply" detection. Anything else with a `<word>-<word>` shape
+# is treated as an agent.
+_INFRASTRUCTURE_SOURCES = frozenset({"cs-bot", "internal", "card_action"})
+
+
 class AuditPlugin(BasePlugin):
     """运行时统计 + JSON 持久化。"""
 
@@ -194,9 +200,8 @@ class AuditPlugin(BasePlugin):
 
     @staticmethod
     def _looks_like_agent(source: str) -> bool:
-        """简单判断 source 是否像 agent nick（包含 '-' 且以字母数字结尾）。"""
+        """source 是否符合 agent nick 约定（scoped name = `<user>-<short>` 形式，
+        且不在 zchat 已知 infrastructure sources 内）。"""
         if not source or "-" not in source:
             return False
-        # 约定 agent nick 格式是 username-name，包含 -
-        # 不 match cs-bot / internal / customer 等系统源
-        return source not in ("cs-bot", "internal", "customer", "card_action", "operator", "admin")
+        return source not in _INFRASTRUCTURE_SOURCES

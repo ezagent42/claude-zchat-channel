@@ -43,6 +43,8 @@ class IRCConnection:
         self._connection: Any = None
         self._thread: threading.Thread | None = None
         self._joined_channels: set[str] = set()
+        # channel name (含 '#') → set[nick]，由 NAMES/JOIN/PART/QUIT/NICK 事件维护
+        self._members: dict[str, set[str]] = {}
 
     def connect(self) -> None:
         """建立 IRC 连接并启动 reactor 线程。"""
@@ -82,9 +84,54 @@ class IRCConnection:
                 except Exception as e:
                     print(f"[irc_connection] on_privmsg error: {e}", file=sys.stderr)
 
+        # ---- NAMES/JOIN/PART/QUIT/NICK 维护 _members 供 router NAMES 熔断 ----
+        def _on_namreply(_conn, event):
+            args = event.arguments
+            if len(args) < 3:
+                return
+            ch = args[1]
+            for raw in args[2].split():
+                clean = raw.lstrip("@+%&~")
+                if clean:
+                    self._members.setdefault(ch, set()).add(clean)
+
+        def _on_join(_conn, event):
+            ch = event.target
+            joiner = event.source.nick if event.source else None
+            if ch and joiner:
+                self._members.setdefault(ch, set()).add(joiner)
+
+        def _on_part(_conn, event):
+            ch = event.target
+            leaver = event.source.nick if event.source else None
+            if ch and leaver and ch in self._members:
+                self._members[ch].discard(leaver)
+
+        def _on_quit(_conn, event):
+            leaver = event.source.nick if event.source else None
+            if not leaver:
+                return
+            for nicks in self._members.values():
+                nicks.discard(leaver)
+
+        def _on_nick(_conn, event):
+            old = event.source.nick if event.source else None
+            new = event.target if event.target else None
+            if not (old and new):
+                return
+            for nicks in self._members.values():
+                if old in nicks:
+                    nicks.discard(old)
+                    nicks.add(new)
+
         self._connection.add_global_handler("welcome", _on_welcome)
         self._connection.add_global_handler("pubmsg", _on_pubmsg)
         self._connection.add_global_handler("privmsg", _on_privmsg)
+        self._connection.add_global_handler("namreply", _on_namreply)
+        self._connection.add_global_handler("join", _on_join)
+        self._connection.add_global_handler("part", _on_part)
+        self._connection.add_global_handler("quit", _on_quit)
+        self._connection.add_global_handler("nick", _on_nick)
 
         self._thread = threading.Thread(target=self._reactor.process_forever, daemon=True)
         self._thread.start()
@@ -113,6 +160,11 @@ class IRCConnection:
     def joined_channels(self) -> set[str]:
         """当前已 JOIN 的 channel 集合（含 '#' 前缀）。"""
         return set(self._joined_channels)
+
+    def names(self, channel: str) -> set[str]:
+        """返回 channel 当前已知成员 nick 集合（含 '#' 前缀；空集合 = 未 JOIN 或缓存未填）。"""
+        ch = channel if channel.startswith("#") else f"#{channel}"
+        return set(self._members.get(ch, set()))
 
     def privmsg(self, target: str, content: str) -> None:
         """发送 PRIVMSG。content 已是 IRC 编码（含前缀）或 @-addressed 文本。"""

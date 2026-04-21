@@ -4,18 +4,16 @@ zchat 系统唯一的运行时动态持久化。CLI 写入；CS 加载 + watch r
 
 V6 schema：
 
-    [bots."customer"]
+    [bots."<bot_name>"]
     app_id = "cli_..."
-    credential_file = "credentials/customer.json"
+    credential_file = "credentials/<bot_name>.json"
     default_agent_template = "fast-agent"
     lazy_create_enabled = true
 
     [channels."conv-001"]
-    bot = "customer"                  # 引用 [bots] name
+    bot = "<bot_name>"                # 引用 [bots] name
     external_chat_id = "oc_..."
-    entry_agent = "yaosh-fast-001"
-    [channels."conv-001".agents]
-    fast-001 = "yaosh-fast-001"
+    entry_agent = "yaosh-fast-001"    # router @ 谁；roster 由 IRC NAMES 反映
 """
 
 from __future__ import annotations
@@ -46,18 +44,12 @@ class ChannelRoute:
     bot: str | None = None                              # 引用 [bots] name
     external_chat_id: str | None = None                 # bridge 用（CS 不解析）
     entry_agent: str | None = None                      # router @ 谁（copilot 模式）
-    agents: dict[str, str] = field(default_factory=dict)  # role → nick
 
 
 @dataclass
 class RoutingTable:
     channels: dict[str, ChannelRoute] = field(default_factory=dict)
     bots: dict[str, Bot] = field(default_factory=dict)
-
-    def channel_agents(self, channel_id: str) -> list[str]:
-        """返回某 channel 的所有 agent nick 列表。"""
-        ch = self.channels.get(channel_id)
-        return list(ch.agents.values()) if ch else []
 
     def entry_agent(self, channel_id: str) -> str | None:
         """返回 channel 的入口 agent nick（copilot 模式下被 @ 的唯一 agent）。"""
@@ -112,7 +104,6 @@ def load(path: str | Path) -> RoutingTable:
             bot=ch_data.get("bot"),
             external_chat_id=ch_data.get("external_chat_id"),
             entry_agent=ch_data.get("entry_agent"),
-            agents=dict(ch_data.get("agents") or {}),
         )
         channels[normalized] = route
 

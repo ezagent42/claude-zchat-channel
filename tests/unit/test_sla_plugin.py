@@ -170,6 +170,32 @@ async def test_side_admin_mention_also_triggers(emit_event, emit_command):
 
 
 @pytest.mark.asyncio
+async def test_agent_to_agent_side_with_quoted_operator_does_not_trigger(
+    emit_event, emit_command
+):
+    """deep 在 side 里建议 fast 走 @operator 流程（agent-to-agent）—— 不应触发求助。
+
+    回归 2026-04-21 false-positive：首个 @-mention 是其它 agent nick 而非 help marker
+    时，sla 不该启 help timer。
+    """
+    plugin = SlaPlugin(
+        emit_event=emit_event, emit_command=emit_command,
+        timeout_seconds=9999, help_timeout_seconds=9999,
+    )
+    msg = {
+        "type": "message",
+        "channel": "#c",
+        "source": "yaosh-deep-001",
+        "content": (
+            "__side:@yaosh-fast-001 查不到订单 #123，建议走 @operator 流程。"
+            "edit_of=abc 的占位由你接管。"
+        ),
+    }
+    await plugin.on_ws_message(msg)
+    assert "#c" not in plugin._help_timers
+
+
+@pytest.mark.asyncio
 async def test_non_side_msg_ignored_for_help(emit_event, emit_command):
     plugin = SlaPlugin(
         emit_event=emit_event, emit_command=emit_command,
@@ -185,7 +211,7 @@ async def test_non_side_msg_ignored_for_help(emit_event, emit_command):
 
 
 @pytest.mark.asyncio
-async def test_operator_side_cancels_help_timer(emit_event, emit_command):
+async def test_human_relay_side_cancels_help_timer(emit_event, emit_command):
     plugin = SlaPlugin(
         emit_event=emit_event, emit_command=emit_command,
         timeout_seconds=9999, help_timeout_seconds=9999,
@@ -198,10 +224,10 @@ async def test_operator_side_cancels_help_timer(emit_event, emit_command):
     })
     assert "#c" in plugin._help_timers
 
-    # operator 回应（source 包含 operator）
+    # 人工通过 bridge 中继回应（source = cs-bot）
     await plugin.on_ws_message({
         "channel": "#c",
-        "source": "operator_小李",
+        "source": "cs-bot",
         "content": "__side:好的我来处理",
     })
     # yield 给 event loop
@@ -230,7 +256,8 @@ async def test_help_timer_expiry_emits_help_timeout(emit_event, emit_command):
     assert len(help_calls) == 1
     _, channel, data = help_calls[0][0]
     assert channel == "#c"
-    assert data["reason"] == "operator_no_response"
+    assert data["reason"] == "no_human_response"
+    assert data["text"] == "@operator 求助"
 
 
 @pytest.mark.asyncio

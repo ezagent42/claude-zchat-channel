@@ -184,15 +184,22 @@ async def test_card_action_sends_csat_to_bridge() -> None:
     mock_client.connected = True
     bridge._bridge_client = mock_client
 
-    payload = {"action": {"value": {"score": "3", "conv_id": "conv_42"}}}
+    # bridge needs sender + outbound stubs for thank-you card
+    bridge.sender = MagicMock()
+    bridge.outbound = MagicMock()
+    bridge.outbound.pop_csat_card_msg_id.return_value = ""
+
+    payload = {"action": {"value": {"score": "3", "conv_id": "conv_42"}}, "card_msg_id": ""}
     bridge._on_card_action(payload)
 
     mock_client.send.assert_called_once()
     sent = mock_client.send.call_args[0][0]
-    # V4：统一 type=message，channel=conv_id，content 含 __csat_score 编码
-    assert sent["type"] == "message"
+    # V6+: CSAT 走 event 通道（不污染 message/IRC 路径）
+    assert sent["type"] == "event"
+    assert sent["event"] == "csat_score"
     assert sent["channel"] == "conv_42"
-    assert "__csat_score:3" in sent["content"]
+    assert sent["data"]["score"] == 3
+    assert sent["data"]["source"] == "customer"
 
 
 # ------------------------------------------------------------------ #

@@ -106,6 +106,12 @@ class FeishuBridge:
         # 已连接的 conversation（避免重复 connect）
         self._known_conversations: set[str] = set()
 
+        # 已发送 chat_info 事件的 chat_id（lazy 拉一次，避免重复 API 调用）
+        self._chat_info_emitted: set[str] = set()
+
+        # 监管 bridge 接收的 channel_id → chat_name（来自 customer bridge 的 chat_info event）
+        self._supervised_chat_names: dict[str, str] = {}
+
         # 消息去重（防止飞书延迟重投导致重复处理）
         # 用 deque + set 组合：deque 保持插入顺序并限制容量，set 提供 O(1) 查找
         self._processed_msg_ids: set[str] = set()
@@ -211,6 +217,19 @@ class FeishuBridge:
         if not event or not event.message:
             return
 
+        # 自发回环过滤：本 bot 自己发出的消息不应再回经入站事件转回 CS
+        # （飞书有时会把 bot 自己 send 的 card / message 也作为 message_receive 事件投回）
+        sender_app_id = (
+            event.sender.sender_id.app_id
+            if event.sender and event.sender.sender_id
+               and getattr(event.sender.sender_id, "app_id", None)
+            else ""
+        )
+        if sender_app_id and sender_app_id == self.config.feishu.app_id:
+            log.debug("[%s] ignore self-sent message (app_id=%s)",
+                      self._bot_name, sender_app_id)
+            return
+
         msg = event.message
 
         # 消息去重：飞书可能延迟重投同一事件
@@ -234,6 +253,11 @@ class FeishuBridge:
             log.debug("Ignoring message from unmapped chat_id=%s", chat_id)
             return
         channel_id = channel_id.lstrip("#")
+
+        # 首次见此 chat_id → 拉群名 + emit chat_info 事件（监管 bridge 用来给卡片标题命名）
+        if chat_id and chat_id not in self._chat_info_emitted:
+            self._chat_info_emitted.add(chat_id)
+            self._emit_chat_info(channel_id, chat_id)
 
         msg_type = msg.message_type or "text"
         try:
@@ -293,6 +317,32 @@ class FeishuBridge:
                 asyncio.run(self._lazy_create_channel_and_agent(chat_id))
 
         log.info("Bot added to group %s (bot=%s)", chat_id, self._bot_name)
+
+    def _emit_chat_info(self, channel_id: str, chat_id: str) -> None:
+        """拉飞书群信息 → 经 channel-server 广播 chat_info event。
+
+        监管 bridge 订阅此事件后会缓存 channel_id → chat_name，渲染卡片 title 用。
+        失败静默（不阻塞消息转发链）。
+        """
+        try:
+            info = self.sender.get_chat_info(chat_id)
+            if not info:
+                return
+            chat_name = info.get("name") or ""
+            if not chat_name:
+                return
+            self._bridge_client.send(
+                ws_messages.build_event(
+                    channel=channel_id,
+                    event="chat_info",
+                    data={"chat_name": chat_name, "chat_id": chat_id},
+                )
+            )
+            log.info("[%s] chat_info emitted: channel=%s chat_name=%s",
+                     self._bot_name, channel_id, chat_name)
+        except Exception:
+            log.exception("[%s] _emit_chat_info failed for chat_id=%s",
+                          self._bot_name, chat_id)
 
     def _on_user_added(self, data: P2ImChatMemberUserAddedV1) -> None:
         """用户加入群 — V6 bridge 不再追踪成员权限（spec §2.2 红线 3）。"""
@@ -388,6 +438,140 @@ class FeishuBridge:
     # 出站：channel-server → 飞书（V4 按 irc_encoding.parse kind 路由）
     # ------------------------------------------------------------------
 
+    def _handle_sys_event(self, conv_id: str, msg: dict) -> None:
+        """处理 channel-server 系统 event。
+
+        按 conv ownership 分发：
+        - own (本 bridge 是 conv 宿主): 响应 csat_request → 发评分卡片到客户群；
+          channel_resolved 可做 close 清理（当前 noop）
+        - supervisor (本 bridge 监管 conv): 响应 help_requested / help_timeout
+          / mode_changed / chat_info / channel_resolved → 更新 squad 卡片
+        """
+        event_name = msg.get("event") or ""
+        data = msg.get("data") or {}
+        conv_norm = (conv_id or "").lstrip("#")
+        own = {(c or "").lstrip("#") for c in self._external_to_channel.values()}
+        supervised = {(c or "").lstrip("#") for c in self._supervised_external_to_channel.values()}
+        is_own = conv_norm in own
+        is_supervisor = conv_norm in supervised and not is_own
+        if not (is_own or is_supervisor):
+            return
+
+        # ── own-bridge 专属事件（宿主才处理）─────────────────────────
+        if is_own:
+            if event_name == "csat_request":
+                log.info("[event] csat_request on own %s → send card", conv_norm)
+                self.outbound.on_csat_request(conv_norm)
+                return
+            # 其它 own-only 事件按需加；否则 own 不响应（supervisor 会接）
+            if event_name in ("help_requested", "help_timeout", "mode_changed", "chat_info"):
+                log.debug("[event] %s on own %s; supervisor handles", event_name, conv_norm)
+                return
+
+        # ── supervisor 事件 ─────────────────────────────────────────
+        if not is_supervisor:
+            return
+
+        if event_name == "help_requested":
+            self._supervise_help_requested(conv_norm, data)
+        elif event_name == "help_timeout":
+            self._supervise_help_timeout(conv_norm, data)
+        elif event_name == "mode_changed":
+            new_mode = (data or {}).get("to", "fast")
+            self.outbound.on_mode_changed(conv_norm, new_mode)
+            log.info("[event] mode_changed on supervised %s → %s; card refreshed",
+                     conv_norm, new_mode)
+        elif event_name in ("channel_resolved", "conversation_resolved"):
+            self.outbound.on_conversation_closed(
+                conv_norm, (data or {}).get("resolution")
+            )
+        elif event_name == "chat_info":
+            chat_name = (data or {}).get("chat_name") or ""
+            if chat_name:
+                self._supervised_chat_names[conv_norm] = chat_name
+                log.info("[event] cached chat_name for %s = %s", conv_norm, chat_name)
+                # 如果 thread/card 已经先建了，回填 metadata + 刷新卡片 title
+                thread = self.outbound.get_thread(conv_norm)
+                if thread and thread.card_msg_id:
+                    thread.metadata["chat_name"] = chat_name
+                    try:
+                        from feishu_bridge.feishu_renderer import build_conv_card
+                        refreshed = build_conv_card(
+                            conv_norm,
+                            thread.metadata,
+                            mode=thread.mode or "fast",
+                            state=thread.state or "active",
+                        )
+                        self.sender.update_card(thread.card_msg_id, refreshed)
+                    except Exception:
+                        log.exception("[event] refresh card on chat_info failed for %s", conv_norm)
+        else:
+            log.debug("[event] supervisor ignoring unknown event=%s", event_name)
+
+    def _supervise_help_requested(self, conv_id: str, data: dict) -> None:
+        """help_requested 事件 → update_card "🚨 求助中" + reply_in_thread `<at all>`。"""
+        thread = self.outbound.get_thread(conv_id)
+        if thread is None or not thread.card_msg_id:
+            log.warning("[event] help_requested: no card for conv=%s; cannot notify", conv_id)
+            return
+        text = data.get("text") or ""
+        chat_name = self._supervised_chat_names.get(conv_id, "")
+        # 1. update card 加紧急标记
+        try:
+            from feishu_bridge.feishu_renderer import build_conv_card
+            card = build_conv_card(
+                conv_id,
+                {
+                    "source": "supervision",
+                    "bot": self._bot_name,
+                    "alert": "🚨 求助中",
+                    "chat_name": chat_name,
+                },
+                mode="help",
+                state="help_requested",
+            )
+            self.sender.update_card(thread.card_msg_id, card)
+        except Exception:
+            log.exception("[event] update_card failed for %s", conv_id)
+        # 2. thread 内 @所有人
+        try:
+            mention = '<at user_id="all"></at>'
+            body = f'{mention} 🚨 {conv_id} 求助：{text}'
+            self.sender.reply_in_thread(thread.card_msg_id, body)
+        except Exception:
+            log.exception("[event] reply_in_thread @all failed for %s", conv_id)
+
+    def _supervise_help_timeout(self, conv_id: str, data: dict) -> None:
+        """help_timeout 事件 → 卡片改 "⚠️ 求助超时" + thread 提醒。"""
+        thread = self.outbound.get_thread(conv_id)
+        if thread is None or not thread.card_msg_id:
+            return
+        chat_name = self._supervised_chat_names.get(conv_id, "")
+        try:
+            from feishu_bridge.feishu_renderer import build_conv_card
+            card = build_conv_card(
+                conv_id,
+                {
+                    "source": "supervision",
+                    "bot": self._bot_name,
+                    "alert": "⚠️ 求助超时",
+                    "chat_name": chat_name,
+                },
+                mode="help",
+                state="help_timeout",
+            )
+            self.sender.update_card(thread.card_msg_id, card)
+        except Exception:
+            log.exception("[event] update_card timeout failed for %s", conv_id)
+        try:
+            text = data.get("text") or ""
+            self.sender.reply_in_thread(
+                thread.card_msg_id,
+                f'⚠️ {conv_id} 求助超时（180s 无响应）。原求助：{text}',
+            )
+        except Exception:
+            log.exception("[event] reply_in_thread timeout failed for %s", conv_id)
+
     def _handle_message_event(self, conv_id: str, msg: dict) -> None:
         """处理 message 事件 → 解析 content 的 kind → OutboundRouter 路由。
 
@@ -455,6 +639,7 @@ class FeishuBridge:
         "mode.changed": "_handle_mode_changed",
         "conversation.closed": "_handle_conv_closed",
         "csat_request": "_handle_csat_request",
+        "event": "_handle_sys_event",
     }
 
     def _on_bridge_event(self, msg: dict) -> None:
@@ -471,11 +656,15 @@ class FeishuBridge:
             supervised = {_norm(c) for c in self._supervised_external_to_channel.values()}
             conv_norm = _norm(conv_id)
             if conv_norm in supervised and conv_norm not in own:
-                # 他人 channel：本 bridge 作为 squad 监管，走镜像路径
+                # 他人 channel：本 bridge 作为监管者
                 if msg_type == "message":
+                    # 镜像路径：原文进 thread + 必要时建卡片
                     self._handle_supervised_message(conv_norm, msg)
+                elif msg_type == "event":
+                    # 系统事件：监管者按事件类型 update_card / @all 等
+                    self._handle_sys_event(conv_norm, msg)
                 else:
-                    log.debug("[recv] supervised non-message event ignored: %s", msg_type)
+                    log.debug("[recv] supervised non-message/event ignored: %s", msg_type)
                 return
             if conv_norm not in own:
                 log.debug("[recv] channel=%s not owned/supervised by bot=%s; skip",
@@ -520,9 +709,10 @@ class FeishuBridge:
             # 首次见此 conv，发 card 作 thread root
             try:
                 from feishu_bridge.feishu_renderer import build_conv_card
+                chat_name = self._supervised_chat_names.get(conv_id, "")
                 card = build_conv_card(
                     conv_id,
-                    {"source": "supervision", "bot": self._bot_name},
+                    {"source": "supervision", "bot": self._bot_name, "chat_name": chat_name},
                     mode="fast",
                     state="active",
                 )
@@ -536,6 +726,9 @@ class FeishuBridge:
                 supervising_chat_id=host_chat,
                 card_msg_id=card_msg_id,
                 state="active",
+                # 保存 chat_name 到 metadata：后续 mode_changed/help_requested/timeout
+                # 刷新卡片时沿用群名作 title，不必每次重查
+                metadata={"chat_name": chat_name} if chat_name else {},
             )
             self.outbound._threads[conv_id] = thread
             log.info("[supervise] card created for %s (msg_id=%s)", conv_id, card_msg_id)
@@ -597,19 +790,41 @@ class FeishuBridge:
             )
             return
 
-        # CSAT score handling
+        # CSAT score handling — 走 event 通道，不污染 message/IRC 路径
         score = value.get("score")
         if score is not None and conv_id is not None:
             if not self._bridge_client.connected:
                 log.warning("card action: bridge not connected")
                 return
+            try:
+                score_int = int(score)
+            except (TypeError, ValueError):
+                log.warning("[csat] invalid score value: %s", score)
+                return
             self._bridge_client.send(
-                ws_messages.build_message(
+                ws_messages.build_event(
                     channel=conv_id,
-                    source="customer",
-                    content=f"__csat_score:{int(score)}",
+                    event="csat_score",
+                    data={"score": score_int, "source": "customer"},
                 )
             )
+            # UI 反馈：recall 原 CSAT 卡 + 发新"感谢评价"卡
+            # （PATCH 对 card shape 大改，飞书部分客户端不刷新 UI；recall+resend 最可靠）
+            card_msg_id = self.outbound.pop_csat_card_msg_id(conv_id) or payload.get("card_msg_id") or ""
+            customer_chat = self.outbound.mapper.get_feishu_chat(conv_id)
+            if customer_chat:
+                try:
+                    from feishu_bridge.feishu_renderer import thank_you_card
+                    # 先发新卡（保持客户视觉连续），再撤回老卡
+                    self.sender.send_card(customer_chat, thank_you_card(score_int))
+                    if card_msg_id:
+                        self.sender.recall(card_msg_id)
+                    log.info("[csat] thank-you card sent + old CSAT recalled for %s (score=%d)",
+                             conv_id, score_int)
+                except Exception:
+                    log.exception("[csat] send thank-you / recall failed")
+            else:
+                log.warning("[csat] no customer_chat mapping for conv=%s", conv_id)
 
     # ------------------------------------------------------------------
     # 文件下载
@@ -668,7 +883,31 @@ class FeishuBridge:
                         tag = getattr(action_obj, "tag", "")
                         if not isinstance(value, dict):
                             value = vars(value) if hasattr(value, "__dict__") else {}
-                        self._on_card_action({"action": {"value": value, "tag": tag}})
+                        # 提取 open_message_id（CSAT 点击后 update_card 需要它）
+                        # Lark SDK 在不同版本里把它放在 event.context / event.message_id
+                        # / data.header 下；防御式尝试几种路径。
+                        card_msg_id = ""
+                        ctx = getattr(event, "context", None)
+                        if ctx is not None:
+                            card_msg_id = (
+                                getattr(ctx, "open_message_id", "")
+                                or getattr(ctx, "message_id", "")
+                                or ""
+                            )
+                            if not card_msg_id and hasattr(ctx, "__dict__"):
+                                card_msg_id = ctx.__dict__.get("open_message_id", "") or ""
+                        if not card_msg_id:
+                            card_msg_id = (
+                                getattr(event, "open_message_id", "")
+                                or getattr(event, "message_id", "")
+                                or ""
+                            )
+                        log.debug("[card_action] action=%s value=%s card_msg_id=%s",
+                                  tag, value, card_msg_id)
+                        self._on_card_action({
+                            "action": {"value": value, "tag": tag},
+                            "card_msg_id": card_msg_id,
+                        })
                         return
                 elif isinstance(event, dict):
                     action = event.get("action", {})
