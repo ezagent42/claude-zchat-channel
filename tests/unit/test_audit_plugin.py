@@ -12,7 +12,7 @@ from plugins.audit.plugin import AuditPlugin
 
 @pytest.fixture
 def audit(tmp_path) -> AuditPlugin:
-    return AuditPlugin(persist_path=tmp_path / "audit.json")
+    return AuditPlugin(config={"data_dir": str(tmp_path)})
 
 
 def test_handles_no_commands(audit):
@@ -111,13 +111,12 @@ def test_csat_mean_aggregate(audit):
 
 @pytest.mark.asyncio
 async def test_persistence_survives_reload(tmp_path):
-    p = tmp_path / "audit.json"
-    a = AuditPlugin(persist_path=p)
+    a = AuditPlugin(config={"data_dir": str(tmp_path)})
     await a.on_ws_event({"event": "mode_changed", "channel": "c1", "data": {"to": "takeover"}})
     await a.on_ws_message({"channel": "c1", "source": "customer", "content": "hi"})
 
-    # 重新加载
-    b = AuditPlugin(persist_path=p)
+    # 重新加载（同一 data_dir 读 state.json）
+    b = AuditPlugin(config={"data_dir": str(tmp_path)})
     status = b.query("status", {"channel": "c1"})
     assert status is not None
     assert status["state"] == "takeover"

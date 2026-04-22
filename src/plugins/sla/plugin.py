@@ -59,15 +59,20 @@ class SlaPlugin(BasePlugin):
 
     def __init__(
         self,
+        config: dict,
         emit_event: Callable[[str, str, dict], Awaitable[None]],
         emit_command: Callable[[str, str, dict], Awaitable[None]],
-        timeout_seconds: float = 180.0,
-        help_timeout_seconds: float | None = None,
     ) -> None:
+        """V7 config-driven signature.
+
+        config:
+          - takeover_timeout (default 180s): mode=takeover 后多久自动 /release
+          - help_timeout (default = takeover_timeout): @operator 求助后等多久 emit help_timeout
+        """
         self._emit_event = emit_event
         self._emit_command = emit_command
-        self._timeout_seconds = timeout_seconds
-        self._help_timeout_seconds = help_timeout_seconds or timeout_seconds
+        self._timeout_seconds = float(config.get("takeover_timeout", 180.0))
+        self._help_timeout_seconds = float(config.get("help_timeout") or self._timeout_seconds)
         self._timers: dict[str, asyncio.Task] = {}
         self._help_timers: dict[str, asyncio.Task] = {}
 

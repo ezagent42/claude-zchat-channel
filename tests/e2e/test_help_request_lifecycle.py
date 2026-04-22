@@ -29,8 +29,8 @@ async def test_operator_responds_in_time(tmp_path):
         pass
 
     sla = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 0.2},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=0.2,
     )
 
     # agent 求助
@@ -70,8 +70,8 @@ async def test_operator_no_response_emits_timeout(tmp_path):
         pass
 
     sla = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 0.05},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=0.05,
     )
 
     await sla.on_ws_message({
@@ -103,8 +103,8 @@ async def test_help_and_takeover_timers_independent(tmp_path):
         commands.append((cmd, channel))
 
     sla = SlaPlugin(
+        config={"takeover_timeout": 0.05, "help_timeout": 9999},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=0.05, help_timeout_seconds=9999,
     )
 
     # 触发 takeover timer

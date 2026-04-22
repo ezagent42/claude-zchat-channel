@@ -15,7 +15,7 @@ def emit_event():
 
 @pytest.fixture
 def plugin(emit_event):
-    return ResolvePlugin(emit_event=emit_event)
+    return ResolvePlugin(config={}, emit_event=emit_event)
 
 
 def test_handles_resolve_command(plugin):

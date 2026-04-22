@@ -33,9 +33,9 @@ async def test_csat_full_lifecycle(tmp_path):
         events.append(msg)
         await registry.broadcast_event(msg)
 
-    audit = AuditPlugin(persist_path=tmp_path / "audit.json")
-    resolve = ResolvePlugin(emit_event=emit_event)
-    csat = CsatPlugin(emit_event=emit_event, audit_plugin=audit)
+    audit = AuditPlugin(config={"data_dir": str(tmp_path)})
+    resolve = ResolvePlugin(config={}, emit_event=emit_event)
+    csat = CsatPlugin(config={}, emit_event=emit_event, audit=audit)
 
     registry.register(audit)
     registry.register(resolve)
@@ -70,9 +70,9 @@ async def test_csat_multiple_channels(tmp_path):
         msg = ws_messages.build_event(channel, event, data)
         await registry.broadcast_event(msg)
 
-    audit = AuditPlugin(persist_path=tmp_path / "audit.json")
-    resolve = ResolvePlugin(emit_event=emit_event)
-    csat = CsatPlugin(emit_event=emit_event, audit_plugin=audit)
+    audit = AuditPlugin(config={"data_dir": str(tmp_path)})
+    resolve = ResolvePlugin(config={}, emit_event=emit_event)
+    csat = CsatPlugin(config={}, emit_event=emit_event, audit=audit)
     registry.register(audit)
     registry.register(resolve)
     registry.register(csat)
