@@ -1,4 +1,9 @@
-# routing.toml — zchat channel-server V6 路由配置
+# routing.toml — zchat channel-server V7 路由配置
+#
+# V7（2026-04-22）plugin 架构：
+#   - plugin 由 channel_server.plugin_loader 在启动时 config-driven 自动发现和注册
+#   - plugin 配置分离到同目录下的 plugins.toml（可选；不提供则 plugin 用默认配置）
+#   - plugin state 默认落盘到 <project>/plugins/<name>/state.json
 #
 # 将此文件复制为 routing.toml（与 server.py 同目录），
 # 或通过环境变量 CS_ROUTING_CONFIG 指定路径，例如：
@@ -49,3 +54,19 @@ entry_agent = "yaosh-squad-0"
 
 # 注：V6 起 routing.toml 不存 channel→agents 列表；
 # 运行时 roster 由 IRC NAMES 反映，agent 通过 list_peers() MCP tool 查询。
+
+# ── 延伸阅读 ──────────────────────────────────────────────
+# 同目录下可建 plugins.toml 配置 plugin 行为，格式：
+#
+#   [plugins.audit]
+#   # data_dir = "./audit"   # 可选，不填走默认 <project>/plugins/audit/
+#
+#   [plugins.sla]
+#   takeover_timeout = 180
+#   help_timeout = 180
+#
+#   [plugins.activation]
+#   # enabled = false        # 显式禁用某 plugin
+#
+# 第三方 plugin 放在 ~/.zchat/plugins/<name>/plugin.py，loader 自动发现。
+# 详见 zchat 主库 docs/guide/007-plugin-guide.md。
