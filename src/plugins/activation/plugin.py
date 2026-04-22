@@ -34,10 +34,16 @@ class ActivationPlugin(BasePlugin):
 
     def __init__(
         self,
-        state_file: str | Path,
+        config: dict,
         emit_event: Callable[[str, str, dict], Awaitable[None]],
     ) -> None:
-        self._path = Path(state_file)
+        """V7 config-driven signature.
+
+        config:
+          - data_dir (optional): plugin 状态根目录。
+        """
+        data_dir = Path(config.get("data_dir") or ".")
+        self._path = data_dir / "state.json"
         self._emit_event = emit_event
         self._state = self._load()
 

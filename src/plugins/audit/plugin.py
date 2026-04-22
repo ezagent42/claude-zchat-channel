@@ -38,8 +38,16 @@ class AuditPlugin(BasePlugin):
 
     name = "audit"
 
-    def __init__(self, persist_path: str | Path) -> None:
-        self._path = Path(persist_path)
+    def __init__(self, config: dict, emit_event=None) -> None:
+        """V7 config-driven signature.
+
+        config:
+          - data_dir (optional): plugin 状态根目录。未填则由 loader 注入默认。
+
+        emit_event: 接收但不使用（audit 只订阅，不 emit）。保留以统一契约。
+        """
+        data_dir = Path(config.get("data_dir") or ".")
+        self._path = data_dir / "state.json"
         self._state = self._load()
 
     # ------------------------------------------------------------------

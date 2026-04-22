@@ -24,11 +24,19 @@ class CsatPlugin(BasePlugin):
 
     def __init__(
         self,
+        config: dict,
         emit_event: Callable[[str, str, dict], Awaitable[None]],
-        audit_plugin: Any = None,   # AuditPlugin 引用（懒耦合，可为 None）
+        *,
+        audit: Any = None,   # AuditPlugin 引用，loader 通过 signature-driven DI 注入
     ) -> None:
+        """V7 config-driven signature.
+
+        config: 当前无业务参数。
+        audit: kw-only，由 plugin_loader 按参数名自动从 registry.get_plugin("audit") 注入。
+               audit plugin 未启用时为 None，on_ws_event 里的 `if self._audit:` 分支已处理。
+        """
         self._emit_event = emit_event
-        self._audit = audit_plugin
+        self._audit = audit
 
     def handles_commands(self) -> list[str]:
         return []

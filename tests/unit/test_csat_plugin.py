@@ -23,7 +23,7 @@ def audit_mock():
 
 @pytest.fixture
 def csat(emit_event, audit_mock):
-    return CsatPlugin(emit_event=emit_event, audit_plugin=audit_mock)
+    return CsatPlugin(config={}, emit_event=emit_event, audit=audit_mock)
 
 
 def test_no_commands(csat):
@@ -94,7 +94,7 @@ async def test_non_csat_event_ignored(csat, emit_event, audit_mock):
 @pytest.mark.asyncio
 async def test_works_without_audit_plugin(emit_event):
     """audit_plugin=None 时也能 emit event。"""
-    csat = CsatPlugin(emit_event=emit_event, audit_plugin=None)
+    csat = CsatPlugin(config={}, emit_event=emit_event, audit=None)
     await csat.on_ws_event({
         "event": "csat_score",
         "channel": "conv-1",

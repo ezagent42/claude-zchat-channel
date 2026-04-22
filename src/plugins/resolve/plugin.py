@@ -21,8 +21,10 @@ class ResolvePlugin(BasePlugin):
 
     def __init__(
         self,
+        config: dict,
         emit_event: Callable[[str, str, dict], Awaitable[None]],
     ) -> None:
+        """V7 config-driven signature. config 为空也可用。"""
         self._emit_event = emit_event
 
     def handles_commands(self) -> list[str]:

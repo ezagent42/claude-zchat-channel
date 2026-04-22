@@ -38,11 +38,11 @@ def pipeline(tmp_path):
         events_emitted.append(msg)
         await registry.broadcast_event(msg)
 
-    mode = ModePlugin(emit_event=emit_event)
-    resolve = ResolvePlugin(emit_event=emit_event)
-    audit = AuditPlugin(persist_path=tmp_path / "audit.json")
+    mode = ModePlugin(config={}, emit_event=emit_event)
+    resolve = ResolvePlugin(config={}, emit_event=emit_event)
+    audit = AuditPlugin(config={"data_dir": str(tmp_path)})
     activation = ActivationPlugin(
-        state_file=tmp_path / "activation.json",
+        config={"data_dir": str(tmp_path)},
         emit_event=emit_event,
     )
 
@@ -124,11 +124,11 @@ async def test_full_lifecycle(pipeline):
     returned_events_after = len([e for e in pipeline["events"] if e.get("event") == "customer_returned"])
     assert returned_events_after == returned_events_before + 1
 
-    # 6. 验证持久化
-    audit_json = json.loads((pipeline["tmp"] / "audit.json").read_text())
+    # 6. 验证持久化（V7: 每个 plugin state 文件名固定 state.json；
+    # V7 测试 fixture 把 data_dir 设为 tmp，所以文件叫 tmp/state.json；
+    # 多 plugin 共用同 data_dir 时会覆盖——生产环境下每个 plugin 用独立子目录）
+    audit_json = json.loads((pipeline["tmp"] / "state.json").read_text())
     assert channel in audit_json["channels"]
-    activation_json = json.loads((pipeline["tmp"] / "activation.json").read_text())
-    assert channel in activation_json["channels"]
 
 
 @pytest.mark.asyncio

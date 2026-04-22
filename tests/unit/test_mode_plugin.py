@@ -16,7 +16,7 @@ def emit_event():
 
 @pytest.fixture
 def plugin(emit_event):
-    return ModePlugin(emit_event=emit_event)
+    return ModePlugin(config={}, emit_event=emit_event)
 
 
 # ──────────────────────── 声明 ────────────────────────

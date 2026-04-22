@@ -17,7 +17,7 @@ def emit_event():
 
 @pytest.fixture
 def act(tmp_path, emit_event):
-    return ActivationPlugin(state_file=tmp_path / "activation.json", emit_event=emit_event)
+    return ActivationPlugin(config={"data_dir": str(tmp_path)}, emit_event=emit_event)
 
 
 def test_no_commands(act):
@@ -65,11 +65,10 @@ async def test_no_return_event_if_not_dormant(act, emit_event):
 
 @pytest.mark.asyncio
 async def test_persistence(tmp_path, emit_event):
-    p = tmp_path / "state.json"
-    a = ActivationPlugin(state_file=p, emit_event=emit_event)
+    a = ActivationPlugin(config={"data_dir": str(tmp_path)}, emit_event=emit_event)
     await a.on_ws_event({"event": "channel_resolved", "channel": "c1", "data": {}})
 
-    b = ActivationPlugin(state_file=p, emit_event=emit_event)
+    b = ActivationPlugin(config={"data_dir": str(tmp_path)}, emit_event=emit_event)
     assert b.query("is_dormant", {"channel": "c1"}) is True
 
 

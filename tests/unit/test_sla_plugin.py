@@ -19,11 +19,15 @@ def emit_command():
     return AsyncMock()
 
 
-def make_plugin(emit_event, emit_command, timeout=0.05):
+def make_plugin(emit_event, emit_command, timeout=0.05, help_timeout=None):
+    """Helper: construct SlaPlugin with V7 config-driven signature."""
+    config = {"takeover_timeout": timeout}
+    if help_timeout is not None:
+        config["help_timeout"] = help_timeout
     return SlaPlugin(
+        config=config,
         emit_event=emit_event,
         emit_command=emit_command,
-        timeout_seconds=timeout,
     )
 
 
@@ -133,10 +137,9 @@ async def test_multiple_channels_independent_timers(emit_event, emit_command):
 @pytest.mark.asyncio
 async def test_side_operator_mention_starts_help_timer(emit_event, emit_command):
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 9999},
         emit_event=emit_event,
         emit_command=emit_command,
-        timeout_seconds=9999,
-        help_timeout_seconds=9999,
     )
     # agent 发 side 消息 @operator
     msg = {
@@ -155,8 +158,8 @@ async def test_side_operator_mention_starts_help_timer(emit_event, emit_command)
 @pytest.mark.asyncio
 async def test_side_admin_mention_also_triggers(emit_event, emit_command):
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 9999},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=9999,
     )
     msg = {
         "type": "message",
@@ -179,8 +182,8 @@ async def test_agent_to_agent_side_with_quoted_operator_does_not_trigger(
     时，sla 不该启 help timer。
     """
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 9999},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=9999,
     )
     msg = {
         "type": "message",
@@ -198,8 +201,8 @@ async def test_agent_to_agent_side_with_quoted_operator_does_not_trigger(
 @pytest.mark.asyncio
 async def test_non_side_msg_ignored_for_help(emit_event, emit_command):
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 9999},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=9999,
     )
     msg = {
         "channel": "#c",
@@ -213,8 +216,8 @@ async def test_non_side_msg_ignored_for_help(emit_event, emit_command):
 @pytest.mark.asyncio
 async def test_human_relay_side_cancels_help_timer(emit_event, emit_command):
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 9999},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=9999,
     )
     # agent 求助
     await plugin.on_ws_message({
@@ -239,8 +242,8 @@ async def test_human_relay_side_cancels_help_timer(emit_event, emit_command):
 @pytest.mark.asyncio
 async def test_help_timer_expiry_emits_help_timeout(emit_event, emit_command):
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 0.05},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=0.05,
     )
     await plugin.on_ws_message({
         "channel": "#c",
@@ -264,8 +267,8 @@ async def test_help_timer_expiry_emits_help_timeout(emit_event, emit_command):
 async def test_release_to_copilot_cancels_help_timer(emit_event, emit_command):
     """mode 切回 copilot 时，help timer 也应取消（防止泄漏）。"""
     plugin = SlaPlugin(
+        config={"takeover_timeout": 9999, "help_timeout": 9999},
         emit_event=emit_event, emit_command=emit_command,
-        timeout_seconds=9999, help_timeout_seconds=9999,
     )
     await plugin.on_ws_message({
         "channel": "#c",

@@ -4,22 +4,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from pathlib import Path
 
 from .irc_connection import IRCConnection
 from .plugin import PluginRegistry
+from .plugin_loader import load_plugins, load_plugins_toml
 from .routing import load as load_routing
 from .routing_watcher import watch_routing
 from .router import Router
 from .ws_server import WSServer
-
-# 官方插件
-from plugins.mode.plugin import ModePlugin
-from plugins.sla.plugin import SlaPlugin
-from plugins.resolve.plugin import ResolvePlugin
-from plugins.audit.plugin import AuditPlugin
-from plugins.activation.plugin import ActivationPlugin
-from plugins.csat.plugin import CsatPlugin
 
 
 def _env(name: str, default: str = "") -> str:
@@ -66,7 +58,18 @@ async def _main() -> None:
     # Router
     router = Router(routing=routing, registry=registry, irc_conn=irc_conn, ws_server=ws_server)
 
-    # ── 注册官方插件（V4-S2b）──────────────────────────────────────────
+    # ── 加载 plugin (V7 config-driven) ─────────────────────────────────
+    #
+    # 机制（见 channel_server.plugin_loader）:
+    #   1. 扫 builtin `plugins/` namespace package + 可选用户 `~/.zchat/plugins/`
+    #   2. 从 routing.toml 同目录读 plugins.toml，找 `[plugins.<name>]` section
+    #   3. Signature-driven DI: loader 按 __init__ kw 名注入 emit_event / emit_command
+    #      / 同 registry 内已注册的 peer plugin（如 csat 要 audit）
+    #   4. 未写配置的 plugin 仍会加载，走默认 data_dir `<project>/plugins/<name>/`
+    #   5. plugins.toml 里 `enabled = false` 可显式禁用
+    #
+    # V6→V7 去掉了 CS_DATA_DIR env var 兜底；plugin 数据路径统一由 plugins.toml
+    # data_dir 字段或默认推导。E2E 测试通过 fixture 注入 tmpdir + 构造 plugins.toml。
 
     async def emit_event(event: str, channel: str, data: dict) -> None:
         """plugin emit event 的统一出口 → router.emit_event。"""
@@ -78,19 +81,17 @@ async def _main() -> None:
         cmd_msg = _ws.build_message(channel, source="internal", content=f"/{cmd_name}")
         await router.forward_inbound_ws(cmd_msg)
 
-    registry.register(ModePlugin(emit_event=emit_event))
-    registry.register(SlaPlugin(emit_event=emit_event, emit_command=emit_command, timeout_seconds=180))
-    registry.register(ResolvePlugin(emit_event=emit_event))
-
-    # audit + activation 持久化路径（优先 env var，其次 routing.toml 同目录）
-    data_dir = Path(_env("CS_DATA_DIR") or Path(routing_path).parent)
-    audit_plugin = AuditPlugin(persist_path=data_dir / "audit.json")
-    registry.register(audit_plugin)
-    registry.register(ActivationPlugin(
-        state_file=data_dir / "activation-state.json",
-        emit_event=emit_event,
-    ))
-    registry.register(CsatPlugin(emit_event=emit_event, audit_plugin=audit_plugin))
+    plugins_toml = load_plugins_toml(routing_path)
+    registered = load_plugins(
+        registry=registry,
+        plugins_toml=plugins_toml,
+        routing_path=routing_path,
+        injections={
+            "emit_event": emit_event,
+            "emit_command": emit_command,
+        },
+    )
+    log.info("[boot] registered %d plugins: %s", len(registered), registered)
 
     # ──────────────────────────────────────────────────────────────────
 
