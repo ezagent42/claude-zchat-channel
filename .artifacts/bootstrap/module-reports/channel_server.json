@@ -5,12 +5,13 @@
     "src/channel_server/__main__.py",
     "src/channel_server/irc_connection.py",
     "src/channel_server/plugin.py",
+    "src/channel_server/plugin_loader.py",
     "src/channel_server/router.py",
     "src/channel_server/routing.py",
     "src/channel_server/routing_watcher.py",
     "src/channel_server/ws_server.py"
   ],
-  "description": "V4 核心路由引擎。纯基础设施层：routing.toml 加载/热更新 + IRC 长连接 + WebSocket bridge 接入 + Plugin 框架 + WS↔IRC 双向翻译。不含业务语义，所有业务扩展通过 plugin 挂载。进程入口是 __main__._main(),启动顺序: load_routing → PluginRegistry → WSServer → IRCConnection → Router → 注册 6 个官方 plugin → wire callbacks → auto-join channels → routing_watcher。",
+  "description": "V4 核心路由引擎。纯基础设施层：routing.toml 加载/热更新 + IRC 长连接 + WebSocket bridge 接入 + Plugin 框架 + WS↔IRC 双向翻译。不含业务语义，所有业务扩展通过 plugin 挂载。进程入口是 __main__._main(),启动顺序: load_routing → PluginRegistry → WSServer → IRCConnection → Router → plugin_loader.load_plugins(config-driven 自动发现+注册，V7 2026-04-22) → wire callbacks → auto-join channels → routing_watcher。",
   "key_classes_functions": [
     {"name": "IRCConnection", "file": "src/channel_server/irc_connection.py", "line": 20, "purpose": "IRC 客户端封装：连接管理 + pubmsg/privmsg 发送 + namreply/join/part/quit/nick 事件维护 _members 成员字典。独立 reactor 线程运行。"},
     {"name": "IRCConnection.send_sys", "file": "src/channel_server/irc_connection.py", "line": 175, "purpose": "发送 __zchat_sys: 系统消息（委托 zchat_protocol.irc_encoding）。"},

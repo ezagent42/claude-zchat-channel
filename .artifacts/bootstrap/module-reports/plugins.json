@@ -15,7 +15,7 @@
     "src/plugins/sla/__init__.py",
     "src/plugins/sla/plugin.py"
   ],
-  "description": "6 个官方业务 plugin,通过 BasePlugin 接口挂入 PluginRegistry。全部在 channel_server.__main__ 初始化时注册。plugins/ 是 namespace package(extend_path),支持与根目录 plugins/ 合并以便部署期第三方 plugin 扩展。业务语义集中在此层:mode(copilot/takeover)/resolve(结案)/sla(双 timer 守护)/audit(数据统计持久化)/activation(休眠+回访)/csat(评分卡片)。core 的 router 不感知这些事件名,只做分派。",
+  "description": "6 个官方业务 plugin,通过 BasePlugin 接口挂入 PluginRegistry。V7(2026-04-22)起,所有 plugin 由 channel_server.plugin_loader 在启动时 config-driven 自动发现和注册(扫 plugins/ namespace package + 用户目录 ~/.zchat/plugins/,从 plugins.toml [plugins.<name>] 读配置,signature-driven DI 注入 emit_event / peer plugin)。plugin __init__ 签名统一为 (config: dict, emit_event, **injections)。plugins/ 是 namespace package(extend_path),支持与根目录 plugins/ 合并以便部署期第三方 plugin 扩展。业务语义集中在此层:mode(copilot/takeover)/resolve(结案)/sla(双 timer 守护)/audit(数据统计持久化)/activation(休眠+回访)/csat(评分卡片)。core 的 router 不感知这些事件名,只做分派。",
   "key_classes_functions": [
     {"name": "ModePlugin", "file": "src/plugins/mode/plugin.py", "line": 14, "purpose": "channel mode 管理(copilot/takeover),命令:/hijack /release /copilot,emit mode_changed event(from/to/triggered_by/cmd)。query('get',{channel}) 返回当前 mode(默认 copilot)。"},
     {"name": "ResolvePlugin", "file": "src/plugins/resolve/plugin.py", "line": 17, "purpose": "/resolve 命令 → emit channel_resolved event(resolved_by)。无持久化。"},
