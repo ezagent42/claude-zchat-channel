@@ -78,7 +78,7 @@ async def _handle_browser_ws(bridge: VoiceBridge, ws, auth: dict) -> None:
         main_task = asyncio.create_task(bridge.run_session(session))
 
     # 两条 loop：浏览器上行音频 → session.mic_queue；session.speaker_queue → 下行
-    recv_task = asyncio.create_task(_pump_browser_to_mic(ws, session))
+    recv_task = asyncio.create_task(_pump_browser_to_mic(ws, session, bridge))
     send_task = asyncio.create_task(_pump_speaker_to_browser(ws, session))
 
     try:
@@ -93,13 +93,26 @@ async def _handle_browser_ws(bridge: VoiceBridge, ws, auth: dict) -> None:
         log.info("ws session closed: %s", session.id)
 
 
-async def _pump_browser_to_mic(ws, session: VoiceSession) -> None:
-    """从 WS 收 binary frame → session.mic_queue。"""
+async def _pump_browser_to_mic(ws, session: VoiceSession, bridge: VoiceBridge) -> None:
+    """从 WS 收 frame → 分派到 mic_queue（binary）或 control handler（text）。"""
+    import json as _json
     try:
         async for msg in ws:
             if isinstance(msg, (bytes, bytearray)):
                 await session.push_mic(bytes(msg))
-            # ignore text frames (control messages handled elsewhere later)
+                continue
+            # Text frame = JSON control message
+            try:
+                ctrl = _json.loads(msg)
+            except Exception:
+                continue
+            action = ctrl.get("action")
+            if action == "speech_start":
+                # Barge-in: customer started talking; stop TTS + notify CS
+                await bridge.handle_barge_in(session)
+            elif action == "speech_end":
+                await bridge.handle_speech_end(session)
+            # other actions reserved
     except Exception as e:
         log.debug("browser→mic pump ended: %s", e)
     finally:

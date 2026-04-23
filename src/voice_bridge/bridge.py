@@ -326,7 +326,11 @@ class VoiceBridge:
             buf.pop(first_key, None)
 
     async def _fanout_tts(self, sessions: list, text: str) -> None:
-        """合成一次 TTS，广播到 N 个 session 的 speaker_queue。"""
+        """合成一次 TTS，广播到 N 个 session 的 speaker_queue。
+
+        若某 session 在 barge-in 期间（speaker_muted=True），该 session
+        的 push_speaker 是 no-op，不会 block 别的 session。
+        """
         tts = self.make_tts()
         await tts.open()
         try:
@@ -336,6 +340,46 @@ class VoiceBridge:
                         await session.push_speaker(chunk.audio)
         finally:
             await tts.close()
+
+    # ------------------------------------------------------------------
+    # Phase 5: barge-in
+    # ------------------------------------------------------------------
+
+    async def handle_barge_in(self, session: VoiceSession) -> None:
+        """Customer started talking while agent was speaking — stop TTS + notify.
+
+        Actions:
+          1. Mute the session's speaker (new TTS chunks ignored)
+          2. Drain speaker_queue (pending buffered audio dropped)
+          3. Send `user_barge_in` event to CS; agent soul may listen (future).
+
+        Design note: doesn't cancel the global fanout task because other
+        sessions on the same channel (if any) should continue hearing the
+        reply. Per-session mute ensures this session stops.
+        """
+        if session.closed:
+            return
+        session.speaker_muted = True
+        dropped = session.drain_speaker()
+        log.info("[barge-in session=%s channel=%s] dropped %d queued audio chunks",
+                 session.id, session.channel, dropped)
+        if self._cs_client is not None:
+            await self._cs_client.send(ws_messages.build_event(
+                channel=session.channel,
+                event="user_barge_in",
+                data={
+                    "session_id": session.id,
+                    "customer": session.customer,
+                    "source": f"{self.SOURCE_PREFIX}{session.customer}",
+                },
+            ))
+
+    async def handle_speech_end(self, session: VoiceSession) -> None:
+        """Customer stopped talking — unmute speaker so new TTS plays again."""
+        if session.closed:
+            return
+        session.speaker_muted = False
+        log.info("[speech-end session=%s] speaker unmuted", session.id)
 
 
 async def _drain_mic(session: VoiceSession) -> AsyncIterator[bytes]:

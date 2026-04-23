@@ -27,6 +27,7 @@ class VoiceSession:
         mic_queue: 浏览器上传的音频 PCM chunks 入口
         speaker_queue: TTS 合成的音频 PCM chunks 出口（推给浏览器）
         closed: 是否已关闭（WS 断 / 超时）
+        speaker_muted: Phase 5 barge-in 期间 True，pump 跳过 send 给浏览器
     """
     id: str
     channel: str
@@ -35,6 +36,7 @@ class VoiceSession:
     mic_queue: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue)
     speaker_queue: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue)
     closed: bool = False
+    speaker_muted: bool = False
 
     @classmethod
     def new(cls, channel: str, customer: str) -> "VoiceSession":
@@ -53,9 +55,23 @@ class VoiceSession:
 
     async def push_speaker(self, audio: bytes) -> None:
         """TTS 合成的音频 → 推浏览器。"""
-        if self.closed:
+        if self.closed or self.speaker_muted:
             return
         await self.speaker_queue.put(audio)
+
+    def drain_speaker(self) -> int:
+        """Discard any buffered TTS audio that hasn't been sent to the browser yet.
+
+        Called when the customer starts talking (barge-in) — stop mid-sentence.
+        Returns number of dropped chunks (for logging / tests).
+        """
+        dropped = 0
+        while True:
+            try:
+                self.speaker_queue.get_nowait()
+                dropped += 1
+            except asyncio.QueueEmpty:
+                return dropped
 
     def close(self) -> None:
         """Mark closed + unblock any queue consumer waiting."""

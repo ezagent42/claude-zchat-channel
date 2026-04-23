@@ -114,15 +114,76 @@
     processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
     let frameBuffer = new Int16Array(0);
 
+    // VAD state for barge-in (Phase 5)
+    // 简单 RMS 能量阈值：超阈值 > HOLD_MS 视为开口；低阈值 > SILENCE_MS 视为停口
+    const VAD_RMS_THRESHOLD = 0.025;  // -32 dBFS 附近
+    const VAD_SPEECH_HOLD_MS = 120;   // 持续 120ms 超阈值才触发 speech_start
+    const VAD_SILENCE_HOLD_MS = 600;  // 持续 600ms 静音才触发 speech_end
+    let vadSpeechAccumMs = 0;
+    let vadSilenceAccumMs = 0;
+    let vadSpeaking = false;
+
+    function frameRMS(f32) {
+      let sum = 0;
+      for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
+      return Math.sqrt(sum / f32.length);
+    }
+
+    function vadUpdate(f32, durMs) {
+      const rms = frameRMS(f32);
+      const loud = rms > VAD_RMS_THRESHOLD;
+      if (loud) {
+        vadSpeechAccumMs += durMs;
+        vadSilenceAccumMs = 0;
+        if (!vadSpeaking && vadSpeechAccumMs >= VAD_SPEECH_HOLD_MS) {
+          vadSpeaking = true;
+          onSpeechStart();
+        }
+      } else {
+        vadSilenceAccumMs += durMs;
+        vadSpeechAccumMs = 0;
+        if (vadSpeaking && vadSilenceAccumMs >= VAD_SILENCE_HOLD_MS) {
+          vadSpeaking = false;
+          onSpeechEnd();
+        }
+      }
+    }
+
+    function onSpeechStart() {
+      log("VAD: speech_start");
+      setStatus("🎤 识别中...", "connected");
+      // 1. Cancel local TTS playback (instant; no server round-trip needed)
+      if (playbackCtx) {
+        try { playbackCtx.close(); } catch (e) {}
+        playbackCtx = null;
+        playbackScheduled = 0;
+      }
+      // 2. Tell server to stop TTS + notify agent
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: "speech_start" }));
+      }
+    }
+
+    function onSpeechEnd() {
+      log("VAD: speech_end");
+      setStatus("已接通，开始通话", "connected");
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: "speech_end" }));
+      }
+    }
+
     processor.onaudioprocess = (ev) => {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const input = ev.inputBuffer.getChannelData(0);  // float32 -1..1
+      const durMs = (input.length / SAMPLE_RATE) * 1000;
+      // VAD on raw float32
+      vadUpdate(input, durMs);
+      // Forward as PCM s16
       const pcm16 = new Int16Array(input.length);
       for (let i = 0; i < input.length; i++) {
         const v = Math.max(-1, Math.min(1, input[i]));
         pcm16[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
       }
-      // Accumulate + emit frames of FRAME_SAMPLES
       const combined = new Int16Array(frameBuffer.length + pcm16.length);
       combined.set(frameBuffer, 0);
       combined.set(pcm16, frameBuffer.length);
