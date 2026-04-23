@@ -26,12 +26,14 @@ def test_strip_msg_prefix_non_msg_prefix_unchanged():
     assert _strip_msg_prefix("plain text") == "plain text"
 
 
-def test_should_speak_filters_side_sys_edit_empty():
+def test_should_speak_filters_side_sys_empty_not_edit():
+    """Phase 4：__edit 由 _extract_speakable 特殊处理（streaming delta），不在顶层过滤。"""
     assert not _should_speak("")
     assert not _should_speak("   ")
     assert not _should_speak("__side:foo")
     assert not _should_speak("__zchat_sys:{\"type\":\"x\"}")
-    assert not _should_speak("__edit:abc")
+    # __edit no longer filtered here — it's handled in _extract_speakable
+    assert _should_speak("__edit:abc")
     assert _should_speak("__msg:uuid:normal")
     assert _should_speak("plain text without prefix")
 
@@ -98,13 +100,14 @@ async def test_on_cs_message_skips_own_source_echo():
 
 
 @pytest.mark.asyncio
-async def test_on_cs_message_filters_side_sys_edit():
+async def test_on_cs_message_filters_side_sys_empty():
+    """side / sys / 空白 始终过滤；__edit 在 Phase 4 改为 streaming 处理，
+    见 test_voice_bridge_streaming.py 的 on_cs_edit 测试."""
     bridge, _ = _make_bridge_with_fake_cs()
     session = await bridge.register_session("c1", "alice")
     for content in [
         "__side:operator message",
         "__zchat_sys:{\"event\":\"resolved\"}",
-        "__edit:some edit",
         "",
     ]:
         await bridge._on_cs_message(ws_messages.build_message(

@@ -31,29 +31,42 @@ log = logging.getLogger(__name__)
 
 
 # IRC-encoded content prefixes produced by agents (irc_encoding 内部约定):
-#   __msg:<uuid>:<text>   — 普通回复
+#   __msg:<uuid>:<text>   — 普通回复（整条）
+#   __edit:<uuid>:<text>  — Phase 4 streaming 支持：把"增量 append"识别为 delta
+#                           TTS 只念新增部分；"完全替换"则退回念整条
 #   __side:...            — 旁路消息（督导侧栏），不该念给客户
-#   __edit:...            — 编辑先前消息，Phase 4 可增量 TTS 中再处理
 #   __zchat_sys:...       — 系统事件 JSON，永远不念
-_MSG_PREFIX_RE = re.compile(r"^__msg:[^:]+:", re.DOTALL)
+_MSG_PREFIX_RE = re.compile(r"^__msg:([^:]+):", re.DOTALL)
+_EDIT_PREFIX_RE = re.compile(r"^__edit:([^:]+):", re.DOTALL)
+
+
+def _parse_msg(content: str) -> tuple[str, str] | None:
+    """返回 (msg_id, text) for __msg:<id>:<text>, 否则 None."""
+    m = _MSG_PREFIX_RE.match(content)
+    if not m:
+        return None
+    return m.group(1), content[m.end():]
+
+
+def _parse_edit(content: str) -> tuple[str, str] | None:
+    """返回 (target_msg_id, new_text) for __edit:<id>:<text>，否则 None."""
+    m = _EDIT_PREFIX_RE.match(content)
+    if not m:
+        return None
+    return m.group(1), content[m.end():]
 
 
 def _strip_msg_prefix(content: str) -> str:
-    """把 `__msg:<id>:<text>` 剥成 `<text>`；其他前缀原样返回。"""
-    match = _MSG_PREFIX_RE.match(content)
-    if match:
-        return content[match.end():]
-    return content
+    """Back-compat thin wrapper: 把 `__msg:<id>:<text>` 剥成 `<text>`。"""
+    parsed = _parse_msg(content)
+    return parsed[1] if parsed else content
 
 
 def _should_speak(content: str) -> bool:
-    """判断一条 IRC content 是否要 TTS。
+    """判断一条 IRC content 顶层是否可能需要 TTS.
 
-    排除：
-      - __side:   旁路
-      - __zchat_sys:  系统 JSON
-      - __edit:   Phase 4 再处理
-      - 空白
+    __edit: 由 VoiceBridge 特殊处理（Phase 4 streaming delta），不在此过滤；
+    但顶层 __side / __zchat_sys / 空白仍要过滤。
     """
     if not content or not content.strip():
         return False
@@ -61,9 +74,13 @@ def _should_speak(content: str) -> bool:
         return False
     if content.startswith("__zchat_sys:"):
         return False
-    if content.startswith("__edit:"):
-        return False
     return True
+
+
+# 每个 channel 记住最近 N 条 msg_id → 已发出 text 累积。
+# 目的：收到 __edit:<id>:<newer> 时，如果 newer 以 existing 为前缀，
+# 只 TTS 前缀增长的 delta。
+_MSG_BUFFER_PER_CHANNEL = 64
 
 
 class VoiceBridge:
@@ -86,6 +103,10 @@ class VoiceBridge:
         self._cs_client: CSClient | None = None
         # CS 连上后暂存活跃的 broadcast handler task（取消用）
         self._bg_tasks: set[asyncio.Task] = set()
+        # Phase 4 streaming：记住每 channel 最近 N 条 msg_id 的已播 text 累积。
+        # 结构：{channel: {msg_id: already_spoken_text}}
+        # 用于收到 __edit 时计算 prefix delta，只念新增部分。
+        self._msg_buffer: dict[str, dict[str, str]] = {}
 
     # ------------------------------------------------------------------
     # engine factories
@@ -216,11 +237,20 @@ class VoiceBridge:
     async def _on_cs_message(self, msg: dict) -> None:
         """CS broadcast handler: any bridge's message / event lands here.
 
-        我们只在 type=message 且 channel 上有活跃 session 时 TTS。
+        类型决定行为：
+          - type != "message" → 忽略（event / registered / etc.）
+          - __side / __zchat_sys / 空白 → 不念
+          - __msg:<id>:<text> → TTS 完整 text，记 buffer[channel][id]=text
+          - __edit:<id>:<new_text>:
+              - buffer 里有 id 且 new_text 以 buffer[id] 为前缀 → TTS delta
+                （这是 streaming 增量 append；Phase 4 主场景）
+              - buffer 有但 new_text 不是前缀（真正的替换）→ 念整条新 text
+              - buffer 没有（voice_bridge 刚起 / agent edit 更老消息）→ 念整条
+          - 其他裸 text（没前缀）→ TTS 整条
+
         过滤自己发出去再 bounce 回来的消息（source 以 SOURCE_PREFIX 开头）。
         """
-        mtype = msg.get("type")
-        if mtype != ws_messages.WSType.MESSAGE:
+        if msg.get("type") != ws_messages.WSType.MESSAGE:
             return
         channel = str(msg.get("channel", "")).lstrip("#")
         if not channel:
@@ -230,18 +260,70 @@ class VoiceBridge:
             return  # 没人在听
         source = str(msg.get("source", ""))
         if source.startswith(self.SOURCE_PREFIX):
-            # 自己发的回环（例如 CS broadcast 给所有 bridge 包括发送方）
-            return
+            return  # self-echo
         content = str(msg.get("content", ""))
         if not _should_speak(content):
             return
-        spoken = _strip_msg_prefix(content)
+
+        to_speak = self._extract_speakable(channel, content)
+        if not to_speak:
+            return
         log.info("[voice-out channel=%s sessions=%d] TTS: %s",
-                 channel, len(sessions), spoken[:80])
-        # TTS 单次合成 → 分发给该 channel 所有 session
-        task = asyncio.create_task(self._fanout_tts(sessions, spoken))
+                 channel, len(sessions), to_speak[:80])
+        task = asyncio.create_task(self._fanout_tts(sessions, to_speak))
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
+
+    def _extract_speakable(self, channel: str, content: str) -> str:
+        """Return the text to TTS (empty = nothing new to say).
+
+        Updates self._msg_buffer[channel] as a side-effect.
+        """
+        buf = self._msg_buffer.setdefault(channel, {})
+
+        parsed_edit = _parse_edit(content)
+        if parsed_edit is not None:
+            msg_id, new_text = parsed_edit
+            prior = buf.get(msg_id)
+            if prior is not None and new_text.startswith(prior):
+                # prefix-append (streaming) → 只念 delta
+                delta = new_text[len(prior):]
+                if not delta.strip():
+                    # 仅尾部标点/空白变化，跳过
+                    return ""
+                buf[msg_id] = new_text
+                self._trim_buffer(channel)
+                return delta
+            # 替换 / 未知 id → 念整条新 text（安全回退）
+            buf[msg_id] = new_text
+            self._trim_buffer(channel)
+            return new_text
+
+        parsed_msg = _parse_msg(content)
+        if parsed_msg is not None:
+            msg_id, text = parsed_msg
+            buf[msg_id] = text
+            self._trim_buffer(channel)
+            return text
+
+        # 没前缀的裸 text → 念整条
+        return content
+
+    def _trim_buffer(self, channel: str) -> None:
+        """Keep per-channel buffer bounded."""
+        buf = self._msg_buffer.get(channel)
+        if not buf:
+            return
+        overflow = len(buf) - _MSG_BUFFER_PER_CHANNEL
+        if overflow <= 0:
+            return
+        # dict 插入保留顺序（Python ≥3.7），drop 最旧的若干个
+        for _ in range(overflow + 8):
+            try:
+                first_key = next(iter(buf))
+            except StopIteration:
+                return
+            buf.pop(first_key, None)
 
     async def _fanout_tts(self, sessions: list, text: str) -> None:
         """合成一次 TTS，广播到 N 个 session 的 speaker_queue。"""
