@@ -115,29 +115,34 @@ def read_bot_config(
     routing_path: str | Path,
     bot: str,
 ) -> dict | None:
-    """读取 routing.toml [bots."<bot>"] 完整配置 + 解析 credential_file 内容。
+    """读取 routing.toml [bots."<bot>"] 配置 + 从 credential_file 读 app_id/app_secret。
+
+    V7：credential_file 是 app_id 的唯一来源。routing.toml 不再写 app_id。
 
     Returns:
         {
           "name": str, "app_id": str, "app_secret": str | None,
           "default_agent_template": str | None,
           "lazy_create_enabled": bool,
+          "credential_file": str | None,   # 原始相对路径（debug 用）
         }
         bot 不存在返回 None。
+        credential_file 缺失/不可读 → app_id 与 app_secret 均为 ""/None（调用方检查）。
     """
     data = _load_toml(routing_path)
     bots = data.get("bots") or {}
     if bot not in bots:
         return None
     b = bots[bot]
+    cred = b.get("credential_file")
     out: dict = {
         "name": bot,
-        "app_id": b.get("app_id", ""),
+        "app_id": "",
         "app_secret": None,
         "default_agent_template": b.get("default_agent_template"),
         "lazy_create_enabled": bool(b.get("lazy_create_enabled", False)),
+        "credential_file": cred,
     }
-    cred = b.get("credential_file")
     if cred:
         cred_path = Path(cred)
         if not cred_path.is_absolute():
@@ -145,10 +150,8 @@ def read_bot_config(
         if cred_path.exists():
             try:
                 cred_data = json.loads(cred_path.read_text(encoding="utf-8"))
+                out["app_id"] = cred_data.get("app_id", "")
                 out["app_secret"] = cred_data.get("app_secret")
-                # 凭证文件 app_id 优先（防止 routing 与 credential 不一致）
-                if cred_data.get("app_id"):
-                    out["app_id"] = cred_data["app_id"]
             except Exception:
                 pass
     return out

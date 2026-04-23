@@ -1,4 +1,4 @@
-"""feishu_bridge.routing_reader 测试（V6: bot 名 + bot_config 解析）。"""
+"""feishu_bridge.routing_reader 测试（V7: app_id 来自 credential 文件）。"""
 
 from __future__ import annotations
 
@@ -19,13 +19,12 @@ from feishu_bridge.routing_reader import (
 def toml_file(tmp_path: Path) -> Path:
     content = textwrap.dedent("""\
         [bots."customer"]
-        app_id = "cli_app1"
         credential_file = "credentials/customer.json"
         default_agent_template = "fast-agent"
         lazy_create_enabled = true
 
         [bots."admin"]
-        app_id = "cli_app2"
+        # admin 故意不写 credential_file，覆盖 read_bot_config 的 fallback 路径
 
         [channels."conv-a"]
         bot = "customer"
@@ -105,7 +104,7 @@ def test_no_import_of_channel_server():
                     f"routing_reader must not import channel_server (found: {alias.name})"
 
 
-# ---- read_bot_config (V6 新增) ----
+# ---- read_bot_config (V7: app_id 来自 credential 文件) ----
 
 def test_read_bot_config_with_credential(toml_file, tmp_path):
     cred_dir = tmp_path / "credentials"
@@ -116,18 +115,45 @@ def test_read_bot_config_with_credential(toml_file, tmp_path):
     cfg = read_bot_config(toml_file, "customer")
     assert cfg is not None
     assert cfg["name"] == "customer"
-    assert cfg["app_id"] == "cli_app1"
+    assert cfg["app_id"] == "cli_app1"        # 来自 credential 文件
     assert cfg["app_secret"] == "shh"
+    assert cfg["credential_file"] == "credentials/customer.json"
     assert cfg["default_agent_template"] == "fast-agent"
     assert cfg["lazy_create_enabled"] is True
 
 
-def test_read_bot_config_missing_credential_file(toml_file):
+def test_read_bot_config_missing_credential_file_field(toml_file):
+    """bot 没 credential_file 字段 → app_id/app_secret 全空。"""
     cfg = read_bot_config(toml_file, "admin")
-    # admin bot 在 toml 但没 credential_file
     assert cfg is not None
-    assert cfg["app_id"] == "cli_app2"
+    assert cfg["app_id"] == ""
     assert cfg["app_secret"] is None
+    assert cfg["credential_file"] is None
+
+
+def test_read_bot_config_credential_file_not_on_disk(toml_file):
+    """credential_file 字段存在但磁盘文件不存在 → app_id/app_secret 全空。"""
+    cfg = read_bot_config(toml_file, "customer")
+    # toml 里 customer 写了 credentials/customer.json，但 fixture 没建该文件
+    assert cfg is not None
+    assert cfg["app_id"] == ""
+    assert cfg["app_secret"] is None
+    assert cfg["credential_file"] == "credentials/customer.json"
+
+
+def test_read_bot_config_ignores_legacy_app_id_in_toml(tmp_path):
+    """V7+ : routing.toml 残留的 app_id 字段被忽略；只信 credential 文件。"""
+    cred_dir = tmp_path / "credentials"
+    cred_dir.mkdir()
+    (cred_dir / "x.json").write_text(json.dumps({"app_id": "from_cred", "app_secret": "s"}))
+    f = tmp_path / "routing.toml"
+    f.write_text(textwrap.dedent("""\
+        [bots."x"]
+        app_id = "stale_should_be_ignored"
+        credential_file = "credentials/x.json"
+    """))
+    cfg = read_bot_config(f, "x")
+    assert cfg["app_id"] == "from_cred"
 
 
 def test_read_bot_config_unknown_bot(toml_file):
@@ -140,21 +166,21 @@ def test_read_bot_config_unknown_bot(toml_file):
 def supervision_toml(tmp_path: Path) -> Path:
     content = textwrap.dedent("""\
         [bots."customer"]
-        app_id = "cli_c"
+        credential_file = "credentials/customer.json"
 
         [bots."sales"]
-        app_id = "cli_s"
+        credential_file = "credentials/sales.json"
 
         [bots."squad"]
-        app_id = "cli_sq"
+        credential_file = "credentials/squad.json"
         supervises = ["customer", "sales"]
 
         [bots."squad-lite"]
-        app_id = "cli_sl"
+        credential_file = "credentials/squad-lite.json"
         supervises = ["customer"]
 
         [bots."squad-empty"]
-        app_id = "cli_se"
+        credential_file = "credentials/squad-empty.json"
 
         [channels."conv-a"]
         bot = "customer"

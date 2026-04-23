@@ -1,4 +1,4 @@
-"""RoutingTable + load() 单元测试（V6）。"""
+"""RoutingTable + load() 单元测试（V7）。"""
 
 from __future__ import annotations
 import textwrap
@@ -9,15 +9,14 @@ import pytest
 from channel_server.routing import Bot, ChannelRoute, RoutingTable, load
 
 
-V6_TOML = textwrap.dedent("""\
+V7_TOML = textwrap.dedent("""\
     [bots."customer"]
-    app_id = "cli_app1"
     credential_file = "credentials/customer.json"
     default_agent_template = "fast-agent"
     lazy_create_enabled = true
 
     [bots."admin"]
-    app_id = "cli_app2"
+    credential_file = "credentials/admin.json"
     lazy_create_enabled = false
 
     [channels."ch-1"]
@@ -36,7 +35,7 @@ V6_TOML = textwrap.dedent("""\
 @pytest.fixture
 def basic_toml_file(tmp_path: Path) -> Path:
     f = tmp_path / "routing.toml"
-    f.write_text(V6_TOML, encoding="utf-8")
+    f.write_text(V7_TOML, encoding="utf-8")
     return f
 
 
@@ -122,7 +121,6 @@ def test_load_bots(basic_toml_file: Path):
     table = load(basic_toml_file)
     assert set(table.bots.keys()) == {"customer", "admin"}
     customer = table.bots["customer"]
-    assert customer.app_id == "cli_app1"
     assert customer.credential_file == "credentials/customer.json"
     assert customer.default_agent_template == "fast-agent"
     assert customer.lazy_create_enabled is True
@@ -131,7 +129,23 @@ def test_load_bots(basic_toml_file: Path):
 
 
 def test_bot_dataclass_defaults():
-    b = Bot(name="x", app_id="cli_x")
+    b = Bot(name="x")
     assert b.credential_file is None
     assert b.default_agent_template is None
     assert b.lazy_create_enabled is False
+
+
+def test_load_ignores_app_id_field(tmp_path: Path):
+    """V7+: 旧的 routing.toml 含 app_id 字段时，load 静默忽略（不进 Bot dataclass）。"""
+    legacy = textwrap.dedent("""\
+        [bots."legacy"]
+        app_id = "cli_legacy_should_be_ignored"
+        credential_file = "credentials/legacy.json"
+    """)
+    f = tmp_path / "routing.toml"
+    f.write_text(legacy, encoding="utf-8")
+    table = load(f)
+    assert "legacy" in table.bots
+    assert table.bots["legacy"].credential_file == "credentials/legacy.json"
+    # Bot dataclass 没有 app_id 字段
+    assert not hasattr(table.bots["legacy"], "app_id")
