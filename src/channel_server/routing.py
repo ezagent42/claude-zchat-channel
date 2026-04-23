@@ -1,14 +1,16 @@
-"""routing.toml 加载 + 查询 API（V6）。
+"""routing.toml 加载 + 查询 API（V7）。
 
 zchat 系统唯一的运行时动态持久化。CLI 写入；CS 加载 + watch reload；bridge 读取映射。
 
-V6 schema：
+V7 schema（V7 起 credential_file 是 app_id 的唯一来源；routing.toml 不再写 app_id）：
 
     [bots."<bot_name>"]
-    app_id = "cli_..."
-    credential_file = "credentials/<bot_name>.json"
+    credential_file = "credentials/<bot_name>.json"   # 必填（含 app_id + app_secret）
     default_agent_template = "fast-agent"
     lazy_create_enabled = true
+
+旧的 routing.toml 残留 `app_id` 字段会让 load() 抛 ValueError 而非静默忽略 —
+强制升级时手动清理（删 `app_id = ...` 一行）。
 
     [channels."conv-001"]
     bot = "<bot_name>"                # 引用 [bots] name
@@ -32,7 +34,6 @@ log = logging.getLogger(__name__)
 @dataclass
 class Bot:
     name: str
-    app_id: str
     credential_file: str | None = None
     default_agent_template: str | None = None
     lazy_create_enabled: bool = False
@@ -73,9 +74,15 @@ def load(path: str | Path) -> RoutingTable:
     for bot_name, b_data in (data.get("bots") or {}).items():
         if not isinstance(b_data, dict):
             continue
+        if "app_id" in b_data:
+            raise ValueError(
+                f"routing.toml [bots.\"{bot_name}\"] contains legacy 'app_id' field — "
+                f"V7+ moved app_id into credential_file "
+                f"({b_data.get('credential_file', f'credentials/{bot_name}.json')}). "
+                f"Delete the 'app_id = ...' line from routing.toml and re-run."
+            )
         bots[bot_name] = Bot(
             name=bot_name,
-            app_id=b_data.get("app_id", ""),
             credential_file=b_data.get("credential_file"),
             default_agent_template=b_data.get("default_agent_template"),
             lazy_create_enabled=bool(b_data.get("lazy_create_enabled", False)),

@@ -16,20 +16,19 @@
 # ── bots ─────────────────────────────────────────────────
 # 每个外部平台（如飞书）的 bot 身份 + 凭证。
 # `zchat up` 时每个 bot 起一个独立 feishu_bridge 进程。
+#
+# V7：app_id + app_secret 都从 credential_file 读，routing.toml 不再写 app_id。
 
 [bots.customer]
-app_id = "cli_xxxxxxxxxxxx"
-credential_file = "credentials/customer.json"
+credential_file = "credentials/customer.json"   # {"app_id":"cli_xxx","app_secret":"yyy"}
 default_agent_template = "fast-agent"
 lazy_create_enabled = true                      # bot_added 事件自动懒创建 channel + agent
 
 [bots.admin]
-app_id = "cli_yyyyyyyyyyyy"
 credential_file = "credentials/admin.json"
 default_agent_template = "admin-agent"
 
 [bots.squad]
-app_id = "cli_zzzzzzzzzzzz"
 credential_file = "credentials/squad.json"
 default_agent_template = "squad-agent"
 supervises = ["customer"]                       # squad 监管 customer bot 的所有 channel

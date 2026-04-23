@@ -47,13 +47,21 @@ def build_config_from_routing(
     if bot_cfg is None:
         raise ValueError(
             f"bot '{bot_name}' not found in {routing_path}; "
-            f"run `zchat bot add {bot_name} --app-id ... --app-secret ...`"
+            f"run `zchat bot add {bot_name} --credential <path>`"
+        )
+    cred_file = bot_cfg.get("credential_file")
+    if not cred_file:
+        raise ValueError(
+            f"bot '{bot_name}' has no credential_file in routing.toml; "
+            f"V7+ requires credential_file (containing app_id + app_secret)"
         )
     if not bot_cfg.get("app_id"):
-        raise ValueError(f"bot '{bot_name}' has no app_id")
+        raise ValueError(
+            f"bot '{bot_name}' credential_file '{cred_file}' missing or has no app_id"
+        )
     if not bot_cfg.get("app_secret"):
         raise ValueError(
-            f"bot '{bot_name}' has no app_secret (credential_file missing or unreadable)"
+            f"bot '{bot_name}' credential_file '{cred_file}' has no app_secret"
         )
 
     project_dir = Path(routing_path).parent
