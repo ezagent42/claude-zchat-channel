@@ -10,6 +10,7 @@ dependencies = [
     "websockets>=12.0",
     "lark-oapi>=1.4.0",
     "pyyaml>=6.0",
+    "pyjwt>=2.8.0",
 ]
 license = "MIT"
 authors = [{ name = "ezagent42" }]

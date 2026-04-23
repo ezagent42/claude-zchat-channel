@@ -20,6 +20,7 @@ import sys
 from voice_bridge.bridge import VoiceBridge
 from voice_bridge.config import VoiceBridgeConfig
 from voice_bridge.session import VoiceSession
+from voice_bridge.tokens import JWTValidator
 from voice_bridge.ws_server import BrowserWSServer
 
 log = logging.getLogger("voice_bridge")
@@ -134,6 +135,11 @@ async def _main(cfg: VoiceBridgeConfig) -> int:
     async def on_connect(ws, auth):
         await _handle_browser_ws(bridge, ws, auth)
 
+    jwt_validator = JWTValidator(secret=cfg.jwt_secret) if cfg.jwt_secret else None
+    if not cfg.dev_mode and jwt_validator is None:
+        log.error("production mode requires --jwt-secret (dev_mode=false)")
+        return 3
+
     server = BrowserWSServer(
         host=cfg.listen_host,
         port=cfg.listen_port,
@@ -141,6 +147,7 @@ async def _main(cfg: VoiceBridgeConfig) -> int:
         on_ws_connect=on_connect,
         dev_mode=cfg.dev_mode,
         bind_channel=cfg.bind_channel,
+        jwt_validator=jwt_validator,
     )
     await server.start()
 
