@@ -141,19 +141,19 @@ def test_read_bot_config_credential_file_not_on_disk(toml_file):
     assert cfg["credential_file"] == "credentials/customer.json"
 
 
-def test_read_bot_config_ignores_legacy_app_id_in_toml(tmp_path):
-    """V7+ : routing.toml 残留的 app_id 字段被忽略；只信 credential 文件。"""
+def test_read_bot_config_rejects_legacy_app_id_in_toml(tmp_path):
+    """V7+ : routing.toml 残留 app_id 字段 → 抛 ValueError（不静默忽略）。"""
     cred_dir = tmp_path / "credentials"
     cred_dir.mkdir()
     (cred_dir / "x.json").write_text(json.dumps({"app_id": "from_cred", "app_secret": "s"}))
     f = tmp_path / "routing.toml"
     f.write_text(textwrap.dedent("""\
         [bots."x"]
-        app_id = "stale_should_be_ignored"
+        app_id = "stale_must_be_removed"
         credential_file = "credentials/x.json"
     """))
-    cfg = read_bot_config(f, "x")
-    assert cfg["app_id"] == "from_cred"
+    with pytest.raises(ValueError, match="legacy 'app_id' field"):
+        read_bot_config(f, "x")
 
 
 def test_read_bot_config_unknown_bot(toml_file):

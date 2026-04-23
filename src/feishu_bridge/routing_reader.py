@@ -118,6 +118,7 @@ def read_bot_config(
     """读取 routing.toml [bots."<bot>"] 配置 + 从 credential_file 读 app_id/app_secret。
 
     V7：credential_file 是 app_id 的唯一来源。routing.toml 不再写 app_id。
+    旧 routing.toml 残留 'app_id' 字段会抛 ValueError（强制升级清理）。
 
     Returns:
         {
@@ -134,6 +135,13 @@ def read_bot_config(
     if bot not in bots:
         return None
     b = bots[bot]
+    if "app_id" in b:
+        raise ValueError(
+            f"routing.toml [bots.\"{bot}\"] contains legacy 'app_id' field — "
+            f"V7+ moved app_id into credential_file "
+            f"({b.get('credential_file', f'credentials/{bot}.json')}). "
+            f"Delete the 'app_id = ...' line from routing.toml and re-run."
+        )
     cred = b.get("credential_file")
     out: dict = {
         "name": bot,

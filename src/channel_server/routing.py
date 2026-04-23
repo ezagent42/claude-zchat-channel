@@ -9,6 +9,9 @@ V7 schema（V7 起 credential_file 是 app_id 的唯一来源；routing.toml 不
     default_agent_template = "fast-agent"
     lazy_create_enabled = true
 
+旧的 routing.toml 残留 `app_id` 字段会让 load() 抛 ValueError 而非静默忽略 —
+强制升级时手动清理（删 `app_id = ...` 一行）。
+
     [channels."conv-001"]
     bot = "<bot_name>"                # 引用 [bots] name
     external_chat_id = "oc_..."
@@ -71,6 +74,13 @@ def load(path: str | Path) -> RoutingTable:
     for bot_name, b_data in (data.get("bots") or {}).items():
         if not isinstance(b_data, dict):
             continue
+        if "app_id" in b_data:
+            raise ValueError(
+                f"routing.toml [bots.\"{bot_name}\"] contains legacy 'app_id' field — "
+                f"V7+ moved app_id into credential_file "
+                f"({b_data.get('credential_file', f'credentials/{bot_name}.json')}). "
+                f"Delete the 'app_id = ...' line from routing.toml and re-run."
+            )
         bots[bot_name] = Bot(
             name=bot_name,
             credential_file=b_data.get("credential_file"),

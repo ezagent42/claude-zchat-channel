@@ -135,17 +135,32 @@ def test_bot_dataclass_defaults():
     assert b.lazy_create_enabled is False
 
 
-def test_load_ignores_app_id_field(tmp_path: Path):
-    """V7+: 旧的 routing.toml 含 app_id 字段时，load 静默忽略（不进 Bot dataclass）。"""
+def test_load_rejects_legacy_app_id_field(tmp_path: Path):
+    """V7+: 旧 routing.toml 残留 app_id 字段 → 抛 ValueError，强制用户清理（不静默忽略）。"""
     legacy = textwrap.dedent("""\
         [bots."legacy"]
-        app_id = "cli_legacy_should_be_ignored"
+        app_id = "cli_legacy_must_be_removed"
         credential_file = "credentials/legacy.json"
     """)
     f = tmp_path / "routing.toml"
     f.write_text(legacy, encoding="utf-8")
-    table = load(f)
-    assert "legacy" in table.bots
-    assert table.bots["legacy"].credential_file == "credentials/legacy.json"
-    # Bot dataclass 没有 app_id 字段
-    assert not hasattr(table.bots["legacy"], "app_id")
+    with pytest.raises(ValueError, match="legacy 'app_id' field"):
+        load(f)
+
+
+def test_load_rejects_app_id_even_without_credential_file(tmp_path: Path):
+    """app_id 字段单独存在（连 credential_file 都没有）也要抛错，错误信息提示默认路径。"""
+    legacy = textwrap.dedent("""\
+        [bots."solo"]
+        app_id = "cli_solo"
+    """)
+    f = tmp_path / "routing.toml"
+    f.write_text(legacy, encoding="utf-8")
+    with pytest.raises(ValueError, match=r"credentials/solo\.json"):
+        load(f)
+
+
+def test_bot_instance_has_no_app_id_attr():
+    """Bot dataclass 没有 app_id 字段（V7 删字段）。"""
+    b = Bot(name="x")
+    assert not hasattr(b, "app_id")
