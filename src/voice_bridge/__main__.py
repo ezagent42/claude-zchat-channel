@@ -74,12 +74,7 @@ async def _handle_browser_ws(bridge: VoiceBridge, ws, auth: dict) -> None:
     if bridge.config.loopback:
         main_task = asyncio.create_task(bridge.run_loopback_session(session))
     else:
-        # Phase 2+ 会在这里启动 "mic → CS → broadcast → speaker" loop；
-        # Phase 1 loopback 模式之外会抛异常直到 Phase 2 实现
-        await ws.send('{"action":"error","message":"Phase 2 not yet wired"}')
-        await ws.close(1011, "Phase 2 NYI")
-        await bridge.drop_session(session.id)
-        return
+        main_task = asyncio.create_task(bridge.run_session(session))
 
     # 两条 loop：浏览器上行音频 → session.mic_queue；session.speaker_queue → 下行
     recv_task = asyncio.create_task(_pump_browser_to_mic(ws, session))
@@ -126,6 +121,16 @@ async def _pump_speaker_to_browser(ws, session: VoiceSession) -> None:
 async def _main(cfg: VoiceBridgeConfig) -> int:
     bridge = VoiceBridge(cfg)
 
+    # L1：在启动 web server 前先连 CS（若失败 voice_bridge 拒启动，
+    # 避免浏览器连上才发现 CS 没通）
+    if not cfg.loopback:
+        try:
+            await bridge.connect_cs()
+        except Exception as e:
+            log.error("failed to connect CS (%s): %s", cfg.cs_ws_url, e)
+            log.error("hint: make sure channel_server is running, or use --loopback for L0")
+            return 2
+
     async def on_connect(ws, auth):
         await _handle_browser_ws(bridge, ws, auth)
 
@@ -160,6 +165,8 @@ async def _main(cfg: VoiceBridgeConfig) -> int:
 
     await stop_event.wait()
     await server.stop()
+    if not cfg.loopback:
+        await bridge.disconnect_cs()
     return 0
 
 
