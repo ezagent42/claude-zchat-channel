@@ -103,8 +103,16 @@
   }
 
   async function startCapture() {
+    // 不开 echoCancellation / noiseSuppression：有些浏览器会把人声当
+    // 回声/噪声压掉（幅度降到 ±30），ASR 识别失败。Volcengine server 侧
+    // 自带 VAD 和降噪，这里只要原始音频。
     mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, sampleRate: SAMPLE_RATE },
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        sampleRate: SAMPLE_RATE,
+      },
     });
     // 有些浏览器（尤其 Firefox/Safari）不接受 AudioContext({sampleRate:16000})
     // 而会用系统默认 48000Hz。ASR 期待 16kHz，如果发 48k 会识别失败。
@@ -196,12 +204,32 @@
       }
     }
 
+    // 诊断：每 2 秒汇报一次麦实际 peak / RMS（让用户知道音频有没有进来）
+    let peakBucket = 0;
+    let rmsSqBucket = 0;
+    let samplesBucket = 0;
+    let lastPeakLog = performance.now();
+
     processor.onaudioprocess = (ev) => {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const rawInput = ev.inputBuffer.getChannelData(0);  // float32 -1..1 @ actualRate
       // 下采样到 16kHz
       const input = downsample(rawInput, downsampleFactor);
       const durMs = (input.length / SAMPLE_RATE) * 1000;
+      // 监控 peak / RMS（基于原始 float32）
+      for (let i = 0; i < rawInput.length; i++) {
+        const a = Math.abs(rawInput[i]);
+        if (a > peakBucket) peakBucket = a;
+        rmsSqBucket += rawInput[i] * rawInput[i];
+      }
+      samplesBucket += rawInput.length;
+      const now = performance.now();
+      if (now - lastPeakLog > 2000 && samplesBucket > 0) {
+        const rms = Math.sqrt(rmsSqBucket / samplesBucket);
+        log(`mic level: peak=${peakBucket.toFixed(4)} rms=${rms.toFixed(5)} (正常说话 peak>0.1, rms>0.02)`);
+        peakBucket = 0; rmsSqBucket = 0; samplesBucket = 0;
+        lastPeakLog = now;
+      }
       // VAD on downsampled float32
       vadUpdate(input, durMs);
       // Forward as PCM s16 @ 16kHz
