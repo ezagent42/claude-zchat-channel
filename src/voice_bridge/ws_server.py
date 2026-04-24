@@ -120,7 +120,8 @@ class BrowserWSServer:
             return None
 
         parsed = urllib.parse.urlsplit(request.path)
-        url_path = parsed.path
+        # 宽容：URL 复制带前后空格/%20 也能落到根路径
+        url_path = parsed.path.strip().rstrip("/") or "/"
         if url_path in ("/", "/call"):
             return self._serve_static("call.html")
         if url_path.startswith("/static/"):
