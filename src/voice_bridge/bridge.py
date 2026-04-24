@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import re
 from typing import AsyncIterator
 
@@ -206,6 +207,9 @@ class VoiceBridge:
         一个 session 生命周期内持有一个 ASR engine 实例。
         TTS 的触发不在本函数（由 CS broadcast 驱动，跨 session 共享），
         所以 TTS engine 不在这里创建。
+
+        Phase C：ASR final 送出后立即 TTS 一段 filler（"嗯，让我看一下"），
+        盖住 agent 1-2s 思考 + 真答复 TTS 的空白时段，提升 phone-feel。
         """
         if self._cs_client is None:
             raise RuntimeError(
@@ -231,8 +235,40 @@ class VoiceBridge:
                     content=text,
                 )
                 await self._cs_client.send(msg)
+                # Path C: 立即起一段 filler，让客户在 agent 思考时不感觉冷场
+                if self.config.filler_enabled and not session.speaker_muted:
+                    task = asyncio.create_task(self._play_filler(session))
+                    self._bg_tasks.add(task)
+                    task.add_done_callback(self._bg_tasks.discard)
         finally:
             await asr.close()
+
+    async def _play_filler(self, session: VoiceSession) -> None:
+        """Path C：随机选一句 filler TTS 推到 session.speaker_queue。
+
+        若 session 已有未播完的 audio buffer（说明上一条 agent 答复还在排队），
+        跳过 filler 防叠加。
+        若 session 在过程中被 mute（barge-in），中途停止。
+        """
+        if session.closed or session.speaker_muted:
+            return
+        if not session.speaker_queue.empty():
+            # 已有 audio 待播 → 不发 filler 避免堆积
+            return
+        phrases = self.config.filler_phrases or []
+        if not phrases:
+            return
+        text = random.choice(phrases)
+        log.debug("[filler session=%s] %s", session.id, text)
+        tts = self.make_tts()
+        await tts.open()
+        try:
+            async for chunk in tts.synthesize(text):
+                if session.closed or session.speaker_muted:
+                    break
+                await session.push_speaker(chunk.audio)
+        finally:
+            await tts.close()
 
     async def _on_cs_message(self, msg: dict) -> None:
         """CS broadcast handler: any bridge's message / event lands here.

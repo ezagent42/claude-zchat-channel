@@ -41,6 +41,18 @@ class VoiceBridgeConfig:
     loopback: bool = False           # L0：跳过 CS，ASR→TTS 直回
     bind_channel: str = ""           # 固定绑死一个 channel（dev mode）；为空则靠 token 解
 
+    # --- Path C filler（降低 phone-feel 感知延迟） ---
+    # ASR final 出来后立即 TTS 一段填充语，覆盖 agent 思考 + 真答复 TTS 的
+    # 1-2 秒空白。客户感知"对方在听 + 在思考"，比纯沉默好。
+    filler_enabled: bool = True
+    filler_phrases: list[str] = field(default_factory=lambda: [
+        "嗯",
+        "好的",
+        "稍等一下",
+        "嗯，让我看一下",
+        "好，我帮您查一下",
+    ])
+
     @classmethod
     def from_env(cls) -> "VoiceBridgeConfig":
         """从环境变量构造（用于 python -m voice_bridge 默认值）。"""
