@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shlex
 import subprocess
@@ -259,41 +258,6 @@ def register_tools(server: Server, state: dict) -> None:
                 },
             ),
             Tool(
-                name="voice_issue_link",
-                description=(
-                    "Issue a short-lived signed URL for a voice call on a channel.\n\n"
-                    "Use when a customer wants to escalate from text chat to voice "
-                    "(e.g. 'can we talk instead'). Post the returned URL back to the "
-                    "channel; customer clicks it, browser opens voice portal, "
-                    "voice_bridge ASR/TTS bridges to same IRC channel.\n\n"
-                    "Parameters:\n"
-                    "- channel (required): IRC channel, with or without '#'\n"
-                    "- customer_id (optional): customer identity tag; defaults to anon-<hex>\n"
-                    "- ttl_seconds (optional): default 180 (3 min); clamp 30-900\n\n"
-                    "Requires env VOICE_JWT_SECRET + VOICE_PORTAL_URL; if either missing, "
-                    "returns {\"error\": \"voice not configured\"}.\n\n"
-                    "Returns JSON with {url, expires_at}."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "channel": {
-                            "type": "string",
-                            "description": "Target channel name (e.g. 'conv-001' or '#conv-001')",
-                        },
-                        "customer_id": {
-                            "type": "string",
-                            "description": "Customer identity; defaults to anon-<hex>",
-                        },
-                        "ttl_seconds": {
-                            "type": "number",
-                            "description": "Link validity window (default 180, clamp 30-900)",
-                        },
-                    },
-                    "required": ["channel"],
-                },
-            ),
-            Tool(
                 name="run_zchat_cli",
                 description=(
                     "Execute a zchat CLI command and return stdout/stderr.\n\n"
@@ -351,8 +315,6 @@ def register_tools(server: Server, state: dict) -> None:
             return await _handle_run_zchat_cli(arguments)
         if name == "list_peers":
             return await _handle_list_peers(state.get("members") or {}, arguments)
-        if name == "voice_issue_link":
-            return await _handle_voice_issue_link(arguments)
         raise ValueError(f"Unknown tool: {name}")
 
 
@@ -440,52 +402,6 @@ async def _handle_run_zchat_cli(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="error: 'zchat' executable not found in PATH")]
     except Exception as e:
         return [TextContent(type="text", text=f"error: {e}")]
-
-
-async def _handle_voice_issue_link(arguments: dict) -> list[TextContent]:
-    """Issue a short-lived signed URL for voice-portal.
-
-    Reads VOICE_JWT_SECRET + VOICE_PORTAL_URL from env.
-    If either missing, returns a descriptive error (not exception).
-    """
-    secret = os.environ.get("VOICE_JWT_SECRET", "")
-    portal = os.environ.get("VOICE_PORTAL_URL", "")
-    if not secret or not portal:
-        return [TextContent(type="text", text=json.dumps({
-            "error": "voice not configured",
-            "missing": [k for k, v in {"VOICE_JWT_SECRET": secret, "VOICE_PORTAL_URL": portal}.items() if not v],
-        }))]
-
-    channel = str(arguments.get("channel", "")).strip().lstrip("#")
-    if not channel:
-        return [TextContent(type="text", text=json.dumps({"error": "channel required"}))]
-    customer = str(arguments.get("customer_id", "")).strip()
-    if not customer:
-        # 匿名客户
-        customer = f"anon-{uuid.uuid4().hex[:8]}"
-    ttl = int(arguments.get("ttl_seconds") or 180)
-    ttl = max(30, min(900, ttl))
-
-    # 延迟 import：避免 agent_mcp 冷启动时即加载 jwt 模块（大多数 agent 用不到）
-    try:
-        from voice_bridge.tokens import issue_token
-    except Exception as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"voice_bridge.tokens import failed: {e}",
-        }))]
-
-    try:
-        token = issue_token(channel=channel, customer=customer, secret=secret, ttl_seconds=ttl)
-    except Exception as e:
-        return [TextContent(type="text", text=json.dumps({"error": f"issue failed: {e}"}))]
-
-    sep = "&" if "?" in portal else "?"
-    url = f"{portal}{sep}t={token}"
-    return [TextContent(type="text", text=json.dumps({
-        "url": url,
-        "expires_at": int(time.time()) + ttl,
-        "customer": customer,
-    }))]
 
 
 # ------------------------------------------------------------------ #
