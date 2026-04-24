@@ -3,13 +3,12 @@
 触发：channel 内任何来源（agent reply / 督导 / 客户消息）以 "/call" 开头
         即触发本 plugin
 处理：
-  1. 从 env 读 VOICE_JWT_SECRET（必填，缺则降级为不签直发 portal_url）
-  2. 从 plugin config 读 portal_url（必填）
-  3. 推断 customer：如果 source 以 "voice-" 开头，说明已是语音用户（不应再
+  1. 从 credentials JSON 读 jwt_secret + portal_url
+  2. 推断 customer：如果 source 以 "voice-" 开头，说明已是语音用户（不应再
      发邀请，emit warning 直接返回）；否则取 source 后缀作 customer_id；
      仍空则匿名 anon-<8hex>
-  4. 调 voice_bridge.tokens.issue_token 签 JWT
-  5. emit_event("voice_url_issued", channel, {url, expires_at, customer})
+  3. 调 voice_bridge.tokens.issue_token 签 JWT
+  4. emit_event("voice_url_issued", channel, {message=url, expires_at, customer})
      →  bridges 各自决定如何呈现给客户：
          · feishu_bridge 把 URL 文本发到飞书群（这条是给客户看的）
          · voice_bridge 收到忽略（客户还没在 voice 上）
@@ -20,11 +19,13 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
 import uuid
-from typing import Any, Awaitable, Callable
+from pathlib import Path
+from typing import Awaitable, Callable
 
 from channel_server.plugin import BasePlugin
 
@@ -37,11 +38,9 @@ class VoicePortalPlugin(BasePlugin):
     """处理 /call 命令，签 voice 通话 URL，广播为 voice_url_issued event。
 
     Config（plugins.toml [plugins.voice_portal]）:
-      portal_url: str   # 必填，例如 "https://cs.h2os.cloud/call"
-      ttl_seconds: int  # 可选，默认 180（夹 30~900）
-
-    Env:
-      VOICE_JWT_SECRET — JWT 签发密钥（必须，否则 plugin emit error event）
+      credentials_file: str   # 必填，相对 routing.toml 目录，如 "credentials/voice.json"
+                              #   JSON 内容：{"jwt_secret": "...", "portal_url": "..."}
+      ttl_seconds: int        # 可选，默认 180（夹 30~900）
     """
 
     name = "voice_portal"
@@ -51,21 +50,34 @@ class VoicePortalPlugin(BasePlugin):
         config: dict,
         emit_event: Callable[[str, str, dict], Awaitable[None]],
     ) -> None:
-        self._portal_url: str = str(config.get("portal_url", "")).strip()
         ttl = int(config.get("ttl_seconds", _DEFAULT_TTL))
         self._ttl = max(30, min(900, ttl))
-        self._secret: str = os.environ.get("VOICE_JWT_SECRET", "")
         self._emit_event = emit_event
 
-        if not self._portal_url:
+        # credentials_file 路径：相对 CS_ROUTING_CONFIG 所在目录（与 feishu
+        # bot credential_file 同语义）；找不到 routing 则 fallback 相对 cwd
+        creds_ref = str(config.get("credentials_file", "")).strip()
+        self._portal_url = ""
+        self._secret = ""
+        if creds_ref:
+            creds_path = Path(creds_ref)
+            if not creds_path.is_absolute():
+                routing_env = os.environ.get("CS_ROUTING_CONFIG", "")
+                base = Path(routing_env).parent if routing_env else Path.cwd()
+                creds_path = base / creds_ref
+            if creds_path.is_file():
+                try:
+                    data = json.loads(creds_path.read_text(encoding="utf-8"))
+                    self._portal_url = str(data.get("portal_url", "")).strip()
+                    self._secret = str(data.get("jwt_secret", "")).strip()
+                except Exception as e:
+                    log.warning("voice_portal: failed to read %s: %s", creds_path, e)
+            else:
+                log.warning("voice_portal: credentials_file not found: %s", creds_path)
+        else:
             log.warning(
-                "voice_portal: portal_url not set in plugins.toml; "
-                "/call will emit voice_unavailable event until configured"
-            )
-        if not self._secret:
-            log.warning(
-                "voice_portal: VOICE_JWT_SECRET env not set; "
-                "/call will emit voice_unavailable event until configured"
+                "voice_portal: plugins.toml missing credentials_file; "
+                "/call will emit voice_unavailable until configured"
             )
 
     def handles_commands(self) -> list[str]:
@@ -79,11 +91,11 @@ class VoicePortalPlugin(BasePlugin):
             await self._emit_event(
                 "voice_unavailable", channel,
                 {
-                    "reason": "voice_portal not configured",
+                    "reason": "voice_portal not configured (see credentials_file in plugins.toml)",
                     "missing": [
                         k for k, v in {
-                            "portal_url (plugins.toml)": self._portal_url,
-                            "VOICE_JWT_SECRET (env)": self._secret,
+                            "portal_url": self._portal_url,
+                            "jwt_secret": self._secret,
                         }.items() if not v
                     ],
                 },

@@ -1,6 +1,7 @@
 """voice_portal plugin 单元测试。"""
 from __future__ import annotations
 
+import json
 from typing import Awaitable, Callable
 
 import pytest
@@ -20,12 +21,23 @@ class _EmittedEvents:
         self.events.append((event, channel, data))
 
 
-def _make_plugin(monkeypatch, *, portal_url: str = _TEST_URL,
-                 secret: str = _TEST_SECRET, ttl: int = 180) -> tuple[VoicePortalPlugin, _EmittedEvents]:
-    monkeypatch.setenv("VOICE_JWT_SECRET", secret)
+def _make_plugin(tmp_path, monkeypatch, *, portal_url: str = _TEST_URL,
+                 secret: str = _TEST_SECRET, ttl: int = 180,
+                 write_creds: bool = True) -> tuple[VoicePortalPlugin, _EmittedEvents]:
+    """构造 plugin：写 voice.json + 设 CS_ROUTING_CONFIG 指向 tmp_path/routing.toml。"""
+    routing_toml = tmp_path / "routing.toml"
+    routing_toml.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CS_ROUTING_CONFIG", str(routing_toml))
+    creds_dir = tmp_path / "credentials"
+    creds_dir.mkdir(exist_ok=True)
+    if write_creds:
+        (creds_dir / "voice.json").write_text(
+            json.dumps({"jwt_secret": secret, "portal_url": portal_url}),
+            encoding="utf-8",
+        )
     emitter = _EmittedEvents()
     plugin = VoicePortalPlugin(
-        config={"portal_url": portal_url, "ttl_seconds": ttl},
+        config={"credentials_file": "credentials/voice.json", "ttl_seconds": ttl},
         emit_event=emitter,
     )
     return plugin, emitter
@@ -33,16 +45,16 @@ def _make_plugin(monkeypatch, *, portal_url: str = _TEST_URL,
 
 # ---- handles_commands ----
 
-def test_handles_commands(monkeypatch):
-    plugin, _ = _make_plugin(monkeypatch)
+def test_handles_commands(tmp_path, monkeypatch):
+    plugin, _ = _make_plugin(tmp_path, monkeypatch)
     assert plugin.handles_commands() == ["call"]
 
 
 # ---- happy path ----
 
 @pytest.mark.asyncio
-async def test_call_emits_voice_url_issued_event(monkeypatch):
-    plugin, emitter = _make_plugin(monkeypatch)
+async def test_call_emits_voice_url_issued_event(tmp_path, monkeypatch):
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch)
     await plugin.on_command("call", {
         "channel": "conv-001",
         "source": "feishu-zhangsan",
@@ -60,8 +72,8 @@ async def test_call_emits_voice_url_issued_event(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_call_normalizes_channel_with_hash_prefix(monkeypatch):
-    plugin, emitter = _make_plugin(monkeypatch)
+async def test_call_normalizes_channel_with_hash_prefix(tmp_path, monkeypatch):
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch)
     await plugin.on_command("call", {
         "channel": "#conv-001",
         "source": "feishu-x",
@@ -70,9 +82,9 @@ async def test_call_normalizes_channel_with_hash_prefix(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_call_with_existing_query_in_portal_url_uses_amp(monkeypatch):
+async def test_call_with_existing_query_in_portal_url_uses_amp(tmp_path, monkeypatch):
     plugin, emitter = _make_plugin(
-        monkeypatch, portal_url="https://cs.example.com/call?env=prod"
+        tmp_path, monkeypatch, portal_url="https://cs.example.com/call?env=prod"
     )
     await plugin.on_command("call", {"channel": "c", "source": "feishu-x"})
     url = emitter.events[0][2]["message"]
@@ -80,16 +92,16 @@ async def test_call_with_existing_query_in_portal_url_uses_amp(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_call_anonymous_when_source_internal(monkeypatch):
-    plugin, emitter = _make_plugin(monkeypatch)
+async def test_call_anonymous_when_source_internal(tmp_path, monkeypatch):
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch)
     await plugin.on_command("call", {"channel": "c", "source": "internal"})
     customer = emitter.events[0][2]["customer"]
     assert customer.startswith("anon-")
 
 
 @pytest.mark.asyncio
-async def test_call_anonymous_when_source_empty(monkeypatch):
-    plugin, emitter = _make_plugin(monkeypatch)
+async def test_call_anonymous_when_source_empty(tmp_path, monkeypatch):
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch)
     await plugin.on_command("call", {"channel": "c", "source": ""})
     customer = emitter.events[0][2]["customer"]
     assert customer.startswith("anon-")
@@ -98,9 +110,9 @@ async def test_call_anonymous_when_source_empty(monkeypatch):
 # ---- voice source self-bounce protection ----
 
 @pytest.mark.asyncio
-async def test_call_from_voice_source_ignored(monkeypatch):
+async def test_call_from_voice_source_ignored(tmp_path, monkeypatch):
     """已经在语音上的客户再喊 /call 应该被忽略，避免无限递归。"""
-    plugin, emitter = _make_plugin(monkeypatch)
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch)
     await plugin.on_command("call", {
         "channel": "c",
         "source": "voice-zhangsan",
@@ -111,8 +123,8 @@ async def test_call_from_voice_source_ignored(monkeypatch):
 # ---- misconfiguration paths emit voice_unavailable ----
 
 @pytest.mark.asyncio
-async def test_call_without_portal_url_emits_unavailable(monkeypatch):
-    plugin, emitter = _make_plugin(monkeypatch, portal_url="")
+async def test_call_without_portal_url_emits_unavailable(tmp_path, monkeypatch):
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch, portal_url="")
     await plugin.on_command("call", {"channel": "c", "source": "x"})
     assert len(emitter.events) == 1
     event, _, data = emitter.events[0]
@@ -121,38 +133,47 @@ async def test_call_without_portal_url_emits_unavailable(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_call_without_jwt_secret_emits_unavailable(monkeypatch):
-    monkeypatch.delenv("VOICE_JWT_SECRET", raising=False)
-    emitter = _EmittedEvents()
-    plugin = VoicePortalPlugin(
-        config={"portal_url": _TEST_URL},
-        emit_event=emitter,
-    )
+async def test_call_without_jwt_secret_emits_unavailable(tmp_path, monkeypatch):
+    """credentials_file 里没 jwt_secret → voice_unavailable。"""
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch, secret="")
     await plugin.on_command("call", {"channel": "c", "source": "x"})
     assert len(emitter.events) == 1
     event, _, data = emitter.events[0]
     assert event == "voice_unavailable"
-    assert "VOICE_JWT_SECRET" in str(data["missing"])
+    assert "jwt_secret" in str(data["missing"])
+
+
+@pytest.mark.asyncio
+async def test_call_without_credentials_file_emits_unavailable(tmp_path, monkeypatch):
+    """plugins.toml 没配 credentials_file → voice_unavailable。"""
+    routing_toml = tmp_path / "routing.toml"
+    routing_toml.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CS_ROUTING_CONFIG", str(routing_toml))
+    emitter = _EmittedEvents()
+    plugin = VoicePortalPlugin(config={}, emit_event=emitter)
+    await plugin.on_command("call", {"channel": "c", "source": "x"})
+    assert len(emitter.events) == 1
+    assert emitter.events[0][0] == "voice_unavailable"
 
 
 # ---- TTL clamping ----
 
-def test_ttl_clamped_to_30_900(monkeypatch):
-    p1, _ = _make_plugin(monkeypatch, ttl=10)
+def test_ttl_clamped_to_30_900(tmp_path, monkeypatch):
+    p1, _ = _make_plugin(tmp_path, monkeypatch, ttl=10)
     assert p1._ttl == 30
-    p2, _ = _make_plugin(monkeypatch, ttl=99999)
+    p2, _ = _make_plugin(tmp_path, monkeypatch, ttl=99999)
     assert p2._ttl == 900
-    p3, _ = _make_plugin(monkeypatch, ttl=200)
+    p3, _ = _make_plugin(tmp_path, monkeypatch, ttl=200)
     assert p3._ttl == 200
 
 
 # ---- token verifies (round-trip with bridge tokens module) ----
 
 @pytest.mark.asyncio
-async def test_emitted_url_token_validates(monkeypatch):
+async def test_emitted_url_token_validates(tmp_path, monkeypatch):
     """Plugin 签发的 token 用 bridge 的 JWTValidator 能验过。"""
     from voice_bridge.tokens import JWTValidator
-    plugin, emitter = _make_plugin(monkeypatch, ttl=300)
+    plugin, emitter = _make_plugin(tmp_path, monkeypatch, ttl=300)
     await plugin.on_command("call", {"channel": "conv-001", "source": "feishu-zhang"})
     url = emitter.events[0][2]["message"]
     token = url.split("?t=")[-1].split("&")[0]

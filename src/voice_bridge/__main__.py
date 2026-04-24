@@ -37,7 +37,8 @@ def _parse_args(argv: list[str] | None = None) -> VoiceBridgeConfig:
     p.add_argument("--channel", default="", help="dev-mode: 固定绑死该 channel")
     p.add_argument("--dev-mode", action="store_true", help="允许 URL 裸传 channel/customer 而无需 JWT")
     p.add_argument("--loopback", action="store_true", help="L0：跳过 CS，mic→ASR→TTS→speaker 本地回环")
-    p.add_argument("--jwt-secret", default="", help="Phase 3：JWT 验签密钥")
+    p.add_argument("--creds", default="",
+                    help="voice credentials JSON 文件路径。内含 jwt_secret / volcengine.* 等")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -50,26 +51,46 @@ def _parse_args(argv: list[str] | None = None) -> VoiceBridgeConfig:
     cfg.bind_channel = args.channel
     cfg.dev_mode = args.dev_mode or cfg.dev_mode
     cfg.loopback = args.loopback or cfg.loopback
-    cfg.jwt_secret = args.jwt_secret or cfg.jwt_secret
 
-    # Volcengine credentials from env（一对 ASR/TTS 共用 app_id/access_token；
-    # voice_type / language 也可 env override）
+    # credentials JSON（与 voice_portal plugin 共用同一文件）
+    creds: dict = {}
+    if args.creds:
+        import json as _json
+        from pathlib import Path as _Path
+        creds_path = _Path(args.creds)
+        if not creds_path.is_file():
+            print(f"voice_bridge: --creds file not found: {creds_path}", flush=True)
+            raise SystemExit(2)
+        try:
+            creds = _json.loads(creds_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"voice_bridge: failed to parse {creds_path}: {e}", flush=True)
+            raise SystemExit(2)
+
+    # jwt_secret 来源：优先 --creds JSON.jwt_secret
+    cfg.jwt_secret = str(creds.get("jwt_secret", "")).strip() or cfg.jwt_secret
+
+    # Volcengine 凭证来源：优先 JSON.volcengine，fallback env（dev 便利）
+    volc = creds.get("volcengine") or {}
     if cfg.asr_engine == "volcengine":
         cfg.asr_config = {
-            "app_id": os.environ.get("VOLC_APP_ID", ""),
-            "access_token": os.environ.get("VOLC_ACCESS_TOKEN", ""),
-            "language": os.environ.get("VOLC_ASR_LANGUAGE", "zh-CN"),
-            "resource_id": os.environ.get("VOLC_ASR_RESOURCE_ID")
-                          or "volc.bigasr.sauc.duration",
+            "app_id": volc.get("app_id") or os.environ.get("VOLC_APP_ID", ""),
+            "access_token": volc.get("access_token")
+                              or os.environ.get("VOLC_ACCESS_TOKEN", ""),
+            "language": volc.get("asr_language")
+                          or os.environ.get("VOLC_ASR_LANGUAGE", "zh-CN"),
+            "resource_id": volc.get("asr_resource_id")
+                             or "volc.bigasr.sauc.duration",
         }
     if cfg.tts_engine == "volcengine":
         cfg.tts_config = {
-            "app_id": os.environ.get("VOLC_APP_ID", ""),
-            "access_token": os.environ.get("VOLC_ACCESS_TOKEN", ""),
-            "cluster": os.environ.get("VOLC_TTS_CLUSTER", "volcano_tts"),
-            "voice_type": os.environ.get("VOLC_TTS_VOICE", "BV700_streaming"),
-            "language": os.environ.get("VOLC_TTS_LANGUAGE", "cn"),
-            "sample_rate": int(os.environ.get("VOLC_TTS_SAMPLE_RATE", "16000")),
+            "app_id": volc.get("app_id") or os.environ.get("VOLC_APP_ID", ""),
+            "access_token": volc.get("access_token")
+                              or os.environ.get("VOLC_ACCESS_TOKEN", ""),
+            "cluster": volc.get("tts_cluster", "volcano_tts"),
+            "voice_type": volc.get("tts_voice", "BV700_streaming"),
+            "language": volc.get("tts_language", "cn"),
+            "sample_rate": int(volc.get("tts_sample_rate", 16000)),
         }
 
     logging.basicConfig(

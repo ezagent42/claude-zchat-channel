@@ -1,0 +1,17 @@
+{
+  "_comment": "Voice overlay credentials. Copy to <project>/credentials/voice.json and edit.",
+  "_comment2": "voice_portal plugin reads jwt_secret + portal_url; voice_bridge reads whole file via --creds.",
+
+  "jwt_secret": "REPLACE_WITH_32_BYTES_RANDOM_eg_openssl_rand_base64_32",
+  "portal_url": "http://127.0.0.1:8787/call",
+
+  "volcengine": {
+    "app_id": "REPLACE_WITH_VOLC_APP_ID",
+    "access_token": "REPLACE_WITH_VOLC_ACCESS_TOKEN",
+    "tts_voice": "BV700_streaming",
+    "tts_language": "cn",
+    "asr_language": "zh-CN",
+    "tts_cluster": "volcano_tts",
+    "tts_sample_rate": 16000
+  }
+}
