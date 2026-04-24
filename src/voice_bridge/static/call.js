@@ -120,14 +120,20 @@
     processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
     let frameBuffer = new Int16Array(0);
 
-    // 简单下采样：取 every N-th 样本。对中文语音识别精度影响可接受；
-    // 严谨做法是 低通滤波再 decimate，但 MVP 够用。
+    // 下采样（48kHz → 16kHz typically factor=3）。
+    // 纯 decimate（取 every N-th 样本）会引入 aliasing，对 ASR 是灾难
+    // （Volcengine 会收到类似噪声的信号，返回空文本 partial/final）。
+    // 改用 box-filter 平均 N 个样本：简单但至少把 > 8kHz 高频压下去。
     function downsample(input, factor) {
       if (Math.abs(factor - 1) < 0.01) return input;
-      const outLen = Math.floor(input.length / factor);
+      const n = Math.round(factor);
+      const outLen = Math.floor(input.length / n);
       const out = new Float32Array(outLen);
       for (let i = 0; i < outLen; i++) {
-        out[i] = input[Math.floor(i * factor)];
+        let sum = 0;
+        const base = i * n;
+        for (let k = 0; k < n; k++) sum += input[base + k];
+        out[i] = sum / n;
       }
       return out;
     }
