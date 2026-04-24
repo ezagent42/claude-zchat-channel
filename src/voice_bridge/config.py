@@ -62,7 +62,10 @@ class VoiceBridgeConfig:
             cs_ws_url=os.environ.get("VOICE_BRIDGE_CS_URL", "ws://127.0.0.1:9999"),
             asr_engine=os.environ.get("VOICE_BRIDGE_ASR", "stub"),
             tts_engine=os.environ.get("VOICE_BRIDGE_TTS", "stub"),
-            jwt_secret=os.environ.get("VOICE_BRIDGE_JWT_SECRET", ""),
+            # 统一用 VOICE_JWT_SECRET（跟 voice_portal plugin 读的同一个 env var）；
+            # VOICE_BRIDGE_JWT_SECRET 留作旧别名回退
+            jwt_secret=(os.environ.get("VOICE_JWT_SECRET", "")
+                         or os.environ.get("VOICE_BRIDGE_JWT_SECRET", "")),
             dev_mode=os.environ.get("VOICE_BRIDGE_DEV_MODE", "1") == "1",
             loopback=os.environ.get("VOICE_BRIDGE_LOOPBACK", "0") == "1",
             bind_channel=os.environ.get("VOICE_BRIDGE_CHANNEL", ""),
