@@ -23,14 +23,13 @@ def build_asr(engine_name: str, config: dict | None = None) -> ASREngine:
             transcripts=config.get("transcripts"),
             chunks_per_emit=int(config.get("chunks_per_emit", 5)),
         )
-    if engine_name == "whisper_cpp":
-        # 延迟 import — 真实环境才需要
-        raise NotImplementedError(
-            "whisper_cpp ASR engine not yet wired; use engine='stub' in Phase 1"
-        )
     if engine_name == "volcengine":
+        # 延迟 import：避免 stub-only 测试加载 websockets 客户端模块
+        from voice_bridge.asr.volcengine import VolcengineASR
+        return VolcengineASR(config)
+    if engine_name == "whisper_cpp":
         raise NotImplementedError(
-            "volcengine ASR engine not yet wired; use engine='stub' in Phase 1"
+            "whisper_cpp ASR engine not yet wired; use 'volcengine' or 'stub'"
         )
     raise ValueError(f"Unknown ASR engine: {engine_name!r}")
 
@@ -43,12 +42,15 @@ def build_tts(engine_name: str, config: dict | None = None) -> TTSEngine:
             bytes_per_char=int(config.get("bytes_per_char", 1600)),
             chunk_size=int(config.get("chunk_size", 3200)),
         )
+    if engine_name == "volcengine":
+        from voice_bridge.tts.volcengine import VolcengineTTS
+        return VolcengineTTS(config)
     if engine_name == "piper":
         raise NotImplementedError(
-            "piper TTS engine not yet wired; use engine='stub' in Phase 1"
+            "piper TTS engine not yet wired; use 'volcengine' or 'stub'"
         )
     if engine_name == "edge_tts":
         raise NotImplementedError(
-            "edge_tts TTS engine not yet wired; use engine='stub' in Phase 1"
+            "edge_tts TTS engine not yet wired; use 'volcengine' or 'stub'"
         )
     raise ValueError(f"Unknown TTS engine: {engine_name!r}")

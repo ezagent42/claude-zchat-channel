@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import logging
 import signal
 import sys
@@ -31,8 +32,8 @@ def _parse_args(argv: list[str] | None = None) -> VoiceBridgeConfig:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8787)
     p.add_argument("--cs-url", default="ws://127.0.0.1:9999")
-    p.add_argument("--asr", default="stub", choices=["stub", "whisper_cpp", "volcengine"])
-    p.add_argument("--tts", default="stub", choices=["stub", "piper", "edge_tts"])
+    p.add_argument("--asr", default="stub", choices=["stub", "volcengine", "whisper_cpp"])
+    p.add_argument("--tts", default="stub", choices=["stub", "volcengine", "piper", "edge_tts"])
     p.add_argument("--channel", default="", help="dev-mode: 固定绑死该 channel")
     p.add_argument("--dev-mode", action="store_true", help="允许 URL 裸传 channel/customer 而无需 JWT")
     p.add_argument("--loopback", action="store_true", help="L0：跳过 CS，mic→ASR→TTS→speaker 本地回环")
@@ -50,6 +51,26 @@ def _parse_args(argv: list[str] | None = None) -> VoiceBridgeConfig:
     cfg.dev_mode = args.dev_mode or cfg.dev_mode
     cfg.loopback = args.loopback or cfg.loopback
     cfg.jwt_secret = args.jwt_secret or cfg.jwt_secret
+
+    # Volcengine credentials from env（一对 ASR/TTS 共用 app_id/access_token；
+    # voice_type / language 也可 env override）
+    if cfg.asr_engine == "volcengine":
+        cfg.asr_config = {
+            "app_id": os.environ.get("VOLC_APP_ID", ""),
+            "access_token": os.environ.get("VOLC_ACCESS_TOKEN", ""),
+            "language": os.environ.get("VOLC_ASR_LANGUAGE", "zh-CN"),
+            "resource_id": os.environ.get("VOLC_ASR_RESOURCE_ID")
+                          or "volc.bigasr.sauc.duration",
+        }
+    if cfg.tts_engine == "volcengine":
+        cfg.tts_config = {
+            "app_id": os.environ.get("VOLC_APP_ID", ""),
+            "access_token": os.environ.get("VOLC_ACCESS_TOKEN", ""),
+            "cluster": os.environ.get("VOLC_TTS_CLUSTER", "volcano_tts"),
+            "voice_type": os.environ.get("VOLC_TTS_VOICE", "BV700_streaming"),
+            "language": os.environ.get("VOLC_TTS_LANGUAGE", "cn"),
+            "sample_rate": int(os.environ.get("VOLC_TTS_SAMPLE_RATE", "16000")),
+        }
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

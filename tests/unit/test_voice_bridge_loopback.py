@@ -125,8 +125,9 @@ def test_engines_factory_rejects_unknown():
         bridge.make_asr()
 
 
-def test_engines_factory_notes_nyi_for_real_engines():
-    for engine in ("whisper_cpp", "volcengine"):
+def test_engines_factory_notes_nyi_for_unwired_engines():
+    """whisper_cpp / piper / edge_tts 仍未接；volcengine 已 wired (见 volc_engines tests)."""
+    for engine in ("whisper_cpp",):
         cfg = VoiceBridgeConfig(asr_engine=engine)
         bridge = VoiceBridge(cfg)
         import pytest
