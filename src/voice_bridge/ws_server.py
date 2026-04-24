@@ -74,6 +74,7 @@ class BrowserWSServer:
         dev_mode: bool = True,
         bind_channel: str = "",
         jwt_validator: Optional[Any] = None,
+        serve_static: bool = True,
     ) -> None:
         self._host = host
         self._port = port
@@ -82,6 +83,7 @@ class BrowserWSServer:
         self._dev_mode = dev_mode
         self._bind_channel = bind_channel.lstrip("#") if bind_channel else ""
         self._jwt_validator = jwt_validator
+        self._serve_static = serve_static
         self._server = None
 
     async def start(self) -> None:
@@ -122,18 +124,22 @@ class BrowserWSServer:
         parsed = urllib.parse.urlsplit(request.path)
         # 宽容：URL 复制带前后空格/%20 也能落到根路径
         url_path = parsed.path.strip().rstrip("/") or "/"
+        if url_path == "/health":
+            return _response(http.HTTPStatus.OK, b"ok\n", "text/plain")
+        # serve_static=False：关闭 fallback call.html，只留 /ws + /health
+        # 适合自家 web 集成场景（前端自己连 /ws?t=<JWT>）
+        if not self._serve_static:
+            return _response(http.HTTPStatus.NOT_FOUND, b"not found")
         if url_path in ("/", "/call"):
-            return self._serve_static("call.html")
+            return self._serve_static_file("call.html")
         if url_path.startswith("/static/"):
             filename = url_path[len("/static/"):]
             if "/" in filename or ".." in filename:
                 return _response(http.HTTPStatus.FORBIDDEN, b"forbidden")
-            return self._serve_static(filename)
-        if url_path == "/health":
-            return _response(http.HTTPStatus.OK, b"ok\n", "text/plain")
+            return self._serve_static_file(filename)
         return _response(http.HTTPStatus.NOT_FOUND, b"not found")
 
-    def _serve_static(self, filename: str) -> Response:
+    def _serve_static_file(self, filename: str) -> Response:
         path = self._static / filename
         if not path.is_file():
             return _response(http.HTTPStatus.NOT_FOUND, b"not found")

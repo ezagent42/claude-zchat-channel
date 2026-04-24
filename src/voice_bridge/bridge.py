@@ -126,14 +126,17 @@ class VoiceBridge:
     async def connect_cs(self, instance_id: str | None = None) -> None:
         """Establish WS connection to channel_server (L1 mode).
 
-        Instance_id 必须在 CS 上唯一；默认用 `voice-<bind_channel>` 或生成。
+        voice_bridge 是**服务级** bridge（不像 feishu_bridge 一 bot 一进程）：
+        一个进程同时服务任意多 channel 的 voice session（channel 由 JWT 动态解）。
+        所以 instance_id 跟 bind_channel 解耦，默认用稳定字串 "voice"。
+        多实例部署可通过环境变量 VOICE_BRIDGE_INSTANCE_ID 区分。
         """
         if self._cs_client is not None:
             return
-        inst = instance_id or (
-            f"voice-{self.config.bind_channel}" if self.config.bind_channel
-            else f"voice-{id(self):x}"
-        )
+        import os as _os
+        inst = (instance_id
+                or _os.environ.get("VOICE_BRIDGE_INSTANCE_ID")
+                or "voice")
         client = CSClient(
             url=self.config.cs_ws_url,
             instance_id=inst,

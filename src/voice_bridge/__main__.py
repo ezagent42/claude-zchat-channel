@@ -34,7 +34,8 @@ def _parse_args(argv: list[str] | None = None) -> VoiceBridgeConfig:
     p.add_argument("--cs-url", default="ws://127.0.0.1:9999")
     p.add_argument("--asr", default="stub", choices=["stub", "volcengine", "whisper_cpp"])
     p.add_argument("--tts", default="stub", choices=["stub", "volcengine", "piper", "edge_tts"])
-    p.add_argument("--channel", default="", help="dev-mode: 固定绑死该 channel")
+    p.add_argument("--channel", default="",
+                    help="dev-mode 的 URL fallback channel（prod 走 JWT；voice_bridge 本身不绑 channel）")
     p.add_argument("--dev-mode", action="store_true", help="允许 URL 裸传 channel/customer 而无需 JWT")
     p.add_argument("--loopback", action="store_true", help="L0：跳过 CS，mic→ASR→TTS→speaker 本地回环")
     p.add_argument("--creds", default="",
@@ -69,6 +70,11 @@ def _parse_args(argv: list[str] | None = None) -> VoiceBridgeConfig:
 
     # jwt_secret 来源：优先 --creds JSON.jwt_secret
     cfg.jwt_secret = str(creds.get("jwt_secret", "")).strip() or cfg.jwt_secret
+
+    # bridge 级可选配置段：{"bridge": {"serve_static": false}}
+    bridge_cfg = creds.get("bridge") or {}
+    if isinstance(bridge_cfg, dict) and "serve_static" in bridge_cfg:
+        cfg.serve_static = bool(bridge_cfg["serve_static"])
 
     # Volcengine 凭证来源：优先 JSON.volcengine，fallback env（dev 便利）
     volc = creds.get("volcengine") or {}
@@ -203,11 +209,16 @@ async def _main(cfg: VoiceBridgeConfig) -> int:
         dev_mode=cfg.dev_mode,
         bind_channel=cfg.bind_channel,
         jwt_validator=jwt_validator,
+        serve_static=cfg.serve_static,
     )
     await server.start()
 
-    log.info("voice_bridge ready. Open http://%s:%d/ ?channel=%s",
-             cfg.listen_host, cfg.listen_port, cfg.bind_channel or "<required>")
+    if cfg.dev_mode:
+        log.info("voice_bridge ready (dev). Open http://%s:%d/?channel=%s",
+                 cfg.listen_host, cfg.listen_port, cfg.bind_channel or "<channel>")
+    else:
+        log.info("voice_bridge ready (prod). WS endpoint ws://%s:%d/ws?t=<JWT>",
+                 cfg.listen_host, cfg.listen_port)
 
     stop_event = asyncio.Event()
 
