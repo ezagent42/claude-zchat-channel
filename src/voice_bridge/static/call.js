@@ -106,13 +106,31 @@
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, sampleRate: SAMPLE_RATE },
     });
-    audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    // 有些浏览器（尤其 Firefox/Safari）不接受 AudioContext({sampleRate:16000})
+    // 而会用系统默认 48000Hz。ASR 期待 16kHz，如果发 48k 会识别失败。
+    // 所以：用原生 rate 创建，运行时降采样。
+    audioCtx = new AudioContext();
+    const actualRate = audioCtx.sampleRate;
+    const downsampleFactor = actualRate / SAMPLE_RATE;  // 48000/16000 = 3
+    log(`mic capture: context rate=${actualRate}Hz, target=${SAMPLE_RATE}Hz, factor=${downsampleFactor.toFixed(2)}`);
     source = audioCtx.createMediaStreamSource(mediaStream);
 
     // 用 ScriptProcessor (简单，兼容性好；AudioWorklet 更现代但代码翻倍)
     const bufferSize = 2048;
     processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
     let frameBuffer = new Int16Array(0);
+
+    // 简单下采样：取 every N-th 样本。对中文语音识别精度影响可接受；
+    // 严谨做法是 低通滤波再 decimate，但 MVP 够用。
+    function downsample(input, factor) {
+      if (Math.abs(factor - 1) < 0.01) return input;
+      const outLen = Math.floor(input.length / factor);
+      const out = new Float32Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        out[i] = input[Math.floor(i * factor)];
+      }
+      return out;
+    }
 
     // VAD state for barge-in (Phase 5)
     // 简单 RMS 能量阈值：超阈值 > HOLD_MS 视为开口；低阈值 > SILENCE_MS 视为停口
@@ -174,11 +192,13 @@
 
     processor.onaudioprocess = (ev) => {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      const input = ev.inputBuffer.getChannelData(0);  // float32 -1..1
+      const rawInput = ev.inputBuffer.getChannelData(0);  // float32 -1..1 @ actualRate
+      // 下采样到 16kHz
+      const input = downsample(rawInput, downsampleFactor);
       const durMs = (input.length / SAMPLE_RATE) * 1000;
-      // VAD on raw float32
+      // VAD on downsampled float32
       vadUpdate(input, durMs);
-      // Forward as PCM s16
+      // Forward as PCM s16 @ 16kHz
       const pcm16 = new Int16Array(input.length);
       for (let i = 0; i < input.length; i++) {
         const v = Math.max(-1, Math.min(1, input[i]));

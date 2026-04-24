@@ -219,8 +219,12 @@ class VoiceBridge:
         asr = self.make_asr()
         await asr.open()
         source = f"{self.SOURCE_PREFIX}{session.customer}"
+        log.info("[run_session session=%s] ASR stream starting on channel=%s",
+                 session.id, session.channel)
         try:
             async for asr_result in asr.stream(_drain_mic(session)):
+                log.debug("[run_session session=%s] ASR result is_final=%s text=%r",
+                          session.id, asr_result.is_final, asr_result.text[:80])
                 if not asr_result.is_final:
                     # Phase 4 会 emit interim 到 CS；现在只发 final
                     continue
@@ -240,8 +244,12 @@ class VoiceBridge:
                     task = asyncio.create_task(self._play_filler(session))
                     self._bg_tasks.add(task)
                     task.add_done_callback(self._bg_tasks.discard)
+        except Exception as e:
+            log.exception("[run_session session=%s] ASR stream FAILED: %s",
+                          session.id, e)
         finally:
             await asr.close()
+            log.info("[run_session session=%s] ASR stream ended", session.id)
 
     async def _play_filler(self, session: VoiceSession) -> None:
         """Path C：随机选一句 filler TTS 推到 session.speaker_queue。

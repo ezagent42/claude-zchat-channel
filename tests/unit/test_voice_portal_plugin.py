@@ -52,7 +52,9 @@ async def test_call_emits_voice_url_issued_event(monkeypatch):
     assert event == "voice_url_issued"
     assert channel == "conv-001"
     assert data["customer"] == "feishu-zhangsan"
-    assert data["url"].startswith(_TEST_URL + "?t=")  # JWT appended
+    # URL 放在 message 字段（router._slim_for_irc 会自动截断，避免 MessageTooLong）
+    assert data["message"].startswith(_TEST_URL + "?t=")  # JWT appended
+    assert "url" not in data          # 不再用 url 字段
     assert data["expires_at"] > 0
     assert data["ttl_seconds"] == 180
 
@@ -73,7 +75,7 @@ async def test_call_with_existing_query_in_portal_url_uses_amp(monkeypatch):
         monkeypatch, portal_url="https://cs.example.com/call?env=prod"
     )
     await plugin.on_command("call", {"channel": "c", "source": "feishu-x"})
-    url = emitter.events[0][2]["url"]
+    url = emitter.events[0][2]["message"]
     assert "?env=prod&t=" in url
 
 
@@ -152,7 +154,7 @@ async def test_emitted_url_token_validates(monkeypatch):
     from voice_bridge.tokens import JWTValidator
     plugin, emitter = _make_plugin(monkeypatch, ttl=300)
     await plugin.on_command("call", {"channel": "conv-001", "source": "feishu-zhang"})
-    url = emitter.events[0][2]["url"]
+    url = emitter.events[0][2]["message"]
     token = url.split("?t=")[-1].split("&")[0]
     validator = JWTValidator(secret=_TEST_SECRET)
     claims = validator.validate(token)

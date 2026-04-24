@@ -501,7 +501,9 @@ class FeishuBridge:
         plugin 不直接 send_message（避免它假装成 agent），它说"voice URL 已签好，
         你们 bridge 谁需要就拿"。feishu_bridge 拿来当文字消息发飞书群，让客户看到。
         """
-        url = (data or {}).get("url", "")
+        # voice_portal 把 URL 放 `message` 字段以便 IRC 侧截断（避免 MessageTooLong）；
+        # 为了向后兼容老版 plugin 仍读 `url` 字段做 fallback。
+        url = (data or {}).get("message") or (data or {}).get("url", "")
         if not url:
             log.warning("[event] voice_url_issued without url for conv=%s", conv_id)
             return

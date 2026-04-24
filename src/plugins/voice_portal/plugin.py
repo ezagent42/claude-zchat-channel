@@ -129,10 +129,15 @@ class VoicePortalPlugin(BasePlugin):
         expires_at = int(time.time()) + self._ttl
         log.info("[voice_portal] /call channel=%s customer=%s → URL signed (exp=%d)",
                  channel, customer, expires_at)
+        # 把 URL 放 `message` 字段（不放 `url`）——
+        # 这样 router._slim_for_irc 会自动将其截断到 200 字节再走 IRC sys PRIVMSG，
+        # 避免超 512 字节的 MessageTooLong；而 bridges 经 WS broadcast 收到的
+        # 是未截断的原始 event data，feishu_bridge 读 `.get("message")` 能拿到
+        # 完整 URL 发给客户群。
         await self._emit_event(
             "voice_url_issued", channel,
             {
-                "url": url,
+                "message": url,
                 "expires_at": expires_at,
                 "customer": customer,
                 "ttl_seconds": self._ttl,
