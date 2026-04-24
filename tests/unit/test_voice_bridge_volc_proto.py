@@ -53,10 +53,15 @@ def test_encode_audio_request_no_compression():
     assert raw[2] & 0x0F == proto.COMP_NO
 
 
-def test_encode_tts_first_sets_first_flag():
+def test_encode_tts_first_uses_no_sequence_flag():
+    """Doubao v1 TTS submit 用 NO_SEQUENCE flag — 没有 sequence 字段。
+    （bidirectional seed-tts-2.0 才用 POS_SEQUENCE，不是当前 submit 模式）。"""
     raw = proto.encode_tts_first({"text": "hi"})
     flags = raw[1] & 0x0F
-    assert flags == 0b0001  # first
+    assert flags == proto.FLAG_NONE  # 0b0000
+    # layout: [hdr 4][size 4][body]，无 sequence
+    msg_type = (raw[1] >> 4) & 0x0F
+    assert msg_type == proto.MSG_TYPE_CLIENT_FULL_REQUEST
 
 
 # ---- parse_frame ----

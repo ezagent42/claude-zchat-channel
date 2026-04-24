@@ -3,6 +3,13 @@
 Endpoint: wss://openspeech.bytedance.com/api/v1/tts/ws_binary
 Auth: Authorization: Bearer; <access_token>  （注意 ; 分号）
 
+响应帧协议（与 ASR 不同）：
+  frame 0: header(4) + 4 zeros            → ACK（flag=0000，无 payload）
+  frame N: header(4) + seq(4) + size(4) + audio_bytes  → 音频块
+    - flag=0001 (POS_SEQUENCE): 中间块
+    - flag=0011 (NEG_WITH_SEQUENCE): 末块，seq 为负值
+  若 seq 为负（-N），表示最后一块
+
 凭证 + 参数：
   config["app_id"]        必填
   config["access_token"]  必填
@@ -22,8 +29,9 @@ Auth: Authorization: Bearer; <access_token>  （注意 ; 分号）
 """
 from __future__ import annotations
 
-import asyncio
+import gzip
 import logging
+import struct
 import uuid
 from typing import AsyncIterator
 
@@ -87,27 +95,49 @@ class VolcengineTTS:
             async for raw in ws:
                 if not isinstance(raw, (bytes, bytearray)):
                     continue
-                try:
-                    frame = proto.parse_frame(bytes(raw))
-                except Exception as e:
-                    log.warning("TTS parse_frame failed: %s", e)
+                raw = bytes(raw)
+                if len(raw) < 4:
                     continue
-                if frame.is_error:
-                    log.error("TTS server error: payload=%s", frame.payload[:200])
+                msg_type = (raw[1] >> 4) & 0x0F
+                flags = raw[1] & 0x0F
+                comp = raw[2] & 0x0F
+
+                # ERROR_INFORMATION：[hdr 4][err_code 4][size 4][json_body]
+                if msg_type == proto.MSG_TYPE_SERVER_ERROR:
+                    err_code = struct.unpack(">I", raw[4:8])[0] if len(raw) >= 8 else 0
+                    size = struct.unpack(">I", raw[8:12])[0] if len(raw) >= 12 else 0
+                    body = raw[12:12+size]
+                    if comp == proto.COMP_GZIP:
+                        try:
+                            body = gzip.decompress(body)
+                        except Exception:
+                            pass
+                    log.error("TTS server error code=%s body=%s", err_code,
+                              body[:300].decode("utf-8", errors="replace"))
                     yield TTSChunk(audio=b"", is_final=True)
                     return
-                # ACK 帧（message_type=11）payload 为空，跳过
-                if frame.message_type == proto.MSG_TYPE_SERVER_ACK:
-                    if frame.is_last:
-                        yield TTSChunk(audio=b"", is_final=True)
+
+                # AUDIO_ONLY_RESPONSE / SERVER_ACK（共用 msg_type=0b1011）
+                if msg_type == proto.MSG_TYPE_SERVER_ACK:
+                    if flags == proto.FLAG_NONE:
+                        # 连接建立 ACK，payload 为 4 个 0 字节 — 跳过
+                        continue
+                    # 含 sequence 的音频块：[hdr 4][seq 4][size 4][audio]
+                    if len(raw) < 12:
+                        continue
+                    seq = struct.unpack(">i", raw[4:8])[0]
+                    size = struct.unpack(">I", raw[8:12])[0]
+                    audio = raw[12:12+size]
+                    is_last = (flags & proto.FLAG_LAST) != 0 or seq < 0
+                    if audio:
+                        yield TTSChunk(audio=audio, is_final=is_last)
+                    if is_last:
                         return
                     continue
-                # 普通响应：payload 是音频字节
-                audio = frame.payload or b""
-                if audio:
-                    yield TTSChunk(audio=audio, is_final=frame.is_last)
-                if frame.is_last:
-                    return
+
+                # 其他 message_type 当前用不到，日志一下
+                log.debug("TTS unexpected msg_type=%s flags=%s len=%d",
+                          msg_type, flags, len(raw))
 
     def _build_request(self, text: str) -> dict:
         return {

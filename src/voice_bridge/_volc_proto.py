@@ -97,9 +97,17 @@ def encode_audio_request(audio: bytes, *, last: bool = False,
 
 
 def encode_tts_first(payload: dict) -> bytes:
-    """Encode TTS first packet (CLIENT_FULL_REQUEST + flags=first=1)."""
+    """Encode TTS v1 submit 请求。
+
+    Doubao TTS v1 submit 协议就是 [header 4] [size 4] [gzipped body]，
+    flag=NO_SEQUENCE（不含 sequence 字段）。双向流式 TTS（seed-tts-2.0）
+    才用 POS_SEQUENCE + sequence，当前 synthesize 是一次性 submit 模式。
+
+    Header: 0x11 (proto_v=1|hdr_size=1) 0x10 (msg_type=FULL|flag=NO_SEQ)
+            0x11 (ser=JSON|comp=GZIP)   0x00 (reserved)
+    """
     body = gzip.compress(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
-    header = _build_header(MSG_TYPE_CLIENT_FULL_REQUEST, flags=0b0001)
+    header = _build_header(MSG_TYPE_CLIENT_FULL_REQUEST, flags=FLAG_NONE)
     size = struct.pack(">I", len(body))
     return header + size + body
 
@@ -118,11 +126,14 @@ class ParsedFrame:
 def parse_frame(raw: bytes) -> ParsedFrame:
     """Parse a server-sent binary frame.
 
-    Frame format from server:
-      [4 byte header][optional 4 byte size][payload]
-      For ERROR responses, there's an additional 4-byte error code before payload.
+    Frame layout 取决于 flags:
+      - NO_SEQUENCE (0b0000)：[hdr 4][size 4][body]
+      - POS_SEQUENCE (0b0001)：[hdr 4][sequence 4][size 4][body]
+      - NEG_SEQUENCE (0b0010) = last without seq：[hdr 4][size 4][body]
+      - NEG_WITH_SEQUENCE (0b0011) = last with seq：[hdr 4][sequence 4][size 4][body]
+    ERROR_INFORMATION (msg_type=15) 额外在 hdr 后多个 4-byte error_code 字段。
 
-    Returns ParsedFrame with json_data decoded if serialization=JSON+compression=gzip.
+    我们只关心能否拿到 payload；返回 ParsedFrame。
     """
     if len(raw) < 4:
         raise ValueError(f"frame too short: {len(raw)} bytes")
@@ -140,6 +151,14 @@ def parse_frame(raw: bytes) -> ParsedFrame:
         # 4-byte error code follows header
         if len(raw) < cursor + 4:
             raise ValueError("error frame missing error code")
+        cursor += 4
+
+    # Presence of sequence field is driven by flag's lowest bit
+    # (POS_SEQUENCE=0b0001 / NEG_WITH_SEQUENCE=0b0011).
+    has_sequence = (flags & 0b0001) != 0
+    if has_sequence:
+        if len(raw) < cursor + 4:
+            raise ValueError("frame missing sequence")
         cursor += 4
 
     if len(raw) < cursor + 4:
