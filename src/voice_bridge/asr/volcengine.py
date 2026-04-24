@@ -87,6 +87,8 @@ class VolcengineASR:
 
             # 2) 并发：上行音频帧 + 下行 ASR 结果
             send_task = asyncio.create_task(_pump_audio(ws, audio))
+            # session 级状态：已经 emit 为 final 的 definite utterance 数
+            n_definite_emitted = 0
             try:
                 async for raw in ws:
                     if not isinstance(raw, (bytes, bytearray)):
@@ -101,9 +103,40 @@ class VolcengineASR:
                                   frame.payload[:200])
                         return
                     data = frame.json_data or {}
-                    result = _extract_result(data)
-                    if result is not None:
-                        yield result
+                    result = _locate_result(data)
+                    if result is None:
+                        if frame.is_last:
+                            return
+                        continue
+                    # Debug: dump raw dict (comment out in prod)
+                    # import json as _json
+                    # log.debug("ASR raw: %s", _json.dumps(data, ensure_ascii=False))
+                    utterances = result.get("utterances") or []
+                    # 1) 新出现的 definite utterance — 逐条 emit 为 final
+                    definite_uts = [
+                        u for u in utterances
+                        if isinstance(u, dict) and u.get("definite")
+                    ]
+                    for ut in definite_uts[n_definite_emitted:]:
+                        text = (ut.get("text") or "").strip()
+                        if text:
+                            yield ASRResult(text=text, is_final=True)
+                    n_definite_emitted = len(definite_uts)
+                    # 2) 当前 tentative partial（尚未 definite 的那句）
+                    tentative = next(
+                        (u for u in reversed(utterances)
+                         if isinstance(u, dict) and not u.get("definite")),
+                        None,
+                    )
+                    if tentative:
+                        ttext = (tentative.get("text") or "").strip()
+                        if ttext:
+                            yield ASRResult(text=ttext, is_final=False)
+                    elif not utterances:
+                        # 没有 utterances 时 fallback：顶层 result.text
+                        top = (result.get("text") or "").strip()
+                        if top:
+                            yield ASRResult(text=top, is_final=False)
                     if frame.is_last:
                         return
             finally:
@@ -161,26 +194,18 @@ async def _pump_audio(ws, audio: AsyncIterator[bytes]) -> None:
             log.debug("ASR stream ended without any audio sent")
 
 
-def _extract_result(data: dict) -> ASRResult | None:
-    """Volcengine v3 response payload → ASRResult.
+def _locate_result(data: dict) -> dict | None:
+    """在 Volcengine 响应 dict 里定位含 text/utterances 的 result 子段。
 
-    Schema 大致：
-      {
-        "header": {"status": 20000000, "message": "OK"},
-        "payload_msg": {
-          "result": {
-            "text": "您好",
-            "utterances": [{"text":"...", "is_final": true, ...}],
-            ...
-          }
-        }
-      }
+    可能的嵌套：
+      {"payload_msg": {"result": {...}}}  — v3 某些路径
+      {"result": {...}}                   — 主流路径
+      {"text": ..., "utterances": ...}    — 平铺变体
     """
     if not data:
         return None
-    # Try common nesting patterns
     candidates: list[dict] = []
-    payload_msg = data.get("payload_msg")
+    payload_msg = data.get("payload_msg") if isinstance(data, dict) else None
     if isinstance(payload_msg, dict):
         if isinstance(payload_msg.get("result"), dict):
             candidates.append(payload_msg["result"])
@@ -188,18 +213,26 @@ def _extract_result(data: dict) -> ASRResult | None:
     if isinstance(data.get("result"), dict):
         candidates.append(data["result"])
     candidates.append(data)
-    result: dict | None = None
     for c in candidates:
         if isinstance(c, dict) and ("text" in c or "utterances" in c):
-            result = c
-            break
+            return c
+    return None
+
+
+def _extract_result(data: dict) -> ASRResult | None:
+    """旧接口：返回单个 ASRResult。当前只用在单测里。
+
+    生产路径：stream() 内部按 utterances[].definite 逐条 emit，见那里。
+    此函数返回的 is_final 由"最后一个 utterance 是否 definite"决定，供
+    测试单步状态校验；不再代表运行时语义。
+    """
+    result = _locate_result(data)
     if result is None:
         return None
     text = (result.get("text") or "").strip()
     utterances = result.get("utterances") or []
     is_final = False
     if utterances and isinstance(utterances, list):
-        # 取最后一句的 is_final 判断
         last = utterances[-1] if isinstance(utterances[-1], dict) else {}
         is_final = bool(last.get("definite") or last.get("is_final"))
     if not text and not utterances:
