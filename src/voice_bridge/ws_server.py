@@ -6,6 +6,7 @@
   - WS  /ws?t=<JWT>       → 浏览器 ↔ voice_bridge 的语音双向通道
   - GET /  /call /static/* → call.html demo 页面（serve_static=True 时）
 
+只接受 JWT 认证（无 dev_mode 裸传）。debug 用 GET /issue 拿 URL。
 使用 websockets ≥ 16 的 process_request(connection, request) API。
 """
 from __future__ import annotations
@@ -59,15 +60,13 @@ class BrowserWSServer:
 
     Args:
       on_ws_connect: coroutine callback(ws_connection, session_params)
-        session_params = {"channel": str, "customer": str, "auth_mode": "dev"|"jwt"}
+        session_params = {"channel": str, "customer": str}
       static_dir: 前端静态文件目录
-      bind_channel: dev mode 下若 URL 没带 channel 参数，fallback 到这个
-      jwt_validator: 入站 /ws 校验
-      jwt_secret: 出站 /issue 签发；空 → /issue 返回 503
-      public_ws_url_template: /issue 返回的 URL 模板。默认空 → 用 request 的
-        Host 头自动拼。模板里 %s 会被 token 替换。例：
-          "wss://voice.example.com/ws?t=%s"
-        留空时拼成 "ws://<Host>/ws?t=<token>"。
+      jwt_validator: /ws 入站校验；None → 没 secret，/ws 拒所有连接
+      jwt_secret: /issue 出站签发；空 → /issue 返回 503
+      serve_static: True 保留 / + /call + /static 的 demo 页面 fallback
+      public_ws_url_template: /issue 返回的 URL 模板。空 → 用请求 Host 头自动拼。
+        模板里 %s 会被 token 替换。例: "wss://voice.example.com/ws?t=%s"
     """
 
     def __init__(
@@ -77,8 +76,6 @@ class BrowserWSServer:
         port: int,
         static_dir: Path,
         on_ws_connect,
-        dev_mode: bool = True,
-        bind_channel: str = "",
         jwt_validator: Optional[Any] = None,
         serve_static: bool = True,
         jwt_secret: str = "",
@@ -88,8 +85,6 @@ class BrowserWSServer:
         self._port = port
         self._static = static_dir
         self._on_ws_connect = on_ws_connect
-        self._dev_mode = dev_mode
-        self._bind_channel = bind_channel.lstrip("#") if bind_channel else ""
         self._jwt_validator = jwt_validator
         self._serve_static = serve_static
         self._jwt_secret = jwt_secret or ""
@@ -104,8 +99,10 @@ class BrowserWSServer:
             max_size=8 * 1024 * 1024,
             compression=None,
         )
-        log.info("voice_bridge HTTP+WS listening on %s:%d (dev_mode=%s)",
-                 self._host, self._port, self._dev_mode)
+        log.info("voice_bridge HTTP+WS listening on %s:%d (jwt=%s, serve_static=%s)",
+                 self._host, self._port,
+                 "on" if self._jwt_validator else "off",
+                 self._serve_static)
 
     async def stop(self) -> None:
         if self._server is None:
@@ -236,32 +233,19 @@ class BrowserWSServer:
     def _resolve_auth(self, query: dict) -> dict | None:
         """Decide session identity from URL query.
 
-        Returns:
-          {"channel": str (bare), "customer": str, "auth_mode": "dev"|"jwt"}
-          or None if rejected.
+        只接受 JWT (?t=<token>)。没 validator 或 token 无效 → 拒绝。
+        Dev 调试用 GET /issue 拿 URL，不再支持裸传 ?channel=&customer=。
         """
-        # JWT first (Phase 3)
         token = query.get("t", "")
-        if token and self._jwt_validator is not None:
-            claims = self._jwt_validator.validate(token)
-            if claims is None:
-                return None
-            return {
-                "channel": claims["channel"].lstrip("#"),
-                "customer": claims["customer"],
-                "auth_mode": "jwt",
-            }
-        # Dev mode
-        if self._dev_mode:
-            channel = query.get("channel", "") or self._bind_channel
-            if not channel:
-                return None
-            return {
-                "channel": channel.lstrip("#"),
-                "customer": query.get("customer", "dev-user"),
-                "auth_mode": "dev",
-            }
-        return None
+        if not token or self._jwt_validator is None:
+            return None
+        claims = self._jwt_validator.validate(token)
+        if claims is None:
+            return None
+        return {
+            "channel": claims["channel"].lstrip("#"),
+            "customer": claims["customer"],
+        }
 
 
 def _parse_query(path: str) -> dict:

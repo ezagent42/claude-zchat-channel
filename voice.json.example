@@ -1,9 +1,18 @@
 {
-  "_comment": "Voice overlay credentials. Copy to <project>/credentials/voice.json and edit.",
-  "_comment2": "voice_portal plugin reads jwt_secret + portal_url; voice_bridge reads whole file via --creds.",
+  "_comment": "voice_bridge config. Copy to <project>/credentials/voice.json and edit.",
+  "_comment2": "voice_bridge 进程 -m voice_bridge --config <此文件路径> 读全部配置。",
+  "_comment3": "agent_mcp 不读这个文件，只通过 VOICE_BRIDGE_ISSUE_URL env 调 voice_bridge /issue 拿 URL。",
 
   "jwt_secret": "REPLACE_WITH_32_BYTES_RANDOM_eg_openssl_rand_base64_32",
-  "portal_url": "http://127.0.0.1:8787/call",
+
+  "listen_host": "127.0.0.1",
+  "listen_port": 8787,
+  "cs_url": "ws://127.0.0.1:9999",
+  "serve_static": true,
+  "public_ws_url_template": "",
+
+  "asr_engine": "volcengine",
+  "tts_engine": "volcengine",
 
   "volcengine": {
     "app_id": "REPLACE_WITH_VOLC_APP_ID",

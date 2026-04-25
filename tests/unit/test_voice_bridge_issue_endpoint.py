@@ -21,10 +21,8 @@ from voice_bridge.ws_server import BrowserWSServer
 _SECRET = "test-secret-32-bytes-min-for-hs256-ok"
 
 
-async def _start_server(*, public_url: str = "ws://127.0.0.1:0/ws") -> tuple[BrowserWSServer, int]:
+async def _start_server(*, public_url: str = "") -> tuple[BrowserWSServer, int]:
     """Start server bound to ephemeral port; return (server, actual_port)."""
-    cfg = VoiceBridgeConfig(jwt_secret=_SECRET)
-    cfg.public_ws_url_template = public_url
     validator = JWTValidator(secret=_SECRET)
 
     async def _on_ws(_ws, _auth):
@@ -34,8 +32,6 @@ async def _start_server(*, public_url: str = "ws://127.0.0.1:0/ws") -> tuple[Bro
         host="127.0.0.1", port=0,
         static_dir=Path(__file__).parent,  # 不重要，serve_static=False
         on_ws_connect=_on_ws,
-        dev_mode=False,
-        bind_channel="",
         jwt_validator=validator,
         serve_static=False,
         jwt_secret=_SECRET,
@@ -134,19 +130,16 @@ async def test_issue_uses_default_ttl_when_omitted():
 @pytest.mark.asyncio
 async def test_issue_disabled_when_no_secret():
     """没有 jwt_secret 时 /issue 应返回 503 — 不能签 token 直接拒"""
-    cfg = VoiceBridgeConfig(jwt_secret="")  # empty
     async def _on_ws(_ws, _auth):
         await _ws.close()
     server = BrowserWSServer(
         host="127.0.0.1", port=0,
         static_dir=Path(__file__).parent,
         on_ws_connect=_on_ws,
-        dev_mode=True,
-        bind_channel="dev",
         jwt_validator=None,
         serve_static=False,
         jwt_secret="",
-        public_ws_url_template="ws://127.0.0.1:0/ws",
+        public_ws_url_template="",
     )
     await server.start()
     try:
