@@ -445,10 +445,6 @@ class FeishuBridge:
                 log.info("[event] csat_request on own %s → send card", conv_norm)
                 self.outbound.on_csat_request(conv_norm)
                 return
-            if event_name == "voice_url_issued":
-                # voice_portal plugin emit 的语音通话 URL —— 把 URL 文本发给客户群
-                self._handle_voice_url_issued(conv_norm, data)
-                return
             # 其它 own-only 事件按需加；否则 own 不响应（supervisor 会接）
             if event_name in ("help_requested", "help_timeout", "mode_changed", "chat_info"):
                 log.debug("[event] %s on own %s; supervisor handles", event_name, conv_norm)
@@ -493,32 +489,6 @@ class FeishuBridge:
                         log.exception("[event] refresh card on chat_info failed for %s", conv_norm)
         else:
             log.debug("[event] supervisor ignoring unknown event=%s", event_name)
-
-    def _handle_voice_url_issued(self, conv_id: str, data: dict) -> None:
-        """voice_portal plugin emit 的 voice_url_issued event：把 URL 文本发到客户群。
-
-        这是"plugin emit event → bridge 决定如何呈现"模式的一个例子：
-        plugin 不直接 send_message（避免它假装成 agent），它说"voice URL 已签好，
-        你们 bridge 谁需要就拿"。feishu_bridge 拿来当文字消息发飞书群，让客户看到。
-        """
-        # voice_portal 把 URL 放 `message` 字段以便 IRC 侧截断（避免 MessageTooLong）；
-        # 为了向后兼容老版 plugin 仍读 `url` 字段做 fallback。
-        url = (data or {}).get("message") or (data or {}).get("url", "")
-        if not url:
-            log.warning("[event] voice_url_issued without url for conv=%s", conv_id)
-            return
-        chat_id = self.mapper.get_feishu_chat(conv_id)
-        if not chat_id:
-            log.warning("[event] voice_url_issued: no feishu chat_id for conv=%s", conv_id)
-            return
-        text = f"📞 您可以点击进行语音通话（链接 3 分钟内有效）：\n{url}"
-        try:
-            self.sender.send_text(chat_id, text)
-            log.info("[event] voice_url_issued: posted URL to %s (conv=%s)",
-                     chat_id, conv_id)
-        except Exception:
-            log.exception("[event] voice_url_issued: send_text failed for conv=%s",
-                          conv_id)
 
     def _supervise_help_requested(self, conv_id: str, data: dict) -> None:
         """help_requested 事件 → update_card "🚨 求助中" + reply_in_thread `<at all>`。"""

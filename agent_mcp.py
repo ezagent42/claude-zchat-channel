@@ -169,141 +169,7 @@ def register_tools(server: Server, state: dict) -> None:
 
     @server.list_tools()
     async def handle_list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="reply",
-                description=(
-                    "Send a message to a channel or user via IRC.\n\n"
-                    "Parameters:\n"
-                    "- chat_id (required): Target channel (#channel) or username for DM\n"
-                    "- text (required): Message content\n"
-                    "- edit_of (optional): message_id of a previous message to replace\n"
-                    "- side (optional): If true, message is only visible to operators\n\n"
-                    "Returns JSON with message_id and sent_to.\n\n"
-                    "Usage patterns:\n"
-                    "- Public message: reply(chat_id='#conv-001', text='hello')\n"
-                    "- Edit/replace: reply(chat_id='#conv-001', text='corrected', edit_of='<message_id>')\n"
-                    "- Side message: reply(chat_id='#conv-001', text='internal note', side=true)\n"
-                    "- Plugin command: reply(chat_id='#conv-001', text='/hijack')\n\n"
-                    "Available plugin commands (via text):\n"
-                    "- /hijack → switch channel to takeover mode (operator drives)\n"
-                    "- /release → switch channel back to copilot mode (agent drives)\n"
-                    "- /copilot → same as /release\n"
-                    "- /resolve → mark conversation as resolved"
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "chat_id": {
-                            "type": "string",
-                            "description": "Target: #channel (e.g. '#conv-001', '#general') or username for DM",
-                        },
-                        "text": {
-                            "type": "string",
-                            "description": "Message content, or /command to trigger a plugin",
-                        },
-                        "edit_of": {
-                            "type": "string",
-                            "description": "message_id of a previous message to edit/replace",
-                        },
-                        "side": {
-                            "type": "boolean",
-                            "description": "If true, only visible to operators (not customers)",
-                        },
-                    },
-                    "required": ["chat_id", "text"],
-                },
-            ),
-            Tool(
-                name="join_channel",
-                description=(
-                    "Join an IRC channel to receive @mentions.\n\n"
-                    "Parameters:\n"
-                    "- channel_name (required): Channel name without # prefix\n\n"
-                    "Usage: dynamically join a new IRC channel at runtime (e.g. when "
-                    "dispatched to a new conversation). The MCP server sends IRC JOIN "
-                    "and starts listening for @mentions in the channel."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "channel_name": {
-                            "type": "string",
-                            "description": "Channel name without # prefix (e.g. 'conv-001')",
-                        },
-                    },
-                    "required": ["channel_name"],
-                },
-            ),
-            Tool(
-                name="list_peers",
-                description=(
-                    "List other agent nicks currently joined to a given IRC channel.\n\n"
-                    "Returns: JSON list[str] of nicks (excluding self and well-known service "
-                    "nicks like cs-bot). Useful before delegating: discover who else is in your "
-                    "channel and pick a peer by naming convention (e.g. matches '*-deep-*').\n\n"
-                    "Parameters:\n"
-                    "- channel (required): channel name with or without leading '#'\n\n"
-                    "Returns empty list if you haven't joined that channel or no peers present."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "channel": {
-                            "type": "string",
-                            "description": "Channel name (e.g. 'conv-001' or '#conv-001')",
-                        },
-                    },
-                    "required": ["channel"],
-                },
-            ),
-            Tool(
-                name="run_zchat_cli",
-                description=(
-                    "Execute a zchat CLI command and return stdout/stderr.\n\n"
-                    "Parameters:\n"
-                    "- args (required): List of CLI arguments (excluding 'zchat' itself)\n"
-                    "- timeout (optional): Max seconds to wait, default 30\n\n"
-                    "Available commands:\n"
-                    "  Agent management:\n"
-                    "  - ['agent', 'create', '<name>'] → create agent (add '--type', '<template>' for specific type)\n"
-                    "  - ['agent', 'stop', '<name>'] → stop agent\n"
-                    "  - ['agent', 'restart', '<name>'] → restart agent\n"
-                    "  - ['agent', 'list'] → list all agents with status\n"
-                    "  - ['agent', 'status', '<name>'] → show agent details\n"
-                    "  - ['agent', 'send', '<name>', '<message>'] → send message to agent\n"
-                    "  - ['agent', 'join', '<name>', '<channel>'] → assign agent to channel\n\n"
-                    "  Channel management:\n"
-                    "  - ['channel', 'create', '<name>'] → register channel in routing.toml\n"
-                    "  - ['channel', 'list'] → list all registered channels\n\n"
-                    "  Project management:\n"
-                    "  - ['project', 'list'] → list projects\n"
-                    "  - ['project', 'show'] → show current project\n\n"
-                    "  IRC:\n"
-                    "  - ['irc', 'daemon', 'start'] → start ergo IRC server\n"
-                    "  - ['irc', 'daemon', 'stop'] → stop ergo IRC server\n\n"
-                    "  System:\n"
-                    "  - ['doctor'] → check environment and dependencies\n"
-                    "  - ['shutdown'] → stop all agents and services"
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "args": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "CLI arguments excluding 'zchat' itself",
-                        },
-                        "timeout": {
-                            "type": "number",
-                            "description": "Max seconds to wait (default 30)",
-                            "default": 30,
-                        },
-                    },
-                    "required": ["args"],
-                },
-            ),
-        ]
+        return _build_tool_list()
 
     @server.call_tool()
     async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
@@ -315,7 +181,187 @@ def register_tools(server: Server, state: dict) -> None:
             return await _handle_run_zchat_cli(arguments)
         if name == "list_peers":
             return await _handle_list_peers(state.get("members") or {}, arguments)
+        if name == "voice_link":
+            return await _handle_voice_link(arguments)
         raise ValueError(f"Unknown tool: {name}")
+
+
+# ------------------------------------------------------------------ #
+# Tool list — voice_link 仅当 VOICE_BRIDGE_ISSUE_URL 存在时暴露
+# ------------------------------------------------------------------ #
+
+
+def _build_tool_list() -> list[Tool]:
+    """Construct the tool list visible to Claude.
+
+    voice_link 是按需注册：只有 fast-agent template 启动时被注入
+    VOICE_BRIDGE_ISSUE_URL env，此 tool 才进入列表。其他 template 看不到。
+    """
+    tools: list[Tool] = [
+        Tool(
+            name="reply",
+            description=(
+                "Send a message to a channel or user via IRC.\n\n"
+                "Parameters:\n"
+                "- chat_id (required): Target channel (#channel) or username for DM\n"
+                "- text (required): Message content\n"
+                "- edit_of (optional): message_id of a previous message to replace\n"
+                "- side (optional): If true, message is only visible to operators\n\n"
+                "Returns JSON with message_id and sent_to.\n\n"
+                "Usage patterns:\n"
+                "- Public message: reply(chat_id='#conv-001', text='hello')\n"
+                "- Edit/replace: reply(chat_id='#conv-001', text='corrected', edit_of='<message_id>')\n"
+                "- Side message: reply(chat_id='#conv-001', text='internal note', side=true)\n"
+                "- Plugin command: reply(chat_id='#conv-001', text='/hijack')\n\n"
+                "Available plugin commands (via text):\n"
+                "- /hijack → switch channel to takeover mode (operator drives)\n"
+                "- /release → switch channel back to copilot mode (agent drives)\n"
+                "- /copilot → same as /release\n"
+                "- /resolve → mark conversation as resolved"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "chat_id": {
+                        "type": "string",
+                        "description": "Target: #channel (e.g. '#conv-001', '#general') or username for DM",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Message content, or /command to trigger a plugin",
+                    },
+                    "edit_of": {
+                        "type": "string",
+                        "description": "message_id of a previous message to edit/replace",
+                    },
+                    "side": {
+                        "type": "boolean",
+                        "description": "If true, only visible to operators (not customers)",
+                    },
+                },
+                "required": ["chat_id", "text"],
+            },
+        ),
+        Tool(
+            name="join_channel",
+            description=(
+                "Join an IRC channel to receive @mentions.\n\n"
+                "Parameters:\n"
+                "- channel_name (required): Channel name without # prefix\n\n"
+                "Usage: dynamically join a new IRC channel at runtime (e.g. when "
+                "dispatched to a new conversation). The MCP server sends IRC JOIN "
+                "and starts listening for @mentions in the channel."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "channel_name": {
+                        "type": "string",
+                        "description": "Channel name without # prefix (e.g. 'conv-001')",
+                    },
+                },
+                "required": ["channel_name"],
+            },
+        ),
+        Tool(
+            name="list_peers",
+            description=(
+                "List other agent nicks currently joined to a given IRC channel.\n\n"
+                "Returns: JSON list[str] of nicks (excluding self and well-known service "
+                "nicks like cs-bot). Useful before delegating: discover who else is in your "
+                "channel and pick a peer by naming convention (e.g. matches '*-deep-*').\n\n"
+                "Parameters:\n"
+                "- channel (required): channel name with or without leading '#'\n\n"
+                "Returns empty list if you haven't joined that channel or no peers present."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "channel": {
+                        "type": "string",
+                        "description": "Channel name (e.g. 'conv-001' or '#conv-001')",
+                    },
+                },
+                "required": ["channel"],
+            },
+        ),
+        Tool(
+            name="run_zchat_cli",
+            description=(
+                "Execute a zchat CLI command and return stdout/stderr.\n\n"
+                "Parameters:\n"
+                "- args (required): List of CLI arguments (excluding 'zchat' itself)\n"
+                "- timeout (optional): Max seconds to wait, default 30\n\n"
+                "Available commands:\n"
+                "  Agent management:\n"
+                "  - ['agent', 'create', '<name>'] → create agent (add '--type', '<template>' for specific type)\n"
+                "  - ['agent', 'stop', '<name>'] → stop agent\n"
+                "  - ['agent', 'restart', '<name>'] → restart agent\n"
+                "  - ['agent', 'list'] → list all agents with status\n"
+                "  - ['agent', 'status', '<name>'] → show agent details\n"
+                "  - ['agent', 'send', '<name>', '<message>'] → send message to agent\n"
+                "  - ['agent', 'join', '<name>', '<channel>'] → assign agent to channel\n\n"
+                "  Channel management:\n"
+                "  - ['channel', 'create', '<name>'] → register channel in routing.toml\n"
+                "  - ['channel', 'list'] → list all registered channels\n\n"
+                "  Project management:\n"
+                "  - ['project', 'list'] → list projects\n"
+                "  - ['project', 'show'] → show current project\n\n"
+                "  IRC:\n"
+                "  - ['irc', 'daemon', 'start'] → start ergo IRC server\n"
+                "  - ['irc', 'daemon', 'stop'] → stop ergo IRC server\n\n"
+                "  System:\n"
+                "  - ['doctor'] → check environment and dependencies\n"
+                "  - ['shutdown'] → stop all agents and services"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "CLI arguments excluding 'zchat' itself",
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Max seconds to wait (default 30)",
+                        "default": 30,
+                    },
+                },
+                "required": ["args"],
+            },
+        ),
+    ]
+    if os.environ.get("VOICE_BRIDGE_ISSUE_URL"):
+        tools.append(Tool(
+            name="voice_link",
+            description=(
+                "Generate a voice-call URL for a customer in a specific channel.\n\n"
+                "Use when the customer asks to talk on the phone / voice / call. The returned URL "
+                "is short-lived (default 3 min); send it to the customer via reply() and they tap "
+                "to start the call. Audio is converted to text and arrives in the same channel as "
+                "their normal chat.\n\n"
+                "Parameters:\n"
+                "- channel (required): Channel name (with or without '#') to bind the call to\n"
+                "- customer (required): External customer identifier (e.g. feishu user open_id)\n"
+                "- ttl_seconds (optional): URL lifetime, 30-900, default 180\n\n"
+                "Returns JSON {url, expires_at}. If voice service is unavailable returns {error}.\n\n"
+                "Typical flow:\n"
+                "  1. customer: '能打电话吗？'\n"
+                "  2. you: voice_link(channel='#conv-001', customer='ou_xxx')\n"
+                "  3. you: reply(chat_id='#conv-001', text='请点击通话：<url>')"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "channel": {"type": "string"},
+                    "customer": {"type": "string"},
+                    "ttl_seconds": {"type": "integer", "minimum": 30, "maximum": 900, "default": 180},
+                },
+                "required": ["channel", "customer"],
+            },
+        ))
+    return tools
 
 
 # ------------------------------------------------------------------ #
@@ -402,6 +448,46 @@ async def _handle_run_zchat_cli(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="error: 'zchat' executable not found in PATH")]
     except Exception as e:
         return [TextContent(type="text", text=f"error: {e}")]
+
+
+async def _handle_voice_link(arguments: dict) -> list[TextContent]:
+    """voice_link tool — HTTP GET voice_bridge /issue 拿一次性 URL。
+
+    secret 完全在 voice_bridge 内部，agent 不持有任何 secret material。
+    """
+    import json as _json
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    issue_url = os.environ.get("VOICE_BRIDGE_ISSUE_URL", "").strip()
+    if not issue_url:
+        return [TextContent(type="text", text='{"error":"voice not configured (VOICE_BRIDGE_ISSUE_URL unset)"}')]
+    channel = str(arguments.get("channel", "")).strip()
+    customer = str(arguments.get("customer", "")).strip()
+    if not channel or not customer:
+        return [TextContent(type="text", text='{"error":"channel and customer are required"}')]
+    qs = {"channel": channel.lstrip("#"), "customer": customer}
+    ttl = arguments.get("ttl_seconds")
+    if ttl is not None:
+        try:
+            qs["ttl"] = str(int(ttl))
+        except (TypeError, ValueError):
+            pass
+    full_url = f"{issue_url}?{urllib.parse.urlencode(qs)}"
+    try:
+        with urllib.request.urlopen(full_url, timeout=3) as resp:
+            body = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        return [TextContent(type="text", text=_json.dumps({
+            "error": f"voice_bridge returned HTTP {e.code}",
+            "detail": e.reason,
+        }))]
+    except Exception as e:
+        return [TextContent(type="text", text=_json.dumps({
+            "error": f"voice_bridge unreachable: {e}",
+        }))]
+    return [TextContent(type="text", text=body.strip())]
 
 
 # ------------------------------------------------------------------ #

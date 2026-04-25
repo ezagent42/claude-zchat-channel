@@ -41,8 +41,11 @@ class VoiceBridgeConfig:
     loopback: bool = False           # L0：跳过 CS，ASR→TTS 直回
     bind_channel: str = ""           # dev-mode URL fallback：?channel= 缺省时顶上
                                      # prod 走 JWT，voice_bridge 本身不绑 channel（服务级 bridge）
-    serve_static: bool = True        # True=serve call.html fallback；False=只留 /ws + /health
+    serve_static: bool = True        # True=serve call.html fallback；False=只留 /ws + /health + /issue
                                      # （自家前端集成时关掉，404 fallback 防误访问）
+    public_ws_url_template: str = "" # /issue 返回的 WS URL 模板。空则用请求的 Host 头自动拼。
+                                     # 例: "wss://voice.example.com/ws?t=%s"
+                                     # 公网部署务必设置（否则用 ws:// 不安全）
 
     # --- Path C filler（降低 phone-feel 感知延迟） ---
     # ASR final 出来后立即 TTS 一段填充语，覆盖 agent 思考 + 真答复 TTS 的

@@ -67,8 +67,8 @@ def test_load_builtin_plugins_all_register(tmp_path, emit_event, emit_command):
         routing_path=tmp_path / "routing.toml",
         injections={"emit_event": emit_event, "emit_command": emit_command},
     )
-    # 7 个 builtin: mode / sla / resolve / audit / activation / csat / voice_portal
-    assert set(registered) == {"mode", "sla", "resolve", "audit", "activation", "csat", "voice_portal"}
+    # 6 个 builtin: mode / sla / resolve / audit / activation / csat
+    assert set(registered) == {"mode", "sla", "resolve", "audit", "activation", "csat"}
 
 
 def test_disabled_plugin_skipped(tmp_path, emit_event, emit_command):

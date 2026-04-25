@@ -1,20 +1,19 @@
 """HTTP + WebSocket server（浏览器入口）。
 
 一个端口同时服务：
-  - GET /                 → call.html（前端单页）
-  - GET /static/<file>    → 前端 JS/CSS 等资源
   - GET /health           → ok
-  - WS  /ws               → 浏览器 ↔ voice_bridge 的语音双向通道
+  - GET /issue?channel=&customer=&ttl=  → 签 JWT，返回 {url, expires_at}
+  - WS  /ws?t=<JWT>       → 浏览器 ↔ voice_bridge 的语音双向通道
+  - GET /  /call /static/* → call.html demo 页面（serve_static=True 时）
 
 使用 websockets ≥ 16 的 process_request(connection, request) API。
-
-Phase 1：支持 dev-mode —— URL 上直接传 ?channel=&customer= 绕过 JWT。
-Phase 3 会加 JWT 验签 (?t=JWT)，本文件预留 handler._parse_auth 扩展点。
 """
 from __future__ import annotations
 
 import http
+import json
 import logging
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any, Optional
@@ -22,6 +21,8 @@ from typing import Any, Optional
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.http11 import Request, Response
 from websockets.datastructures import Headers
+
+from .tokens import issue_token
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +62,12 @@ class BrowserWSServer:
         session_params = {"channel": str, "customer": str, "auth_mode": "dev"|"jwt"}
       static_dir: 前端静态文件目录
       bind_channel: dev mode 下若 URL 没带 channel 参数，fallback 到这个
-      jwt_validator: Phase 3 injection point
+      jwt_validator: 入站 /ws 校验
+      jwt_secret: 出站 /issue 签发；空 → /issue 返回 503
+      public_ws_url_template: /issue 返回的 URL 模板。默认空 → 用 request 的
+        Host 头自动拼。模板里 %s 会被 token 替换。例：
+          "wss://voice.example.com/ws?t=%s"
+        留空时拼成 "ws://<Host>/ws?t=<token>"。
     """
 
     def __init__(
@@ -75,6 +81,8 @@ class BrowserWSServer:
         bind_channel: str = "",
         jwt_validator: Optional[Any] = None,
         serve_static: bool = True,
+        jwt_secret: str = "",
+        public_ws_url_template: str = "",
     ) -> None:
         self._host = host
         self._port = port
@@ -84,6 +92,8 @@ class BrowserWSServer:
         self._bind_channel = bind_channel.lstrip("#") if bind_channel else ""
         self._jwt_validator = jwt_validator
         self._serve_static = serve_static
+        self._jwt_secret = jwt_secret or ""
+        self._public_ws_url_template = public_ws_url_template or ""
         self._server = None
 
     async def start(self) -> None:
@@ -126,7 +136,9 @@ class BrowserWSServer:
         url_path = parsed.path.strip().rstrip("/") or "/"
         if url_path == "/health":
             return _response(http.HTTPStatus.OK, b"ok\n", "text/plain")
-        # serve_static=False：关闭 fallback call.html，只留 /ws + /health
+        if url_path == "/issue":
+            return self._handle_issue(request, parsed.query)
+        # serve_static=False：关闭 fallback call.html，只留 /ws + /health + /issue
         # 适合自家 web 集成场景（前端自己连 /ws?t=<JWT>）
         if not self._serve_static:
             return _response(http.HTTPStatus.NOT_FOUND, b"not found")
@@ -138,6 +150,59 @@ class BrowserWSServer:
                 return _response(http.HTTPStatus.FORBIDDEN, b"forbidden")
             return self._serve_static_file(filename)
         return _response(http.HTTPStatus.NOT_FOUND, b"not found")
+
+    def _handle_issue(self, request: Request, query_str: str) -> Response:
+        """GET /issue?channel=&customer=&ttl= → JSON {url, expires_at}.
+
+        用于 agent_mcp 的 voice_link tool。jwt_secret 内化在 voice_bridge，
+        agent / plugin / 任何外部都不持有。
+        """
+        if not self._jwt_secret:
+            return _response(
+                http.HTTPStatus.SERVICE_UNAVAILABLE,
+                b'{"error":"voice_bridge has no jwt_secret configured"}\n',
+                "application/json",
+            )
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(query_str).items() if v}
+        channel = params.get("channel", "").strip()
+        customer = params.get("customer", "").strip()
+        if not channel or not customer:
+            return _response(
+                http.HTTPStatus.BAD_REQUEST,
+                b'{"error":"channel and customer are required"}\n',
+                "application/json",
+            )
+        try:
+            ttl = int(params.get("ttl", "180"))
+        except ValueError:
+            ttl = 180
+        ttl = max(30, min(900, ttl))
+
+        token = issue_token(
+            channel=channel.lstrip("#"),
+            customer=customer,
+            secret=self._jwt_secret,
+            ttl_seconds=ttl,
+        )
+
+        # URL 模板：优先用配置；否则用 request Host 拼 ws://<Host>/ws?t=<token>
+        if self._public_ws_url_template:
+            if "%s" in self._public_ws_url_template:
+                url = self._public_ws_url_template % token
+            else:
+                sep = "&" if "?" in self._public_ws_url_template else "?"
+                url = f"{self._public_ws_url_template}{sep}t={token}"
+        else:
+            host_hdr = request.headers.get("Host", f"{self._host}:{self._port}")
+            if isinstance(host_hdr, list):
+                host_hdr = host_hdr[0] if host_hdr else f"{self._host}:{self._port}"
+            url = f"ws://{host_hdr}/ws?t={token}"
+
+        body = json.dumps({
+            "url": url,
+            "expires_at": int(time.time()) + ttl,
+        }).encode("utf-8") + b"\n"
+        return _response(http.HTTPStatus.OK, body, "application/json")
 
     def _serve_static_file(self, filename: str) -> Response:
         path = self._static / filename

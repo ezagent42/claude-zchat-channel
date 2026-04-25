@@ -210,6 +210,8 @@ async def _main(cfg: VoiceBridgeConfig) -> int:
         bind_channel=cfg.bind_channel,
         jwt_validator=jwt_validator,
         serve_static=cfg.serve_static,
+        jwt_secret=cfg.jwt_secret,
+        public_ws_url_template=cfg.public_ws_url_template,
     )
     await server.start()
 
