@@ -128,6 +128,106 @@ async def test_issue_uses_default_ttl_when_omitted():
 
 
 @pytest.mark.asyncio
+async def test_issue_loopback_only_default_accepts_127_0_0_1():
+    """Default: /issue 只接 127.0.0.1 → 同主机 GET 应通"""
+    server, port = await _start_server()
+    try:
+        status, _hdrs, body = await asyncio.to_thread(
+            _http_get, port, "/issue?channel=c&customer=u",
+        )
+        assert status == 200, body
+    finally:
+        await server.stop()
+
+
+@pytest.mark.asyncio
+async def test_issue_loopback_only_default_rejects_lan():
+    """LAN 模拟：构造 server with non-loopback peer 应被拒"""
+    # 直接调内部方法，模拟非 loopback 连接
+    from unittest.mock import MagicMock
+    from voice_bridge.tokens import JWTValidator
+    from voice_bridge.ws_server import BrowserWSServer
+
+    async def _on_ws(_ws, _auth):
+        await _ws.close()
+
+    server = BrowserWSServer(
+        host="127.0.0.1", port=0,
+        static_dir=Path(__file__).parent,
+        on_ws_connect=_on_ws,
+        jwt_validator=JWTValidator(secret=_SECRET),
+        serve_static=False,
+        jwt_secret=_SECRET,
+    )
+    fake_conn = MagicMock()
+    fake_conn.remote_address = ("192.168.1.50", 54321)
+    fake_request = MagicMock()
+    fake_request.headers = {"Host": "voice.example.com"}
+    fake_request.path = "/issue?channel=c&customer=u"
+    resp = server._process_request(fake_conn, fake_request)
+    assert resp is not None
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_issue_loopback_only_can_be_disabled():
+    """issue_loopback_only=False → 允许任意 IP"""
+    from unittest.mock import MagicMock
+    from voice_bridge.tokens import JWTValidator
+    from voice_bridge.ws_server import BrowserWSServer
+
+    async def _on_ws(_ws, _auth):
+        await _ws.close()
+
+    server = BrowserWSServer(
+        host="127.0.0.1", port=0,
+        static_dir=Path(__file__).parent,
+        on_ws_connect=_on_ws,
+        jwt_validator=JWTValidator(secret=_SECRET),
+        serve_static=False,
+        jwt_secret=_SECRET,
+        issue_loopback_only=False,
+    )
+    fake_conn = MagicMock()
+    fake_conn.remote_address = ("192.168.1.50", 54321)
+    fake_request = MagicMock()
+    fake_request.headers = {"Host": "voice.example.com"}
+    fake_request.path = "/issue?channel=c&customer=u"
+    resp = server._process_request(fake_conn, fake_request)
+    assert resp is not None
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_ws_path_not_subject_to_loopback_filter():
+    """/ws 不受 issue_loopback_only 影响 — 公网浏览器要能连"""
+    from unittest.mock import MagicMock
+    from voice_bridge.tokens import JWTValidator
+    from voice_bridge.ws_server import BrowserWSServer
+
+    async def _on_ws(_ws, _auth):
+        await _ws.close()
+
+    server = BrowserWSServer(
+        host="127.0.0.1", port=0,
+        static_dir=Path(__file__).parent,
+        on_ws_connect=_on_ws,
+        jwt_validator=JWTValidator(secret=_SECRET),
+        serve_static=False,
+        jwt_secret=_SECRET,
+        # default issue_loopback_only=True
+    )
+    fake_conn = MagicMock()
+    fake_conn.remote_address = ("203.0.113.42", 12345)  # public IP
+    fake_request = MagicMock()
+    fake_request.headers = {"Upgrade": "websocket"}
+    fake_request.path = "/ws?t=ignore"
+    resp = server._process_request(fake_conn, fake_request)
+    # WS upgrade → return None (let websockets handshake proceed)
+    assert resp is None
+
+
+@pytest.mark.asyncio
 async def test_issue_disabled_when_no_secret():
     """没有 jwt_secret 时 /issue 应返回 503 — 不能签 token 直接拒"""
     async def _on_ws(_ws, _auth):

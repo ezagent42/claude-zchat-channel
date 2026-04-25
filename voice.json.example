@@ -10,6 +10,7 @@
   "cs_url": "ws://127.0.0.1:9999",
   "serve_static": true,
   "public_ws_url_template": "",
+  "issue_loopback_only": true,
 
   "asr_engine": "volcengine",
   "tts_engine": "volcengine",

@@ -27,6 +27,9 @@ class VoiceBridgeConfig:
     public_ws_url_template: str = "" # /issue 返回的 WS URL 模板。空则用请求的 Host 头自动拼。
                                      # 例: "wss://voice.example.com/ws?t=%s"
                                      # 公网部署务必设置（否则用 ws:// 不安全）
+    issue_loopback_only: bool = True # /issue 只接 127.0.0.1 / ::1 来源。/ws 不受此限。
+                                     # agent_mcp 通常和 voice_bridge 同主机，所以默认 True 安全。
+                                     # 跨主机 issue → 自己保证 access control，再 set False
 
     # --- CS 上游 ---
     cs_ws_url: str = "ws://127.0.0.1:9999"
@@ -72,7 +75,7 @@ class VoiceBridgeConfig:
 _KNOWN_TOP_LEVEL_KEYS = {
     "jwt_secret",
     "listen_host", "listen_port", "static_dir",
-    "serve_static", "public_ws_url_template",
+    "serve_static", "public_ws_url_template", "issue_loopback_only",
     "cs_url",  # 写到 cfg.cs_ws_url
     "asr_engine", "tts_engine",
     "volcengine",  # nested dict for volcengine creds + config
@@ -114,6 +117,7 @@ def load_config_from_json(path: Path | str) -> VoiceBridgeConfig:
     cfg.static_dir = str(data.get("static_dir", ""))
     cfg.serve_static = bool(data.get("serve_static", cfg.serve_static))
     cfg.public_ws_url_template = str(data.get("public_ws_url_template", ""))
+    cfg.issue_loopback_only = bool(data.get("issue_loopback_only", cfg.issue_loopback_only))
     cfg.cs_ws_url = str(data.get("cs_url", cfg.cs_ws_url))
     cfg.asr_engine = str(data.get("asr_engine", cfg.asr_engine))
     cfg.tts_engine = str(data.get("tts_engine", cfg.tts_engine))

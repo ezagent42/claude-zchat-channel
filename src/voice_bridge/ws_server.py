@@ -80,6 +80,7 @@ class BrowserWSServer:
         serve_static: bool = True,
         jwt_secret: str = "",
         public_ws_url_template: str = "",
+        issue_loopback_only: bool = True,
     ) -> None:
         self._host = host
         self._port = port
@@ -89,6 +90,7 @@ class BrowserWSServer:
         self._serve_static = serve_static
         self._jwt_secret = jwt_secret or ""
         self._public_ws_url_template = public_ws_url_template or ""
+        self._issue_loopback_only = issue_loopback_only
         self._server = None
 
     async def start(self) -> None:
@@ -134,6 +136,12 @@ class BrowserWSServer:
         if url_path == "/health":
             return _response(http.HTTPStatus.OK, b"ok\n", "text/plain")
         if url_path == "/issue":
+            # 公网安全：默认只接 loopback peer。agent / 业务系统在同主机上跑。
+            # 想从其他主机调用 → 显式 issue_loopback_only=False + 自己保证 access control
+            if self._issue_loopback_only and not _is_loopback_peer(connection):
+                return _response(http.HTTPStatus.FORBIDDEN,
+                                  b'{"error":"/issue accepts loopback peers only"}\n',
+                                  "application/json")
             return self._handle_issue(request, parsed.query)
         # serve_static=False：关闭 fallback call.html，只留 /ws + /health + /issue
         # 适合自家 web 集成场景（前端自己连 /ws?t=<JWT>）
@@ -252,3 +260,24 @@ def _parse_query(path: str) -> dict:
     """取 URL query dict；多值取首个。"""
     parsed = urllib.parse.urlsplit(path)
     return {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items() if v}
+
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def _is_loopback_peer(connection) -> bool:
+    """connection.remote_address[0] 在 loopback 集合内。
+
+    websockets 的 ServerConnection 暴露 remote_address: (host, port)；
+    IPv6 mapped IPv4 形式 ::ffff:127.0.0.1 也算 loopback。
+    """
+    addr = getattr(connection, "remote_address", None)
+    if not addr:
+        return False
+    host = str(addr[0]) if addr else ""
+    if host in _LOOPBACK_HOSTS:
+        return True
+    # IPv4-mapped IPv6
+    if host.lower().startswith("::ffff:"):
+        return host[7:] in _LOOPBACK_HOSTS
+    return False

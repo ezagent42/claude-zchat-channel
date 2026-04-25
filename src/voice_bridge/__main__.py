@@ -141,6 +141,7 @@ async def _main(cfg: VoiceBridgeConfig) -> int:
         serve_static=cfg.serve_static,
         jwt_secret=cfg.jwt_secret,
         public_ws_url_template=cfg.public_ws_url_template,
+        issue_loopback_only=cfg.issue_loopback_only,
     )
     await server.start()
 
