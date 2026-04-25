@@ -1,61 +1,56 @@
-"""Volcengine BigModel 流式 ASR (v3 sauc/bigmodel)。
+"""Volcengine Doubao realtime/dialogue ASR engine.
 
-中英文混合识别 + 流式 partial/final + 自带 VAD。
+Resource: volc.speech.dialog (Doubao realtime dialog)
+URL: wss://openspeech.bytedance.com/api/v3/realtime/dialogue
 
-凭证：
-  config["app_id"]        必填 — Volcengine 控制台拿
-  config["access_token"]  必填 — 同上
-  config["resource_id"]   可选 — 默认 "volc.bigasr.sauc.duration"
-  config["model_name"]    可选 — 默认 "bigmodel"
-  config["language"]      可选 — 默认 "zh-CN"，bilingual 用 "zh-CN+en-US" 或单独 "en-US"
-  config["uid"]           可选 — 用户标识，默认 "voice_bridge"
+借 Doubao 端到端 dialog 接口的 ASR 通道；忽略 LLM 和 TTS 事件（"E2E-adapter"
+模式）。一条 WS 持续接收 mic → 在 ASR_RESPONSE 事件流里出 partial/final 文本。
 
-Endpoint: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel
+config:
+    app_id, access_token   必填
+    asr_language          可选 — default zh-CN
+    sample_rate_in        可选 — default 16000
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from typing import AsyncIterator
 
-import websockets.asyncio.client
+from voice_bridge._doubao_proto import (
+    EVENT_ASR_ENDED,
+    EVENT_ASR_INFO,
+    EVENT_ASR_RESPONSE,
+)
 from voice_bridge.asr.base import ASRResult
-from voice_bridge import _volc_proto as proto
+from voice_bridge.doubao_client import DoubaoClient
 
 log = logging.getLogger(__name__)
 
-_ENDPOINT = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
-_DEFAULT_RESOURCE_ID = "volc.bigasr.sauc.duration"
-_DEFAULT_MODEL = "bigmodel"
-
 
 class VolcengineASR:
-    """v3 BigModel 流式 ASR client。"""
+    """Doubao realtime/dialogue 流式 ASR client。"""
 
     def __init__(self, config: dict) -> None:
-        self._app_id = str(config.get("app_id", "")).strip()
-        self._access_token = str(config.get("access_token", "")).strip()
-        if not self._app_id or not self._access_token:
+        self._config = config
+        if not config.get("app_id") or not config.get("access_token"):
             raise ValueError(
                 "VolcengineASR requires config.app_id and config.access_token"
             )
-        self._resource_id = config.get("resource_id") or _DEFAULT_RESOURCE_ID
-        self._model_name = config.get("model_name") or _DEFAULT_MODEL
-        self._language = config.get("language") or "zh-CN"
-        self._uid = config.get("uid") or "voice_bridge"
-        self._endpoint = config.get("endpoint") or _ENDPOINT
-
-        # VAD config
-        self._end_window_ms = int(config.get("end_window_ms", 800))
-        self._force_speech_ms = int(config.get("force_to_speech_ms", 0))
-
+        self._client: DoubaoClient | None = None
         self._opened = False
 
     async def open(self) -> None:
+        if self._opened:
+            return
+        self._client = DoubaoClient(self._config)
+        await self._client.connect()
         self._opened = True
 
     async def close(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
         self._opened = False
 
     async def stream(
@@ -65,176 +60,66 @@ class VolcengineASR:
         sample_rate: int = 16000,
         encoding: str = "pcm_s16le",
     ) -> AsyncIterator[ASRResult]:
-        if not self._opened:
-            raise RuntimeError("VolcengineASR not open; call open() first")
+        """Streaming recognition.
 
-        connect_id = uuid.uuid4().hex
-        request_id = uuid.uuid4().hex
-        headers = {
-            "X-Api-App-Key": self._app_id,
-            "X-Api-Access-Key": self._access_token,
-            "X-Api-Resource-Id": self._resource_id,
-            "X-Api-Connect-Id": connect_id,
-            "X-Api-Request-Id": request_id,
-        }
+        Yields ASRResult; interim results have is_final=False, definite final
+        emitted when ASR_ENDED arrives.
+        """
+        if self._client is None:
+            raise RuntimeError("VolcengineASR not opened")
 
-        async with websockets.asyncio.client.connect(
-            self._endpoint, additional_headers=headers, max_size=8 * 1024 * 1024,
-        ) as ws:
-            # 1) 首包 — full client request 含 user/audio/request 三段配置
-            first = self._build_first_payload(sample_rate=sample_rate)
-            await ws.send(proto.encode_full_request(first))
-
-            # 2) 并发：上行音频帧 + 下行 ASR 结果
-            send_task = asyncio.create_task(_pump_audio(ws, audio))
-            # session 级状态：已经 emit 为 final 的 definite utterance 数
-            n_definite_emitted = 0
-            try:
-                async for raw in ws:
-                    if not isinstance(raw, (bytes, bytearray)):
-                        continue
-                    try:
-                        frame = proto.parse_frame(bytes(raw))
-                    except Exception as e:
-                        log.warning("ASR parse_frame failed: %s", e)
-                        continue
-                    if frame.is_error:
-                        log.error("ASR server error: payload=%s",
-                                  frame.payload[:200])
-                        return
-                    data = frame.json_data or {}
-                    result = _locate_result(data)
-                    if result is None:
-                        if frame.is_last:
-                            return
-                        continue
-                    # Debug: dump raw dict (comment out in prod)
-                    # import json as _json
-                    # log.debug("ASR raw: %s", _json.dumps(data, ensure_ascii=False))
-                    utterances = result.get("utterances") or []
-                    # 1) 新出现的 definite utterance — 逐条 emit 为 final
-                    definite_uts = [
-                        u for u in utterances
-                        if isinstance(u, dict) and u.get("definite")
-                    ]
-                    for ut in definite_uts[n_definite_emitted:]:
-                        text = (ut.get("text") or "").strip()
-                        if text:
-                            yield ASRResult(text=text, is_final=True)
-                    n_definite_emitted = len(definite_uts)
-                    # 2) 当前 tentative partial（尚未 definite 的那句）
-                    tentative = next(
-                        (u for u in reversed(utterances)
-                         if isinstance(u, dict) and not u.get("definite")),
-                        None,
-                    )
-                    if tentative:
-                        ttext = (tentative.get("text") or "").strip()
-                        if ttext:
-                            yield ASRResult(text=ttext, is_final=False)
-                    elif not utterances:
-                        # 没有 utterances 时 fallback：顶层 result.text
-                        top = (result.get("text") or "").strip()
-                        if top:
-                            yield ASRResult(text=top, is_final=False)
-                    if frame.is_last:
-                        return
-            finally:
-                send_task.cancel()
-                try:
-                    await send_task
-                except asyncio.CancelledError:
-                    pass
-
-    def _build_first_payload(self, *, sample_rate: int) -> dict:
-        return {
-            "user": {"uid": self._uid},
-            "audio": {
-                "format": "pcm",
-                "rate": sample_rate,
-                "bits": 16,
-                "channel": 1,
-                "codec": "raw",
-            },
-            "request": {
-                "model_name": self._model_name,
-                "language": self._language,
-                "enable_itn": True,
-                "enable_punc": True,
-                "result_type": "single",        # 单条 partial→final 流
-                "show_utterances": True,        # 含分句信息
-                "vad": {
-                    "vad_enable": True,
-                    "end_window_size": self._end_window_ms,
-                    "force_to_speech_time": self._force_speech_ms,
-                },
-            },
-        }
-
-
-async def _pump_audio(ws, audio: AsyncIterator[bytes]) -> None:
-    """从 audio iterator 取 PCM chunks 发到 server。流尾发 last 帧。"""
-    sent_any = False
-    try:
-        async for chunk in audio:
-            if not chunk:
-                continue
-            sent_any = True
-            await ws.send(proto.encode_audio_request(chunk, last=False))
-    except asyncio.CancelledError:
-        return
-    finally:
-        # 发空 last 帧告诉 server 流结束（即使没有数据也要发一帧，
-        # 否则 server 可能一直等待）
+        send_task = asyncio.create_task(self._pump_audio(audio))
         try:
-            await ws.send(proto.encode_audio_request(b"", last=True))
-        except Exception:
-            pass
-        if not sent_any:
-            log.debug("ASR stream ended without any audio sent")
+            last_interim = ""
+            async for frame in self._client.receive():
+                event = frame.get("event")
+                payload = frame.get("payload_msg")
 
+                if event == EVENT_ASR_INFO:
+                    # speech_started — caller may use to track barge-in；no text yield
+                    continue
 
-def _locate_result(data: dict) -> dict | None:
-    """在 Volcengine 响应 dict 里定位含 text/utterances 的 result 子段。
+                if event == EVENT_ASR_RESPONSE and isinstance(payload, dict):
+                    results = payload.get("results") or []
+                    if not results:
+                        continue
+                    last = results[-1]
+                    text = (last.get("text") or "").strip()
+                    if not text:
+                        continue
+                    is_interim = bool(last.get("is_interim", True))
+                    if is_interim:
+                        yield ASRResult(text=text, is_final=False)
+                        last_interim = text
+                    else:
+                        # 服务端给的 final 文本：直接 emit
+                        yield ASRResult(text=text, is_final=True)
+                        last_interim = ""
 
-    可能的嵌套：
-      {"payload_msg": {"result": {...}}}  — v3 某些路径
-      {"result": {...}}                   — 主流路径
-      {"text": ..., "utterances": ...}    — 平铺变体
-    """
-    if not data:
-        return None
-    candidates: list[dict] = []
-    payload_msg = data.get("payload_msg") if isinstance(data, dict) else None
-    if isinstance(payload_msg, dict):
-        if isinstance(payload_msg.get("result"), dict):
-            candidates.append(payload_msg["result"])
-        candidates.append(payload_msg)
-    if isinstance(data.get("result"), dict):
-        candidates.append(data["result"])
-    candidates.append(data)
-    for c in candidates:
-        if isinstance(c, dict) and ("text" in c or "utterances" in c):
-            return c
-    return None
+                elif event == EVENT_ASR_ENDED:
+                    # 一段语音结束。如果之前没拿到 final 但有 interim，把 interim 当 final 提交
+                    if last_interim:
+                        yield ASRResult(text=last_interim, is_final=True)
+                        last_interim = ""
 
+                elif frame.get("message_type") == "SERVER_ERROR":
+                    log.error("[VolcengineASR] server error code=%s msg=%s",
+                              frame.get("code"), payload)
+                    break
+        finally:
+            send_task.cancel()
+            try:
+                await send_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
-def _extract_result(data: dict) -> ASRResult | None:
-    """旧接口：返回单个 ASRResult。当前只用在单测里。
-
-    生产路径：stream() 内部按 utterances[].definite 逐条 emit，见那里。
-    此函数返回的 is_final 由"最后一个 utterance 是否 definite"决定，供
-    测试单步状态校验；不再代表运行时语义。
-    """
-    result = _locate_result(data)
-    if result is None:
-        return None
-    text = (result.get("text") or "").strip()
-    utterances = result.get("utterances") or []
-    is_final = False
-    if utterances and isinstance(utterances, list):
-        last = utterances[-1] if isinstance(utterances[-1], dict) else {}
-        is_final = bool(last.get("definite") or last.get("is_final"))
-    if not text and not utterances:
-        return None
-    return ASRResult(text=text, is_final=is_final)
+    async def _pump_audio(self, audio: AsyncIterator[bytes]) -> None:
+        if self._client is None:
+            return
+        try:
+            async for chunk in audio:
+                if not chunk:
+                    continue
+                await self._client.send_audio(chunk)
+        except Exception as e:
+            log.debug("[VolcengineASR] mic pump ended: %s", e)
