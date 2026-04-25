@@ -21,7 +21,7 @@ from typing import AsyncIterator
 
 from zchat_protocol import ws_messages
 
-from voice_bridge.asr.base import ASREngine, ASRResult
+from voice_bridge.asr.base import ASREngine
 from voice_bridge.config import VoiceBridgeConfig
 from voice_bridge.cs_client import CSClient
 from voice_bridge.engines import build_asr, build_tts

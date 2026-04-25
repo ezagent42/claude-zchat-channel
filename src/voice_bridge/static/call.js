@@ -17,15 +17,13 @@
   const $customer = document.getElementById("customer");
   const $auth = document.getElementById("auth");
 
-  // Parse query from current URL (dev mode passes channel/customer; jwt mode passes t)
+  // /ws 只接 JWT。?t=<JWT> 由 voice_bridge /issue 签发，agent 调用拿到。
   const params = new URLSearchParams(location.search);
-  const channel = params.get("channel") || "";
-  const customer = params.get("customer") || "";
   const token = params.get("t") || "";
 
-  $channel.textContent = channel || "(从 token 解析)";
-  $customer.textContent = customer || "(从 token 解析)";
-  $auth.textContent = token ? "jwt" : (channel ? "dev" : "—");
+  $channel.textContent = "(从 token 解析)";
+  $customer.textContent = "(从 token 解析)";
+  $auth.textContent = token ? "jwt" : "missing";
 
   let ws = null;
   let audioCtx = null;
@@ -44,6 +42,11 @@
     $status.textContent = text;
     $status.className = "status " + cls;
   };
+
+  if (!token) {
+    setStatus("URL 缺 ?t=<JWT>。先用 GET /issue 拿合法 URL。", "error");
+    $btnConnect.disabled = true;
+  }
 
   async function connect() {
     const wsUrl = buildWsUrl();
@@ -98,7 +101,7 @@
 
   function buildWsUrl() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    // 保留所有 query params 透传（channel/customer/t）
+    // 透传 ?t=<JWT> 给 /ws
     return `${proto}://${location.host}/ws${location.search}`;
   }
 

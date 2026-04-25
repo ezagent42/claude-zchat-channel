@@ -13,7 +13,6 @@ import asyncio
 import logging
 import signal
 import sys
-from pathlib import Path
 
 from voice_bridge.bridge import VoiceBridge
 from voice_bridge.config import VoiceBridgeConfig, load_config_from_json
