@@ -16,10 +16,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# agent_mcp.py 在仓库根目录，需要把根目录加入 sys.path
-_REPO_ROOT = str(Path(__file__).parent.parent.parent)
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
+# agent_mcp 是 src/ 下的顶层模块；editable 装时 .pth 已自动加入 sys.path
+# 为运行 source 静态分析（test_imports_irc_encoding_module）保留 _SRC_DIR 路径
+_SRC_DIR = Path(__file__).parent.parent.parent / "src"
 
 
 # ------------------------------------------------------------------ #
@@ -59,7 +58,7 @@ class TestEncodeUsesProtocol:
     """用 AST 静态分析确认 agent_mcp.py 使用了 zchat_protocol.irc_encoding。"""
 
     def test_imports_irc_encoding_module(self):
-        source = (Path(_REPO_ROOT) / "agent_mcp.py").read_text(encoding="utf-8")
+        source = (_SRC_DIR / "agent_mcp.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
 
         imported_names: set[str] = set()
@@ -82,7 +81,7 @@ class TestEncodeUsesProtocol:
         Tool description 中对前缀的文字说明（"Uses __side: IRC prefix"）不匹配。
         """
         import re
-        source = (Path(_REPO_ROOT) / "agent_mcp.py").read_text(encoding="utf-8")
+        source = (_SRC_DIR / "agent_mcp.py").read_text(encoding="utf-8")
         # 与任务 grep 等价的 Python 正则
         pattern = re.compile(
             r'(?:"__msg:"|"__side:"|"__edit:"|"__zchat_sys:"|'
