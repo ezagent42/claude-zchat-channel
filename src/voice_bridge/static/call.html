@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zchat voice · 通话</title>
+  <link rel="stylesheet" href="/static/call.css">
+</head>
+<body>
+  <main>
+    <h1>zchat voice</h1>
+    <div id="status" class="status">尚未连接</div>
+    <div class="controls">
+      <button id="btn-connect">接通</button>
+      <button id="btn-hangup" disabled>挂断</button>
+    </div>
+    <div class="meta">
+      <div>channel: <code id="channel">—</code></div>
+      <div>customer: <code id="customer">—</code></div>
+      <div>auth: <code id="auth">—</code></div>
+    </div>
+    <details>
+      <summary>诊断日志</summary>
+      <pre id="log"></pre>
+    </details>
+  </main>
+  <script src="/static/call.js"></script>
+</body>
+</html>

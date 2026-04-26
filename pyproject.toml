@@ -10,6 +10,7 @@ dependencies = [
     "websockets>=12.0",
     "lark-oapi>=1.4.0",
     "pyyaml>=6.0",
+    "pyjwt>=2.8.0",
 ]
 license = "MIT"
 authors = [{ name = "ezagent42" }]
@@ -26,12 +27,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/channel_server", "src/plugins", "src/feishu_bridge"]
+packages = ["src/channel_server", "src/plugins", "src/feishu_bridge", "src/voice_bridge"]
+# agent_mcp.py 在 src/ 下作为顶层模块（不是 package）；force-include 让 wheel
+# 能装成 site-packages/agent_mcp.py。editable 装时通过 src/ 的 .pth 自动 link，
+# 修改即生效，不再需要 reinstall。
+only-include = ["src/agent_mcp.py"]
+sources = ["src"]
 
-# agent_mcp.py + instructions.md + .claude-plugin/ + commands/ 位于仓库根（非 src/）。
-# 用 force-include 带进 wheel，保持与 agent_mcp 同级，运行时可读。
+# instructions.md / .claude-plugin / commands 仍在仓库根（runtime 文件，不是 Python）
 [tool.hatch.build.targets.wheel.force-include]
-"agent_mcp.py" = "agent_mcp.py"
 "instructions.md" = "instructions.md"
 ".claude-plugin" = ".claude-plugin"
 "commands" = "commands"
@@ -47,6 +51,7 @@ test = [
 [project.scripts]
 zchat-channel-server = "channel_server.__main__:main"
 zchat-feishu-bridge = "feishu_bridge.__main__:main"
+zchat-voice-bridge = "voice_bridge.__main__:main"
 zchat-agent-mcp = "agent_mcp:entry_point"
 
 [dependency-groups]
