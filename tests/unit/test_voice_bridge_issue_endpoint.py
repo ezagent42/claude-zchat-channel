@@ -121,8 +121,9 @@ async def test_issue_uses_default_ttl_when_omitted():
         data = json.loads(body)
         token = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(data["url"]).query))["t"]
         claims = validate_token(token, secret=_SECRET)
-        # exp - iat 应在合理范围（默认 180s）
-        assert 60 <= claims.exp - claims.iat <= 900
+        # exp 应在合理 TTL 范围（默认 180s，无 iat 字段走 wall-clock 比对）
+        import time as _time
+        assert 60 <= claims.exp - int(_time.time()) <= 900
     finally:
         await server.stop()
 
