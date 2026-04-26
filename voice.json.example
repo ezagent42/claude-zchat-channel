@@ -1,27 +1,24 @@
 {
-  "_comment": "voice_bridge config. Copy to <project>/credentials/voice.json and edit.",
-  "_comment2": "voice_bridge 进程 -m voice_bridge --config <此文件路径> 读全部配置。",
-  "_comment3": "agent_mcp 不读这个文件，只通过 VOICE_BRIDGE_ISSUE_URL env 调 voice_bridge /issue 拿 URL。",
+  "_comment": "voice_bridge config. Copy to <project>/credentials/voice.json and fill in 3 secrets.",
+  "_comment2": "voice_bridge 进程 `python -m voice_bridge --config <此文件路径>` 读全部配置。",
+  "_comment3": "agent_mcp 不读这个文件；fast-agent template 通过 VOICE_BRIDGE_ISSUE_URL env 调 /issue 拿 URL。",
+  "_comment4": "Speaker IDs (tts_voice) 见 https://www.volcengine.com/docs/6561/162929 — 必须 dialog API 兼容。",
 
-  "jwt_secret": "REPLACE_WITH_32_BYTES_RANDOM_eg_openssl_rand_base64_32",
+  "jwt_secret": "REPLACE_WITH_RANDOM_eg_openssl_rand_base64_32",
+
+  "volcengine": {
+    "app_id": "REPLACE_WITH_VOLC_APP_ID",
+    "access_token": "REPLACE_WITH_VOLC_ACCESS_TOKEN",
+    "tts_voice": "zh_female_vv_jupiter_bigtts",
+    "asr_language": "zh-CN"
+  },
 
   "listen_host": "127.0.0.1",
   "listen_port": 8787,
   "cs_url": "ws://127.0.0.1:9999",
   "serve_static": true,
-  "public_ws_url_template": "",
   "issue_loopback_only": true,
-
+  "public_ws_url_template": "",
   "asr_engine": "volcengine",
-  "tts_engine": "volcengine",
-
-  "volcengine": {
-    "app_id": "REPLACE_WITH_VOLC_APP_ID",
-    "access_token": "REPLACE_WITH_VOLC_ACCESS_TOKEN",
-    "tts_voice": "BV700_streaming",
-    "tts_language": "cn",
-    "asr_language": "zh-CN",
-    "tts_cluster": "volcano_tts",
-    "tts_sample_rate": 16000
-  }
+  "tts_engine": "volcengine"
 }

@@ -236,6 +236,13 @@ class VoiceBridge:
                     continue
                 log.info("[voice-in session=%s] channel=%s text=%s",
                          session.id, session.channel, text[:80])
+                # ASR final 出 → 客户已说完一句，可以接收 agent 回复
+                # 不能只靠浏览器 VAD 的 speech_end（需 600ms 静音才触发，
+                # 客户在听对方时的自然停顿往往达不到，导致 mute 永久卡住）
+                if session.speaker_muted:
+                    session.speaker_muted = False
+                    log.debug("[run_session session=%s] auto-unmute on ASR final",
+                              session.id)
                 msg = ws_messages.build_message(
                     channel=session.channel,
                     source=source,
