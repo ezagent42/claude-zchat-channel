@@ -21,7 +21,22 @@ def test_issue_and_validate_roundtrip():
     claims = validate_token(tok, secret=SECRET)
     assert claims.channel == "conv-001"  # '#' stripped
     assert claims.customer == "zhang"
-    assert claims.exp > claims.iat
+    assert claims.exp > int(time.time())  # expires in future
+
+
+def test_token_url_size_under_irc_limit():
+    """JWT URL 必须装在 IRC PRIVMSG 单条 payload (~390 字节) 内，
+    防止 chunk_message 把 URL 切成两条客户复制时少尾巴。"""
+    # 真实最长 case：飞书 open_id 36 字符 + 长 channel name
+    tok = issue_token(
+        channel="#conv-669ca17b-some-suffix",
+        customer="om_x100b51d7f2d0d4a4b2d8c095ed777793",
+        secret=SECRET,
+    )
+    url = f"http://127.0.0.1:8787/?t={tok}"
+    # IRC PRIVMSG payload safe limit = 390 字节
+    # 留 ~80 字节给中文回复文本（"请点击..." 等）+ __msg:<uuid>: 前缀
+    assert len(url) < 310, f"URL too long: {len(url)} bytes"
 
 
 def test_issue_empty_secret_raises():
