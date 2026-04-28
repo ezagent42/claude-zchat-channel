@@ -81,6 +81,13 @@ class FeishuBridge:
         self._supervised_external_to_channel = read_supervised_channels(
             self._routing_path, self._bot_name
         )
+        # routing.toml mtime 跟踪：用于 _maybe_reload_for_unknown_channel
+        # （lazy_create 之后 supervisor bridge 的快照需要刷新）
+        try:
+            self._last_routing_mtime = Path(self._routing_path).stat().st_mtime
+        except OSError:
+            self._last_routing_mtime = 0.0
+        self._last_routing_reload_at = 0.0
 
         self.mapper = ChannelMapper(channel_chat_map=channel_chat_map)
         self.outbound = OutboundRouter(sender=self.sender, mapper=self.mapper)
@@ -133,6 +140,40 @@ class FeishuBridge:
         self._supervised_external_to_channel = read_supervised_channels(
             self._routing_path, self._bot_name
         )
+
+    def _maybe_reload_for_unknown_channel(self, conv_norm: str) -> bool:
+        """收到未知 channel 消息时尝试 reload routing.toml。
+
+        触发场景：customer bridge lazy_create 了一个新 channel，但 squad
+        (supervisor) bridge 的 supervised set 还停留在启动时刻的快照，
+        会把新 channel 的消息当作 unrelated 静默 skip。
+
+        策略：
+          - 仅 supervisor bot（self._supervised_external_to_channel 非空）触发
+          - debounce 2s，避免高频 unrelated msg 反复读盘
+          - 仅 routing.toml mtime 变化时真 reload
+          - 返回 conv_norm 是否成为本 bridge 的 own / supervised
+        """
+        if not self._supervised_external_to_channel and not self.config.lazy_create.enabled:
+            return False
+        import time
+        now = time.time()
+        if now - self._last_routing_reload_at < 2.0:
+            return False
+        try:
+            mtime = Path(self._routing_path).stat().st_mtime
+        except OSError:
+            return False
+        if mtime <= self._last_routing_mtime:
+            return False
+        self._last_routing_reload_at = now
+        self._last_routing_mtime = mtime
+        log.info("[reload] routing.toml mtime changed; reloading mappings (trigger conv=%s)",
+                  conv_norm)
+        self._reload_mappings()
+        own = {(c or "").lstrip("#") for c in self._external_to_channel.values()}
+        supervised = {(c or "").lstrip("#") for c in self._supervised_external_to_channel.values()}
+        return conv_norm in own or conv_norm in supervised
 
     async def _run_cli(self, *args: str, timeout: float = 30.0) -> tuple[int, str, str]:
         """执行 zchat CLI 命令。返回 (returncode, stdout, stderr)。"""
@@ -602,6 +643,11 @@ class FeishuBridge:
             own = {_norm(c) for c in self._external_to_channel.values()}
             supervised = {_norm(c) for c in self._supervised_external_to_channel.values()}
             conv_norm = _norm(conv_id)
+            # 未知 channel → 可能是 lazy_create 后新增的，尝试 reload routing.toml
+            if conv_norm not in own and conv_norm not in supervised:
+                if self._maybe_reload_for_unknown_channel(conv_norm):
+                    own = {_norm(c) for c in self._external_to_channel.values()}
+                    supervised = {_norm(c) for c in self._supervised_external_to_channel.values()}
             if conv_norm in supervised and conv_norm not in own:
                 # 他人 channel：本 bridge 作为监管者
                 if msg_type == "message":
